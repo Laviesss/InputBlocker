@@ -263,9 +263,9 @@ class OverlayService : Service() {
             val configFile = File(InputBlockerServiceManager.getConfigFile(this))
             if (configFile.exists()) {
                 val content = configFile.readLines()
-                    .filter { !it.startsWith("force_safe_mode=") }
+                    .filter { !it.startsWith("force_safe_mode=") && it.isNotBlank() }
                     .joinToString("\n")
-                configFile.writeText(content)
+                configFile.writeText(content + "\n")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear safe mode flag", e)

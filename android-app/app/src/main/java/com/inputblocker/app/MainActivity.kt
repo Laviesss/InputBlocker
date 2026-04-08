@@ -325,8 +325,11 @@ class MainActivity : AppCompatActivity() {
             FileWriter(configFile).use { writer ->
                 writer.write("# InputBlocker Configuration\n")
                 writer.write("# Format: x1,y1,x2,y2\n")
-                writer.write("# Lines starting with # are comments\n\n")
-                writer.write("enabled=${if (isEnabled) "1" else "0"}\n\n")
+                writer.write("# Lines starting with # are comments\n")
+                writer.write("#\n")
+                writer.write("enabled=${if (isEnabled) "1" else "0"}\n")
+                writer.write("\n")
+                writer.write("# Blocked regions:\n")
 
                 for (region in regions) {
                     writer.write("${region.x1},${region.y1},${region.x2},${region.y2}\n")

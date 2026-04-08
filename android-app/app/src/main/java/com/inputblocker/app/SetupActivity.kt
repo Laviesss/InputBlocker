@@ -13,6 +13,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -60,6 +61,25 @@ class SetupActivity : AppCompatActivity() {
         loadRegions()
         setupListeners()
         updateRegionCount()
+        
+        setupBackHandler()
+    }
+    
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (regions.isNotEmpty()) {
+                    AlertDialog.Builder(this@SetupActivity)
+                        .setTitle("Discard Changes?")
+                        .setMessage("You have unsaved regions. Discard them?")
+                        .setPositiveButton("Discard") { _, _ -> finish() }
+                        .setNegativeButton("Keep Editing", null)
+                        .show()
+                } else {
+                    finish()
+                }
+            }
+        })
     }
 
     private fun applyThemeColors() {
@@ -189,19 +209,6 @@ class SetupActivity : AppCompatActivity() {
         resultIntent.putExtra("regions", ArrayList(regions))
         setResult(RESULT_OK, resultIntent)
         finish()
-    }
-
-    override fun onBackPressed() {
-        if (regions.isNotEmpty()) {
-            AlertDialog.Builder(this)
-                .setTitle("Discard Changes?")
-                .setMessage("You have unsaved regions. Discard them?")
-                .setPositiveButton("Discard") { _, _ -> super.onBackPressed() }
-                .setNegativeButton("Keep Editing", null)
-                .show()
-        } else {
-            super.onBackPressed()
-        }
     }
 
     data class Region(

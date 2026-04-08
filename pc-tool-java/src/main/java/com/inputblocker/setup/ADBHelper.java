@@ -91,7 +91,9 @@ public class ADBHelper {
             String rawLine;
             while ((rawLine = reader.readLine()) != null) {
                 String line = rawLine.trim();
-                if (line.isEmpty() || line.startsWith("#") || line.startsWith("enabled=")) continue;
+                // Skip empty lines, comments, enabled, and force_safe_mode lines
+                if (line.isEmpty() || line.startsWith("#") || 
+                    line.startsWith("enabled=") || line.startsWith("force_safe_mode=")) continue;
                 Region r = Region.fromConfigString(line);
                 if (r != null) {
                     regions.add(r);
@@ -107,17 +109,32 @@ public class ADBHelper {
         try {
             StringBuilder config = new StringBuilder();
             config.append("# InputBlocker Configuration\n");
+            config.append("# Format: x1,y1,x2,y2\n");
+            config.append("# Lines starting with # are comments\n\n");
             config.append("enabled=").append(enabled ? "1" : "0").append("\n");
             config.append("force_safe_mode=").append(forceSafeMode ? "1" : "0").append("\n\n");
             for (Region r : regions) {
                 config.append(r.toConfigString()).append("\n");
             }
 
+            // Create temp file locally
+            File tempFile = File.createTempFile("inputblocker_config", ".txt");
+            tempFile.deleteOnExit();
+            FileWriter writer = new FileWriter(tempFile);
+            writer.write(config.toString());
+            writer.close();
+
+            // Push to device using adb push
             ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "mkdir", "-p", "/data/adb/modules/inputblocker/config");
             pb.start().waitFor();
 
-            pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "echo", "-e", config.toString().replace("\n", "\\n").replace("'", "'\"'\"'"));
+            pb = new ProcessBuilder("adb", "-s", deviceSerial, "push", tempFile.getAbsolutePath(), "/data/adb/modules/inputblocker/config/blocked_regions.conf");
             pb.start().waitFor();
+
+            pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "chmod", "644", "/data/adb/modules/inputblocker/config/blocked_regions.conf");
+            pb.start().waitFor();
+
+            tempFile.delete();
 
             return true;
         } catch (Exception e) {

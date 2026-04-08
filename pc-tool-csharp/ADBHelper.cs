@@ -200,13 +200,17 @@ public class ADBHelper : IDisposable
 
         try
         {
-            var output = RunProcess("adb", $"-s {deviceSerial} shell cat /data/adb/modules/inputblocker/config/blocked_regions.conf 2>/dev/null");
+            var output = RunProcess("adb", $"-s {deviceSerial} shell cat /data/adb/modules/inputblocker/config/blocked_regions.conf");
             var lines = output.Split('\n');
 
             foreach (var rawLine in lines)
             {
                 var line = rawLine.Trim();
-                if (string.IsNullOrEmpty(line) || line.StartsWith("#")) continue;
+                // Skip empty lines, comments, and config lines
+                if (string.IsNullOrEmpty(line) || 
+                    line.StartsWith("#") ||
+                    line.StartsWith("enabled=") ||
+                    line.StartsWith("force_safe_mode=")) continue;
 
                 var region = BlockRegion.FromConfigString(line);
                 if (region != null)

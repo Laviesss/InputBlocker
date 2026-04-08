@@ -6,11 +6,15 @@
 
 MODDIR=${0%/*}
 APK_DIR="$MODDIR/common"
-INSTALL_FLAG="/data/local/tmp/.inputblocker_apk_installed"
+INSTALL_FLAG_DIR="/data/local/tmp/inputblocker"
+INSTALL_FLAG="$INSTALL_FLAG_DIR/.apk_installed"
 
 log() {
     log -t InputBlocker "$1"
 }
+
+# Create directory for flag file
+mkdir -p "$INSTALL_FLAG_DIR"
 
 # Check if APK is in the module
 if [ ! -f "$APK_DIR/InputBlocker.apk" ]; then
@@ -21,9 +25,9 @@ fi
 # Check if already installed
 if [ -f "$INSTALL_FLAG" ]; then
     INSTALLED_VERSION=$(cat "$INSTALL_FLAG" 2>/dev/null)
-    CURRENT_VERSION=$(pm dump com.inputblocker.app 2>/dev/null | grep "versionName" | head -1 | cut -d= -f2)
+    CURRENT_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
     
-    if [ "$INSTALLED_VERSION" = "$CURRENT_VERSION" ]; then
+    if [ "$INSTALLED_VERSION" = "$CURRENT_VERSION" ] && [ -n "$INSTALLED_VERSION" ]; then
         log "APK already installed with same version"
         exit 0
     fi
@@ -34,17 +38,16 @@ log "Installing InputBlocker companion app..."
 APK_PATH="$APK_DIR/InputBlocker.apk"
 
 if [ -f "$APK_PATH" ]; then
-    # Get APK version for the flag
-    APK_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
-    
     # Install APK (replace existing)
     pm install -r "$APK_PATH" 2>/dev/null
     
     if [ $? -eq 0 ]; then
         log "APK installed successfully"
-        # Store installed version
+        # Get APK version and store installed flag
+        APK_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
         if [ -n "$APK_VERSION" ]; then
             echo "$APK_VERSION" > "$INSTALL_FLAG"
+            log "Stored version: $APK_VERSION"
         else
             echo "installed" > "$INSTALL_FLAG"
         fi
