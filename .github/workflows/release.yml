@@ -154,7 +154,16 @@ jobs:
         run: |
           cd android-app
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon -q
+          ./gradlew :app:assembleRelease --no-daemon
+
+      - name: Verify APK exists
+        run: |
+          if [ ! -f "android-app/app/build/outputs/apk/release/app-release.apk" ]; then
+            echo "ERROR: APK not found!"
+            ls -la android-app/app/build/outputs/apk/ 2>/dev/null || echo "APK output directory doesn't exist"
+            exit 1
+          fi
+          echo "APK found successfully"
 
       - name: Create module
         run: |
