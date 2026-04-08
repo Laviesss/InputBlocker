@@ -51,6 +51,67 @@ public class MainWindow : Window
         ConnectToDevice();
         LoadExistingRegions();
         StartScreenshotTimer();
+        CheckForUpdates();
+    }
+
+    private async void CheckForUpdates()
+    {
+        var currentVersion = Program.Version;
+        
+        await UpdateChecker.CheckForUpdateAsync(new UpdateCallback(this), currentVersion);
+    }
+    
+    private class UpdateCallback : UpdateChecker.IUpdateCallback
+    {
+        private readonly MainWindow _window;
+        
+        public UpdateCallback(MainWindow window) => _window = window;
+        
+        public void OnUpdateAvailable(UpdateChecker.UpdateInfo info, string currentVersion)
+        {
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                var result = MessageBox.Show(
+                    _window,
+                    $"A new version ({info.Version}) is available!\n\nYou have: {currentVersion}\n\nWould you like to download it?",
+                    "Update Available",
+                    MessageBox.MessageBoxButtons.YesNo,
+                    MessageBox.MessageBoxIcon.Info);
+                
+                if (result == MessageBoxResult.Yes)
+                {
+                    try
+                    {
+                        OpenUrl(info.ReleaseUrl);
+                    }
+                    catch { }
+                }
+            });
+        }
+        
+        public void OnNoUpdateAvailable(string currentVersion)
+        {
+            Console.WriteLine($"You have the latest version ({currentVersion})");
+        }
+        
+        public void OnError(string error)
+        {
+            Console.WriteLine($"Update check failed: {error}");
+        }
+    }
+    
+    private static void OpenUrl(string url)
+    {
+        try
+        {
+            var psi = new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            };
+            System.Diagnostics.Process.Start(psi);
+        }
+        catch { }
     }
 
     private void InitializeComponent()

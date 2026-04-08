@@ -28,6 +28,8 @@ public class Main extends JFrame {
     private static final Color DRAW_FILL = new Color(77, 255, 87, 34);
     private static final Color DRAW_STROKE = new Color(255, 87, 34);
 
+    public static final String VERSION = "1.0.0";
+
     public Main() {
         setTitle("InputBlocker Setup - by Laviesss");
         setSize(650, 900);
@@ -37,6 +39,48 @@ public class Main extends JFrame {
         initComponents();
         connectToDevice();
         loadExistingRegions();
+        checkForUpdates();
+    }
+
+    private void checkForUpdates() {
+        UpdateChecker checker = new UpdateChecker(VERSION, this);
+        checker.setCallback(new UpdateChecker.UpdateCallback() {
+            @Override
+            public void onUpdateAvailable(String version, String releaseUrl, String currentVersion) {
+                SwingUtilities.invokeLater(() -> {
+                    int result = JOptionPane.showConfirmDialog(
+                        Main.this,
+                        "A new version (" + version + ") is available!\n\nYou have: " + currentVersion + "\n\nWould you like to download it?",
+                        "Update Available",
+                        JOptionPane.YES_NO_OPTION
+                    );
+                    
+                    if (result == JOptionPane.YES_OPTION) {
+                        openUrl(releaseUrl);
+                    }
+                });
+            }
+
+            @Override
+            public void onNoUpdateAvailable(String currentVersion) {
+                System.out.println("You have the latest version (" + currentVersion + ")");
+            }
+
+            @Override
+            public void onError(String error) {
+                System.out.println("Update check failed: " + error);
+            }
+        });
+        
+        new Thread(checker).start();
+    }
+    
+    private void openUrl(String url) {
+        try {
+            java.awt.Desktop.getDesktop().browse(new java.net.URI(url));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void initComponents() {
