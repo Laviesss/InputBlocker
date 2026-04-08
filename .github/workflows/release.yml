@@ -192,3 +192,42 @@ jobs:
         with:
           name: InputBlocker-Magisk-Module-Lite
           path: release/InputBlocker-lite.zip
+
+  create-release:
+    needs: [setup, build-csharp, build-java, build-module]
+    runs-on: ubuntu-latest
+    if: needs.setup.outputs.is_release == 'true'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            filename=$(basename "$dir")
+            if [ -f "$dir$filename" ]; then
+              cp "$dir$filename" "release/"
+            else
+              for f in "$dir"*; do
+                if [ -f "$f" ]; then
+                  cp "$f" "release/"
+                fi
+              done
+            fi
+          done
+          ls -la release/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
