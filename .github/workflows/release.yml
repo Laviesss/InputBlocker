@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -53,11 +56,11 @@ jobs:
           - os: windows-latest
             platform: win-x64
             artifact_name: InputBlockerSetup-windows-x64
-            ext: exe
+            ext: .exe
           - os: windows-latest
             platform: win-arm64
             artifact_name: InputBlockerSetup-windows-arm64
-            ext: exe
+            ext: .exe
           - os: ubuntu-latest
             platform: linux-x64
             artifact_name: InputBlockerSetup-linux-x64
@@ -99,7 +102,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: csharp-${{ matrix.platform }}
-          path: release/${{ matrix.platform }}/InputBlockerSetup{{ matrix.ext && format('.{0}', matrix.ext) }}
+          path: release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }}
 
   build-java:
     needs: setup
