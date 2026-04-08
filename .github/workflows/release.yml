@@ -85,11 +85,14 @@ jobs:
         if: matrix.os != 'windows-latest'
         run: chmod +x release/${{ matrix.platform }}/InputBlockerSetup
 
+      - name: Rename artifact
+        run: mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: csharp-${{ matrix.platform }}
-          path: release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }}
+          name: InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+          path: release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
 
   build-java:
     needs: setup
@@ -117,7 +120,7 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: java-${{ matrix.os }}
+          name: InputBlocker-Setup-Java-${{ matrix.os }}
           path: pc-tool-java/build/libs/InputBlockerSetup-1.0.0.jar
 
   build-apk:
@@ -146,7 +149,7 @@ jobs:
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-debug-apk
+          name: InputBlocker-debug.apk
           path: android-app/app/build/outputs/apk/debug/app-debug.apk
 
   build-module:
@@ -181,11 +184,11 @@ jobs:
       - name: Upload full module
         uses: actions/upload-artifact@v4
         with:
-          name: module-full
+          name: InputBlocker-Magisk-Module-Full
           path: release/InputBlocker.zip
 
       - name: Upload lite module
         uses: actions/upload-artifact@v4
         with:
-          name: module-lite
+          name: InputBlocker-Magisk-Module-Lite
           path: release/InputBlocker-lite.zip
