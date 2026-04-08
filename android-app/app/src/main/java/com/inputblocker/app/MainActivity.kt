@@ -10,6 +10,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.Menu
+import android.view.MenuItem
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -78,6 +80,79 @@ class MainActivity : AppCompatActivity() {
         loadConfig()
         updateUI()
         applyThemeToViews()
+        
+        checkForUpdates()
+    }
+    
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main_menu, menu)
+        return true
+    }
+    
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_check_update -> {
+                checkForUpdates(force = true)
+                true
+            }
+            R.id.action_about -> {
+                showAboutDialog()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+    
+    private fun checkForUpdates(force: Boolean = false) {
+        UpdateChecker.checkForUpdate(object : UpdateChecker.UpdateCallback {
+            override fun onUpdateAvailable(info: UpdateChecker.UpdateInfo, currentVersion: String) {
+                runOnUiThread {
+                    showUpdateDialog(info, currentVersion)
+                }
+            }
+            
+            override fun onNoUpdateAvailable(currentVersion: String) {
+                runOnUiThread {
+                    if (force) {
+                        Toast.makeText(this@MainActivity, "You're on the latest version ($currentVersion)", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            
+            override fun onError(error: String) {
+                runOnUiThread {
+                    if (force) {
+                        Toast.makeText(this@MainActivity, "Update check failed: $error", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        })
+    }
+    
+    private fun showUpdateDialog(info: UpdateChecker.UpdateInfo, currentVersion: String) {
+        AlertDialog.Builder(this)
+            .setTitle("Update Available")
+            .setMessage("A new version ($info.version) is available!\n\nYou have: $currentVersion\n\nWould you like to download it?")
+            .setPositiveButton("Download") { _, _ ->
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.releaseUrl))
+                startActivity(intent)
+            }
+            .setNegativeButton("Later", null)
+            .show()
+    }
+    
+    private fun showAboutDialog() {
+        val version = try {
+            packageManager.getPackageInfo(packageName, 0).versionName
+        } catch (e: Exception) {
+            "Unknown"
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("About InputBlocker")
+            .setMessage("InputBlocker v$version\n\nBlock ghost taps and unwanted touch inputs.\n\nCreated by Laviesss")
+            .setPositiveButton("OK", null)
+            .show()
     }
 
     override fun onResume() {
