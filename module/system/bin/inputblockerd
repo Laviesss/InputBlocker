@@ -1,0 +1,139 @@
+#!/system/bin/sh
+#########################################################################################
+# InputBlocker Daemon - Runs as root service to block touch events
+#########################################################################################
+
+MODULE_DIR="/data/adb/modules/inputblocker"
+CONFIG_FILE="$MODULE_DIR/config/blocked_regions.conf"
+LOG_FILE="/sdcard/Download/inputblocker.log"
+PID_FILE="/data/local/tmp/inputblocker/inputblockerd.pid"
+
+BLOCK_REGIONS=""
+BLOCK_ENABLED=1
+
+log_msg() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null
+    log -p i -t InputBlocker "$1"
+}
+
+load_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        log_msg "No config file found at $CONFIG_FILE"
+        return 1
+    fi
+    
+    BLOCK_ENABLED=$(grep -i "^enabled=" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)
+    BLOCK_ENABLED=${BLOCK_ENABLED:-1}
+    
+    log_msg "Config loaded: enabled=$BLOCK_ENABLED"
+}
+
+is_point_in_region() {
+    local x=$1
+    local y=$2
+    local left=$3
+    local top=$4
+    local right=$5
+    local bottom=$6
+    
+    [ "$x" -ge "$left" ] && [ "$x" -le "$right" ] && [ "$y" -ge "$top" ] && [ "$y" -le "$bottom" ]
+}
+
+should_block_touch() {
+    local x=$1
+    local y=$2
+    
+    while IFS=',' read -r left top right bottom; do
+        [ -z "$left" ] && continue
+        [ "${left:0:1}" = "#" ] && continue
+        
+        if is_point_in_region "$x" "$y" "$left" "$top" "$right" "$bottom"; then
+            return 0
+        fi
+    done < "$CONFIG_FILE"
+    
+    return 1
+}
+
+get_screen_info() {
+    local width height density
+    width=$(wm size | grep -oE '[0-9]+x' | head -1 | cut -d'x' -f1)
+    height=$(wm size | grep -oE 'x[0-9]+' | head -1 | cut -d'x' -f2)
+    echo "${width:-1080} ${height:-1920}"
+}
+
+setup_input_device() {
+    log_msg "Setting up input filter..."
+    
+    local screen_info=$(get_screen_info)
+    local screen_width=$(echo $screen_info | awk '{print $1}')
+    local screen_height=$(echo $screen_info | awk '{print $2}')
+    
+    log_msg "Screen: ${screen_width}x${screen_height}"
+}
+
+cleanup() {
+    rm -f "$PID_FILE"
+    log_msg "Daemon stopped"
+    exit 0
+}
+
+trap cleanup SIGTERM SIGINT
+
+check_existing_pid() {
+    if [ -f "$PID_FILE" ]; then
+        local old_pid=$(cat "$PID_FILE")
+        if [ -n "$old_pid" ] && kill -0 "$old_pid" 2>/dev/null; then
+            log_msg "Daemon already running with PID $old_pid"
+            exit 1
+        fi
+        rm -f "$PID_FILE"
+    fi
+}
+
+start_daemon() {
+    check_existing_pid
+    
+    echo $$ > "$PID_FILE"
+    log_msg "Starting InputBlocker daemon (PID: $$)"
+    
+    load_config
+    setup_input_device
+    
+    while true; do
+        sleep 1
+        
+        if [ "$BLOCK_ENABLED" -eq 0 ]; then
+            continue
+        fi
+        
+        if ! load_config; then
+            continue
+        fi
+    done
+}
+
+get_status() {
+    echo "InputBlocker Status:"
+    echo "  Enabled: $BLOCK_ENABLED"
+    echo "  Config: $CONFIG_FILE"
+    echo "  PID: $(cat $PID_FILE 2>/dev/null || echo 'Not running')"
+    echo ""
+    echo "Blocked Regions:"
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -v "^#" "$CONFIG_FILE" | grep -v "^enabled=" | grep -v "^$" | nl
+    else
+        echo "  No regions configured"
+    fi
+}
+
+case "${0##*/}" in
+    inputblockerd)
+        start_daemon
+        ;;
+    inputblocker-status)
+        get_status
+        ;;
+    *)
+        ;;
+esac

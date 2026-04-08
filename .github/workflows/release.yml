@@ -164,33 +164,33 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: android-debug-apk
-          path: magisk-module/common/
+          path: module/common/
 
       - name: Rename APK
-        run: mv magisk-module/common/app-debug.apk magisk-module/common/InputBlocker.apk
+        run: mv module/common/app-debug.apk module/common/InputBlocker.apk
 
       - name: Create full module
         run: |
           mkdir -p release
-          cd magisk-module
+          cd module
           zip -r ../release/InputBlocker.zip . -x "*.DS_Store"
 
       - name: Create lite module
         run: |
-          rm magisk-module/common/InputBlocker.apk
-          cd magisk-module
+          rm module/common/InputBlocker.apk
+          cd module
           zip -r ../release/InputBlocker-lite.zip . -x "*.DS_Store"
 
       - name: Upload full module
         uses: actions/upload-artifact@v4
         with:
-          name: InputBlocker-Magisk-Module-Full
+          name: InputBlocker-RootModule-Full
           path: release/InputBlocker.zip
 
       - name: Upload lite module
         uses: actions/upload-artifact@v4
         with:
-          name: InputBlocker-Magisk-Module-Lite
+          name: InputBlocker-RootModule-Lite
           path: release/InputBlocker-lite.zip
 
   create-release:

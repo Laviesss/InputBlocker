@@ -4,10 +4,3 @@ version=v1.0.0
 versionCode=1
 author=Laviesss
 description=Block ghost taps and unwanted touch inputs by defining rectangular regions
-
-# Supported Root Managers:
-# - Magisk
-# - KernelSU
-# - APatch
-# - SuperSU (legacy)
-# - Other root solutions using /data/adb/modules/ or /data/su.d/

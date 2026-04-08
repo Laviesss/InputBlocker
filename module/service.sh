@@ -1,10 +1,10 @@
 #!/system/bin/sh
 #########################################################################################
-# InputBlocker - Service Script
+# InputBlocker - Boot Service Script
 # Auto-installs companion app on first boot after module installation
 #########################################################################################
 
-MODDIR=${0%/*}
+MODDIR="${0%/*}"
 APK_DIR="$MODDIR/common"
 INSTALL_FLAG_DIR="/data/local/tmp/inputblocker"
 INSTALL_FLAG="$INSTALL_FLAG_DIR/.apk_installed"

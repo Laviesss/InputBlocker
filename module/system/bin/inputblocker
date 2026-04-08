@@ -1,0 +1,256 @@
+#!/system/bin/sh
+#########################################################################################
+# InputBlocker CLI Tool - by Laviesss
+# Block ghost taps and unwanted touch inputs
+# Supports: Magisk, KernelSU, APatch, SuperSU
+#########################################################################################
+
+detect_module_path() {
+    local paths="
+        /data/adb/modules/inputblocker
+        /data/ksu/modules/inputblocker
+        /data/apatch/modules/inputblocker
+        /su/su.d/inputblocker
+    "
+    
+    for path in $paths; do
+        if [ -d "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    
+    echo "/data/adb/modules/inputblocker"
+}
+
+MODULE_DIR="$(detect_module_path)"
+CONFIG_DIR="$MODULE_DIR/config"
+CONFIG_FILE="$CONFIG_DIR/blocked_regions.conf"
+LOG_FILE="/sdcard/Download/inputblocker.log"
+
+log_msg() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG_FILE" 2>/dev/null
+    log -p i -t InputBlocker "$1"
+}
+
+mkdir -p "$CONFIG_DIR"
+
+show_help() {
+    cat << 'EOF'
+InputBlocker CLI - Block ghost taps on your device
+Created by Laviesss
+
+Supports: Magisk, KernelSU, APatch, SuperSU
+
+Usage: inputblocker <command> [options]
+
+Commands:
+    status              Show current status and blocked regions
+    enable              Enable touch blocking
+    disable             Disable touch blocking
+    list                List all blocked regions
+    add <x1,y1,x2,y2>   Add a blocked region
+    remove <id>         Remove a blocked region by ID
+    clear               Remove all regions
+    reset-crash         Reset crash protection flag
+    path                Show module path
+    gui                 Launch visual setup GUI
+
+Kill Switch:
+    Press Vol Down x3, then Vol Up x3 (within 5 seconds)
+
+Examples:
+    inputblocker add 0,0,100,200
+    inputblocker list
+    inputblocker reset-crash
+
+EOF
+}
+
+load_config() {
+    ENABLED=1
+    FORCE_SAFE=0
+    
+    if [ -f "$CONFIG_FILE" ]; then
+        ENABLED=$(grep -i "^enabled=" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)
+        FORCE_SAFE=$(grep -i "^force_safe_mode=" "$CONFIG_FILE" 2>/dev/null | cut -d= -f2)
+        ENABLED=${ENABLED:-1}
+        FORCE_SAFE=${FORCE_SAFE:-0}
+    fi
+}
+
+save_config() {
+    load_config
+    
+    TEMP_FILE=$(mktemp)
+    
+    {
+        echo "# InputBlocker Configuration"
+        echo "# Format: x1,y1,x2,y2"
+        echo ""
+        echo "enabled=$ENABLED"
+        echo "force_safe_mode=$FORCE_SAFE"
+        echo ""
+        grep -v "^#" "$CONFIG_FILE" 2>/dev/null | grep -v "^enabled=" | grep -v "^force_safe_mode=" | grep -v "^$"
+    } > "$TEMP_FILE"
+    
+    mv "$TEMP_FILE" "$CONFIG_FILE"
+    chmod 644 "$CONFIG_FILE"
+}
+
+show_status() {
+    load_config
+    
+    echo "InputBlocker Status - by Laviesss"
+    echo "==========================="
+    echo "Module path: $MODULE_DIR"
+    echo ""
+    
+    if [ "$FORCE_SAFE" -eq 1 ]; then
+        echo "Status: DISABLED (Crash Protection Active)"
+        echo "Run 'inputblocker reset-crash' to re-enable"
+    elif [ "$ENABLED" -eq 1 ]; then
+        echo "Status: ENABLED"
+    else
+        echo "Status: DISABLED"
+    fi
+    
+    echo ""
+    echo "Blocked Regions:"
+    
+    COUNT=0
+    while IFS=',' read -r x1 y1 x2 y2; do
+        [ -z "$x1" ] && continue
+        echo "$x1" | grep -qE '^[0-9]+$' || continue
+        
+        COUNT=$((COUNT + 1))
+        WIDTH=$((x2 - x1))
+        HEIGHT=$((y2 - y1))
+        echo "  [$COUNT] (${x1},${y1}) -> (${x2},${y2}) [${WIDTH}x${HEIGHT}]"
+    done < <(grep -v "^#" "$CONFIG_FILE" 2>/dev/null | grep -v "^enabled=" | grep -v "^force_safe_mode=" | grep -v "^$")
+    
+    [ "$COUNT" -eq 0 ] && echo "  No regions configured"
+    
+    echo ""
+    echo "Total regions: $COUNT"
+}
+
+add_region() {
+    local coords="$1"
+    
+    [ -z "$coords" ] && { echo "Error: Provide x1,y1,x2,y2"; return 1; }
+    
+    local x1 y1 x2 y2
+    IFS=',' read -r x1 y1 x2 y2 <<< "$coords"
+    
+    [ -z "$x1" ] || [ -z "$y1" ] || [ -z "$x2" ] || [ -z "$y2" ] && { echo "Error: Invalid format"; return 1; }
+    
+    echo "$x1" | grep -qE '^[0-9]+$' || { echo "Error: Coordinates must be numbers"; return 1; }
+    [ "$x1" -ge "$x2" ] || [ "$y1" -ge "$y2" ] && { echo "Error: x1<x2, y1<y2 required"; return 1; }
+    
+    load_config
+    echo "${x1},${y1},${x2},${y2}" >> "$CONFIG_FILE"
+    echo "Added: (${x1},${y1}) -> (${x2},${y2})"
+    log_msg "Added region: ${x1},${y1},${x2},${y2}"
+}
+
+remove_region() {
+    local id="$1"
+    
+    [ -z "$id" ] && { echo "Error: Specify region ID"; return 1; }
+    
+    load_config
+    
+    TEMP_FILE=$(mktemp)
+    COUNT=0
+    FOUND=0
+    
+    while IFS=',' read -r x1 y1 x2 y2; do
+        [ -z "$x1" ] && continue
+        echo "$x1" | grep -qE '^[0-9]+$' || continue
+        
+        COUNT=$((COUNT + 1))
+        
+        if [ "$COUNT" -eq "$id" ]; then
+            FOUND=1
+            echo "Removed [$id]: (${x1},${y1}) -> (${x2},${y2})"
+        else
+            echo "${x1},${y1},${x2},${y2}" >> "$TEMP_FILE"
+        fi
+    done < "$CONFIG_FILE"
+    
+    [ "$FOUND" -eq 0 ] && { rm "$TEMP_FILE"; echo "Error: Region $id not found"; return 1; }
+    
+    {
+        echo "enabled=$ENABLED"
+        echo "force_safe_mode=$FORCE_SAFE"
+    } >> "$TEMP_FILE"
+    
+    mv "$TEMP_FILE" "$CONFIG_FILE"
+}
+
+clear_regions() {
+    load_config
+    echo "# InputBlocker" > "$CONFIG_FILE"
+    echo "enabled=$ENABLED" >> "$CONFIG_FILE"
+    echo "force_safe_mode=$FORCE_SAFE" >> "$CONFIG_FILE"
+    echo "Regions cleared"
+    log_msg "Cleared all regions"
+}
+
+enable_blocking() {
+    load_config
+    ENABLED=1
+    save_config
+    echo "InputBlocker ENABLED"
+    log_msg "Blocking enabled"
+    am broadcast -a com.inputblocker.ENABLE --ez force_safe 0 >/dev/null 2>&1
+}
+
+disable_blocking() {
+    load_config
+    ENABLED=0
+    save_config
+    echo "InputBlocker DISABLED"
+    log_msg "Blocking disabled"
+    am broadcast -a com.inputblocker.DISABLE >/dev/null 2>&1
+}
+
+reset_crash() {
+    load_config
+    FORCE_SAFE=0
+    save_config
+    echo "Crash protection reset"
+    echo "Run 'inputblocker enable' to re-enable blocking"
+    log_msg "Crash protection reset"
+}
+
+init_config() {
+    [ -f "$CONFIG_FILE" ] && return
+    
+    cat > "$CONFIG_FILE" << 'EOF'
+# InputBlocker Configuration
+enabled=1
+force_safe_mode=0
+
+# Kill switch: Vol Down x3 -> Vol Up x3 (within 5 seconds)
+# Add regions below:
+EOF
+    log_msg "Created config file at $CONFIG_FILE"
+}
+
+init_config
+
+case "$1" in
+    status|list) show_status ;;
+    enable) enable_blocking ;;
+    disable) disable_blocking ;;
+    add) add_region "$2" ;;
+    remove) remove_region "$2" ;;
+    clear) clear_regions ;;
+    reset-crash) reset_crash ;;
+    path) echo "$MODULE_DIR" ;;
+    gui|setup) echo "Use InputBlocker Setup tool on your computer" ;;
+    help|--help|-h|"") show_help ;;
+    *) echo "Unknown: $1"; show_help ;;
+esac
