@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.inputblocker'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+application {
+    mainClass = 'com.inputblocker.setup.Main'
+}
+
+jar {
+    archiveBaseName = 'InputBlockerSetup'
+    manifest {
+        attributes 'Main-Class': 'com.inputblocker.setup.Main'
+    }
+}

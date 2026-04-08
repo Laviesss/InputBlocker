@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@color/app_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="InputBlocker"
+            android:textSize="28sp"
+            android:textColor="@color/app_text_primary"
+            android:textStyle="bold"/>
+
+        <Button
+            android:id="@+id/btn_theme"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Theme"
+            android:textSize="12sp"
+            android:minWidth="80dp"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_status"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Status: ENABLED"
+        android:textSize="18sp"
+        android:textColor="@color/accent_green"
+        android:layout_marginBottom="16dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Enable Blocking:"
+            android:textColor="@color/app_text_primary"
+            android:textSize="16sp"
+            android:layout_marginEnd="16dp"/>
+
+        <Switch
+            android:id="@+id/switch_enabled"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:checked="true"/>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Blocked Regions"
+        android:textColor="@color/app_text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="8dp"/>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginBottom="16dp"
+        android:background="@color/app_surface"
+        android:padding="8dp">
+
+        <LinearLayout
+            android:id="@+id/regions_list"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"/>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_launch_setup"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Visual Setup"
+            android:layout_marginEnd="8dp"
+            android:backgroundTint="@color/accent_blue"/>
+
+        <Button
+            android:id="@+id/btn_add_region"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Add Manually"
+            android:layout_marginEnd="8dp"
+            android:backgroundTint="@color/app_surface_elevated"
+            android:textColor="@color/app_text_primary"/>
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_clear_all"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Clear All Regions"
+        android:backgroundTint="@color/accent_red"
+        android:layout_marginTop="8dp"/>
+
+</LinearLayout>

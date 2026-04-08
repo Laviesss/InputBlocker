@@ -1,0 +1,4 @@
+// Root build.gradle - placeholder for plugin management
+plugins {
+    id 'com.android.application' version '8.2.0' apply false
+}

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base Colors -->
+    <color name="accent_blue">#2196F3</color>
+    <color name="accent_green">#4CAF50</color>
+    <color name="accent_red">#F44336</color>
+    <color name="accent_orange">#FF9800</color>
+
+    <!-- Light Theme Colors -->
+    <color name="light_background">#FAFAFA</color>
+    <color name="light_surface">#FFFFFF</color>
+    <color name="light_surface_elevated">#F5F5F5</color>
+    <color name="light_text_primary">#212121</color>
+    <color name="light_text_secondary">#757575</color>
+    <color name="light_border">#E0E0E0</color>
+
+    <!-- Dark Theme Colors -->
+    <color name="dark_background">#121212</color>
+    <color name="dark_surface">#1E1E1E</color>
+    <color name="dark_surface_elevated">#2D2D2D</color>
+    <color name="dark_text_primary">#FFFFFF</color>
+    <color name="dark_text_secondary">#B0B0B0</color>
+    <color name="dark_border">#3D3D3D</color>
+
+    <!-- AMOLED Theme Colors -->
+    <color name="amoled_background">#000000</color>
+    <color name="amoled_surface">#0A0A0A</color>
+    <color name="amoled_surface_elevated">#151515</color>
+    <color name="amoled_text_primary">#FFFFFF</color>
+    <color name="amoled_text_secondary">#808080</color>
+    <color name="amoled_border">#1A1A1A</color>
+
+    <!-- Current Theme (defaults - will be changed by Java) -->
+    <color name="app_background">#1E1E1E</color>
+    <color name="app_surface">#2D2D2D</color>
+    <color name="app_surface_elevated">#383838</color>
+    <color name="app_text_primary">#FFFFFF</color>
+    <color name="app_text_secondary">#B0B0B0</color>
+    <color name="app_border">#3D3D3D</color>
+    <color name="app_accent">#2196F3</color>
+</resources>

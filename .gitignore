@@ -1,0 +1,143 @@
+# ============================================================
+# InputBlocker - .gitignore
+# ============================================================
+
+# Local context files (for developer reference only)
+CONTEXT.md
+TODO.md
+
+# Build outputs
+bin/
+build/
+dist/
+out/
+release/
+releases/
+
+# Gradle
+.gradle/
+*.jar
+*.apk
+*.aab
+*.zip
+!**/gradle/wrapper/gradle-wrapper.jar
+
+# .NET
+*.dll
+*.exe
+obj/
+!**/pc-tool-csharp/**/*.csproj.user
+
+# Android
+*.iml
+local.properties
+*.log
+captures/
+.externalNativeBuild
+.cxx/
+*.ap_
+*.dex
+
+# Java
+*.class
+*.log
+*.bak
+
+# ============================================================
+# IDE Files
+# ============================================================
+
+# JetBrains / IntelliJ
+.idea/
+*.iws
+*.ipr
+*.idb
+*.cr
+*.ml
+*.flex
+*.mxml
+*.hm
+*.lr
+shelf/
+workspace.xml
+httpRequests/
+queries/
+dataSources/
+dataSources.local.xml
+
+# Visual Studio / VS Code
+.vs/
+.vscode/
+*.suo
+*.cache
+*.user
+*.userosscache
+*.user2
+*.sln.docstates
+
+# Eclipse
+.project
+.classpath
+.settings/
+.metadata/
+.cache/
+
+# NetBeans
+nbproject/
+*.orig
+
+# Vim / Neovim
+*.swp
+*.swo
+*~
+*.un~
+Session.vim
+.netrwhist
+
+# Emacs
+*~
+\#*\#
+.\#*
+*.elc
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# ============================================================
+# OS Files
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ============================================================
+# Temporary Files
+# ============================================================
+
+*.tmp
+*.temp
+.cache/
+*.lock
+*.pid
+
+# Test coverage
+coverage/
+*.lcov
+
+# Environment files
+.env
+.env.local
+*.local.properties
