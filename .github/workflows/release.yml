@@ -15,7 +15,6 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       is_release: ${{ steps.version.outputs.is_release }}
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -35,18 +34,6 @@ jobs:
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
-
-      - name: Create Release
-        if: steps.version.outputs.is_release == 'true'
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ steps.version.outputs.version }}
-          release_name: InputBlocker ${{ steps.version.outputs.version }}
-          draft: false
-          prerelease: false
 
   build-csharp:
     needs: setup
@@ -125,7 +112,7 @@ jobs:
         run: |
           cd pc-tool-java
           chmod +x gradlew
-          ./gradlew jar --no-daemon -q
+          ./gradlew jar --no-daemon
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -133,7 +120,7 @@ jobs:
           name: java-${{ matrix.os }}
           path: pc-tool-java/build/libs/InputBlockerSetup-1.0.0.jar
 
-  build-module:
+  build-apk:
     needs: setup
     runs-on: ubuntu-latest
     
@@ -150,37 +137,48 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build APK
+      - name: Build debug APK
         run: |
           cd android-app
           chmod +x gradlew
-          ./gradlew :app:assembleRelease --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
 
-      - name: Verify APK exists
-        run: |
-          if [ ! -f "android-app/app/build/outputs/apk/release/app-release.apk" ]; then
-            echo "ERROR: APK not found!"
-            ls -la android-app/app/build/outputs/apk/ 2>/dev/null || echo "APK output directory doesn't exist"
-            exit 1
-          fi
-          echo "APK found successfully"
-
-      - name: Create module
-        run: |
-          mkdir -p magisk-module/common
-          cp android-app/app/build/outputs/apk/release/app-release.apk magisk-module/common/InputBlocker.apk
-          cd magisk-module
-          zip -r ../release/InputBlocker.zip . -x "*.DS_Store"
-          rm common/InputBlocker.apk
-          zip -r ../release/InputBlocker-lite.zip . -x "*.DS_Store"
-
-      - name: Upload APK
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: android-app/app/build/outputs/apk/release/app-release.apk
+          name: android-debug-apk
+          path: android-app/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Upload modules
+  build-module:
+    needs: [setup, build-apk]
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download debug APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-debug-apk
+          path: magisk-module/common/
+
+      - name: Rename APK
+        run: mv magisk-module/common/app-debug.apk magisk-module/common/InputBlocker.apk
+
+      - name: Create full module
+        run: |
+          mkdir -p release
+          cd magisk-module
+          zip -r ../release/InputBlocker.zip . -x "*.DS_Store"
+
+      - name: Create lite module
+        run: |
+          rm magisk-module/common/InputBlocker.apk
+          cd magisk-module
+          zip -r ../release/InputBlocker-lite.zip . -x "*.DS_Store"
+
+      - name: Upload full module
         uses: actions/upload-artifact@v4
         with:
           name: module-full
