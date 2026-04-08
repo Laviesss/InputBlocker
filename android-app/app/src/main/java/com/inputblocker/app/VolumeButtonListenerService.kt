@@ -60,6 +60,7 @@ class VolumeButtonListenerService : Service() {
                             event?.let { handleMediaButton(it) }
                         }
                         "android.media.VOLUME_CHANGED_ACTION" -> handleVolumeChange()
+                        else -> {}
                     }
                 }
             }
@@ -105,7 +106,7 @@ class VolumeButtonListenerService : Service() {
         
         resetTimeoutTimer()
         
-        Log.d(TAG, "Button pressed: ${if (isUp) "UP" else "DOWN"} (sequence: $getSequenceString())")
+        Log.d(TAG, "Button pressed: ${if (isUp) "UP" else "DOWN"} (sequence: ${getSequenceString()})")
         
         if (checkSequence()) {
             triggerKillSwitch()

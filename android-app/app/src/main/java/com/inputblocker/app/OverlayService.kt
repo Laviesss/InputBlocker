@@ -69,7 +69,7 @@ class OverlayService : Service() {
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "Shows when InputBlocker is blocking touches"
-                showBadge = false
+                setShowBadge(false)
             }
             
             val manager = getSystemService(NotificationManager::class.java)
@@ -174,7 +174,7 @@ class OverlayService : Service() {
         
         touchBlockView?.apply {
             setRegions(regions)
-            setEnabled(isEnabled && !forceSafeMode)
+            setBlockingEnabled(isEnabled && !forceSafeMode)
         }
 
         try {
@@ -220,7 +220,7 @@ class OverlayService : Service() {
         
         touchBlockView?.apply {
             setRegions(regions)
-            setEnabled(isEnabled && !forceSafeMode)
+            setBlockingEnabled(isEnabled && !forceSafeMode)
         }
         
         val nm = getSystemService(NotificationManager::class.java)
@@ -232,7 +232,7 @@ class OverlayService : Service() {
     private fun disableBlocking() {
         isEnabled = false
         
-        touchBlockView?.setEnabled(false)
+        touchBlockView?.setBlockingEnabled(false)
         
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
@@ -249,7 +249,7 @@ class OverlayService : Service() {
         
         isEnabled = true
         
-        touchBlockView?.setEnabled(true)
+        touchBlockView?.setBlockingEnabled(true)
         
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
@@ -347,7 +347,7 @@ class OverlayService : Service() {
             invalidate()
         }
 
-        fun setEnabled(enabled: Boolean) {
+        fun setBlockingEnabled(enabled: Boolean) {
             this.enabled = enabled
             invalidate()
         }

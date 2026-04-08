@@ -40,7 +40,7 @@ class SetupActivity : AppCompatActivity() {
         currentTheme = intent.getIntExtra("theme", 0)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            window.addFlags(WindowManager.LayoutParams.FLAG_DRAW_OVER_SYSTEM_BARS)
+            window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE)
         }
 
         setContentView(R.layout.activity_setup)

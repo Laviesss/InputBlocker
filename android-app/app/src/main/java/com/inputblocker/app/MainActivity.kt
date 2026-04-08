@@ -109,7 +109,7 @@ class MainActivity : AppCompatActivity() {
             THEME_AMOLED -> {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
             }
-            THEME_SYSTEM, else -> {
+            else -> {
                 AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
             }
         }
