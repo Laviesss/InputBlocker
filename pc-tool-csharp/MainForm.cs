@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -69,24 +70,61 @@ public class MainWindow : Window
         
         public void OnUpdateAvailable(UpdateChecker.UpdateInfo info, string currentVersion)
         {
-            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
             {
-                var result = MessageBox.Show(
-                    _window,
-                    $"A new version ({info.Version}) is available!\n\nYou have: {currentVersion}\n\nWould you like to download it?",
-                    "Update Available",
-                    MessageBox.MessageBoxButtons.YesNo,
-                    MessageBox.MessageBoxIcon.Info);
+                var result = await ShowUpdateDialog(info.Version, currentVersion);
                 
-                if (result == MessageBoxResult.Yes)
+                if (result)
                 {
-                    try
-                    {
-                        OpenUrl(info.ReleaseUrl);
-                    }
-                    catch { }
+                    OpenUrl(info.ReleaseUrl);
                 }
             });
+        }
+        
+        private async Task<bool> ShowUpdateDialog(string newVersion, string currentVersion)
+        {
+            var window = _window;
+            
+            var dialog = new Avalonia.Controls.TextBlock
+            {
+                Text = $"A new version ({newVersion}) is available!\n\nYou have: {currentVersion}\n\nWould you like to download it?",
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                Margin = new Avalonia.Thickness(0, 0, 0, 16)
+            };
+            
+            var yesButton = new Avalonia.Controls.Button { Content = "Download", Width = 100 };
+            var noButton = new Avalonia.Controls.Button { Content = "Later", Width = 100 };
+            
+            var buttonPanel = new Avalonia.Controls.StackPanel
+            {
+                Orientation = Avalonia.Layout.Orientation.Horizontal,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                Spacing = 8,
+                Children = { noButton, yesButton }
+            };
+            
+            var panel = new Avalonia.Controls.StackPanel
+            {
+                Margin = new Avalonia.Thickness(24),
+                Spacing = 16,
+                Children = { dialog, buttonPanel }
+            };
+            
+            var dialogWindow = new Avalonia.Controls.Window
+            {
+                Title = "Update Available",
+                Width = 350,
+                Height = 200,
+                Content = panel,
+                WindowStartupLocation = Avalonia.Platform.WindowStartupLocation.CenterOwner,
+                CanResize = false,
+                Topmost = true
+            };
+            
+            yesButton.Click += (s, e) => { dialogWindow.Close(true); };
+            noButton.Click += (s, e) => { dialogWindow.Close(false); };
+            
+            return await dialogWindow.ShowDialog<bool>(window);
         }
         
         public void OnNoUpdateAvailable(string currentVersion)
