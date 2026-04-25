@@ -23,6 +23,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.annotation.Nullable
 import androidx.core.app.NotificationCompat
+import java.lang.ref.WeakReference
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
@@ -158,6 +159,7 @@ class OverlayService : Service() {
         }
 
         touchBlockView = TouchBlockView(this)
+        touchBlockView?.setService(this)
         
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -312,11 +314,105 @@ class OverlayService : Service() {
         var y2: Int = 0
     ) : Serializable
 
-    inner class TouchBlockView(context: Context) : View(context) {
+    class TouchBlockView(context: Context) : View(context) {
+        private var serviceRef = WeakReference<OverlayService>(null)
+
+        fun setService(service: OverlayService) {
+            serviceRef = WeakReference(service)
+        }
+
         private val blockPaint = Paint().apply {
             color = Color.parseColor("#1A00FF00")
             style = Paint.Style.FILL
         }
+        private val borderPaint = Paint().apply {
+            color = Color.parseColor("#00FF00")
+            style = Paint.Style.STROKE
+            strokeWidth = 4f
+        }
+        private val textPaint = Paint().apply {
+            color = Color.parseColor("#00FF00")
+            textSize = 36f
+            textAlign = Paint.Align.LEFT
+            isFakeBoldText = true
+        }
+        private val safeModePaint = Paint().apply {
+            color = Color.parseColor("#FFFF00")
+            textSize = 48f
+            textAlign = Paint.Align.CENTER
+            isFakeBoldText = true
+        }
+        private val regionsList = mutableListOf<Region>()
+        private var enabled = true
+
+        fun setRegions(list: List<Region>) {
+            regionsList.clear()
+            regionsList.addAll(list)
+            invalidate()
+        }
+
+        fun setBlockingEnabled(enabled: Boolean) {
+            this.enabled = enabled
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            
+            val service = serviceRef.get()
+            val forceSafeMode = service?.let { 
+                // Use a helper method since forceSafeMode is private
+                InputBlockerServiceManager.getModulePath(it).let { path ->
+                    val configFile = File(path, "config/blocked_regions.conf")
+                    if (configFile.exists()) {
+                        configFile.readLines().any { line -> line.startsWith("force_safe_mode=1") }
+                    } else false
+                }
+            } ?: false
+
+            if (!enabled) {
+                canvas.drawColor(Color.TRANSPARENT)
+                if (forceSafeMode) {
+                    canvas.drawText("SAFE MODE", width / 2f, 100f, safeModePaint)
+                    canvas.drawText("(Blocking Disabled)", width / 2f, 150f, safeModePaint)
+                }
+                return
+            }
+
+            for (region in regionsList) {
+                val rect = android.graphics.RectF(
+                    region.x1.toFloat(), region.y1.toFloat(),
+                    region.x2.toFloat(), region.y2.toFloat()
+                )
+                canvas.drawRect(rect, blockPaint)
+                canvas.drawRect(rect, borderPaint)
+            }
+
+            val text = if (regionsList.isNotEmpty()) {
+                "BLOCKED: ${regionsList.size} region(s)"
+            } else {
+                "No regions configured"
+            }
+            canvas.drawText(text, 10f, 50f, textPaint)
+        }
+
+        override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (!enabled || regionsList.isEmpty()) {
+                return false
+            }
+            val x = event.x
+            val y = event.y
+            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+                for (region in regionsList) {
+                    if (x >= region.x1 && x <= region.x2 && y >= region.y1 && y <= region.y2) {
+                        Log.d(TAG, "Blocked touch at ($x,$y)")
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+    }
         
         private val borderPaint = Paint().apply {
             color = Color.parseColor("#00FF00")

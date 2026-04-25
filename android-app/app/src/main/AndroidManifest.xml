@@ -47,8 +47,11 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="touchBlocking" />
+            <meta-data
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_DESCRIPTION"
+                android:value="Blocks ghost taps in user-defined regions to prevent accidental inputs" />
         </service>
-
+        
         <!-- Volume Button Listener Service (Kill switch) -->
         <service
             android:name=".VolumeButtonListenerService"
@@ -57,6 +60,9 @@
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="volumeButtonListener" />
+            <meta-data
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_DESCRIPTION"
+                android:value="Listens for volume button sequences to provide a hardware kill switch for touch blocking" />
         </service>
 
         <!-- Boot Receiver -->

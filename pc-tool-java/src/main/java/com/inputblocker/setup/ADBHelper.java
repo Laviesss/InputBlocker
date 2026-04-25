@@ -87,17 +87,20 @@ public class ADBHelper {
             String configPath = "/data/adb/modules/inputblocker/config/blocked_regions.conf";
             ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "cat", configPath);
             Process p = pb.start();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-            String rawLine;
-            while ((rawLine = reader.readLine()) != null) {
-                String line = rawLine.trim();
-                // Skip empty lines, comments, enabled, and force_safe_mode lines
-                if (line.isEmpty() || line.startsWith("#") || 
-                    line.startsWith("enabled=") || line.startsWith("force_safe_mode=")) continue;
-                Region r = Region.fromConfigString(line);
-                if (r != null) {
-                    regions.add(r);
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
+                String rawLine;
+                while ((rawLine = reader.readLine()) != null) {
+                    String line = rawLine.trim();
+                    if (line.isEmpty() || line.startsWith("#") || 
+                        line.startsWith("enabled=") || line.startsWith("force_safe_mode=")) continue;
+                    Region r = Region.fromConfigString(line);
+                    if (r != null) {
+                        regions.add(r);
+                    }
                 }
+            }
+            if (!p.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) {
+                p.destroyForcibly();
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -117,25 +120,25 @@ public class ADBHelper {
                 config.append(r.toConfigString()).append("\n");
             }
 
-            // Create temp file locally
             File tempFile = File.createTempFile("inputblocker_config", ".txt");
             tempFile.deleteOnExit();
-            FileWriter writer = new FileWriter(tempFile);
-            writer.write(config.toString());
-            writer.close();
+            try (FileWriter writer = new FileWriter(tempFile)) {
+                writer.write(config.toString());
+            }
 
-            // Push to device using adb push
             ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "mkdir", "-p", "/data/adb/modules/inputblocker/config");
-            pb.start().waitFor();
+            Process p1 = pb.start();
+            if (!p1.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p1.destroyForcibly();
 
             pb = new ProcessBuilder("adb", "-s", deviceSerial, "push", tempFile.getAbsolutePath(), "/data/adb/modules/inputblocker/config/blocked_regions.conf");
-            pb.start().waitFor();
+            Process p2 = pb.start();
+            if (!p2.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p2.destroyForcibly();
 
             pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "chmod", "644", "/data/adb/modules/inputblocker/config/blocked_regions.conf");
-            pb.start().waitFor();
+            Process p3 = pb.start();
+            if (!p3.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p3.destroyForcibly();
 
             tempFile.delete();
-
             return true;
         } catch (Exception e) {
             e.printStackTrace();

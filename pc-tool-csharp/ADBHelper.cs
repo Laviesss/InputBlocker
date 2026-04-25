@@ -227,7 +227,7 @@ public class ADBHelper : IDisposable
         return regions;
     }
 
-    private string RunProcess(string fileName, string arguments)
+    private string RunProcess(string fileName, string arguments, int timeoutMilliseconds = 10000)
     {
         var psi = new ProcessStartInfo
         {
@@ -238,13 +238,26 @@ public class ADBHelper : IDisposable
             UseShellExecute = false,
             CreateNoWindow = true
         };
-
-        using var process = Process.Start(psi);
-        if (process == null) return string.Empty;
-
-        string output = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
-        return output;
+        
+        try
+        {
+            using var process = Process.Start(psi);
+            if (process == null) return string.Empty;
+            
+            if (!process.WaitForExit(timeoutMilliseconds))
+            {
+                process.Kill();
+                Console.WriteLine($"Process {fileName} timed out after {timeoutMilliseconds}ms");
+                return string.Empty;
+            }
+            
+            return process.StandardOutput.ReadToEnd();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error running process {fileName}: {ex.Message}");
+            return string.Empty;
+        }
     }
 
     public void Disconnect()

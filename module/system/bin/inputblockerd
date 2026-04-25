@@ -3,7 +3,23 @@
 # InputBlocker Daemon - Runs as root service to block touch events
 #########################################################################################
 
-MODULE_DIR="/data/adb/modules/inputblocker"
+detect_module_path() {
+    local paths="
+        /data/adb/modules/inputblocker
+        /data/ksu/modules/inputblocker
+        /data/apatch/modules/inputblocker
+        /su/su.d/inputblocker
+    "
+    for path in $paths; do
+        if [ -d "$path" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    echo "/data/adb/modules/inputblocker"
+}
+
+MODULE_DIR="$(detect_module_path)"
 CONFIG_FILE="$MODULE_DIR/config/blocked_regions.conf"
 LOG_FILE="/sdcard/Download/inputblocker.log"
 PID_FILE="/data/local/tmp/inputblocker/inputblockerd.pid"
@@ -137,3 +153,5 @@ case "${0##*/}" in
     *)
         ;;
 esac
+
+(End of file - total 139 lines)
