@@ -298,13 +298,6 @@ class OverlayService : Service() {
         }.start()
     }
 
-        }.start()
-        
-        // In detection mode, we block ALL touches to capture them
-        touchBlockView?.setBlockingEnabled(true)
-        Log.i(TAG, "Auto-detection sequence initiated...")
-    }
-
     private fun stopDetection() {
         isDetectionMode = false
         val detectedRegions = processHeatmap()
@@ -403,46 +396,6 @@ class OverlayService : Service() {
             // Filter out regions that are too tiny to be useful
             (region.x2 - region.x1) > 20 && (region.y2 - region.y1) > 20 
         }
-    }
-
-
-    private fun processHeatmap(): List<Region> {
-        if (touchHeatmap.isEmpty()) return emptyList()
-        
-        // Clustering Logic: Find areas with high touch frequency
-        val hotspots = touchHeatmap.filter { it.value > 5 } // Threshold: 5+ taps
-        if (hotspots.isEmpty()) return emptyList()
-        
-        val regions = mutableListOf<Region>()
-        val processedPoints = mutableSetOf<Pair<Int, Int>>()
-        
-        val sortedPoints = hotspots.keys.sortedByDescending { touchHeatmap[it] }
-        
-        for (point in sortedPoints) {
-            if (point in processedPoints) continue
-            
-            var x1 = point.first
-            var y1 = point.second
-            var x2 = point.first
-            var y2 = point.second
-            
-            // Expand region to include nearby hotspots (within 100px)
-            for ((otherPoint, count) in hotspots) {
-                if (count > 2 && Math.abs(otherPoint.first - point.first) < 100 && Math.abs(otherPoint.second - point.second) < 100) {
-                    x1 = minOf(x1, otherPoint.first)
-                    y1 = minOf(y1, otherPoint.second)
-                    x2 = maxOf(x2, otherPoint.first)
-                    y2 = maxOf(y2, otherPoint.second)
-                    processedPoints.add(otherPoint)
-                }
-            }
-            
-            // Add padding to the detected region
-            regions.add(Region(x1 - 20, y1 - 20, x2 + 20, y2 + 20))
-            processedPoints.add(point)
-        }
-        
-        return regions
     }
 
     private fun reloadConfig() {
