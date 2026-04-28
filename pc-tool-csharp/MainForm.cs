@@ -116,7 +116,7 @@ public class MainWindow : Window
                 Width = 350,
                 Height = 200,
                 Content = panel,
-                WindowStartupLocation = Avalonia.Platform.WindowStartupLocation.CenterOwner,
+                WindowStartupLocation = Avalonia.Controls.WindowStartupLocation.CenterOwner,
                 CanResize = false,
                 Topmost = true
             };

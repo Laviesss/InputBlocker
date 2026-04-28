@@ -3,6 +3,7 @@ package com.inputblocker.app
 import android.Manifest
 import android.app.AlertDialog
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
@@ -27,6 +28,7 @@ import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
 import java.io.Serializable
+import java.util.ArrayList
 
 class MainActivity : AppCompatActivity() {
 
