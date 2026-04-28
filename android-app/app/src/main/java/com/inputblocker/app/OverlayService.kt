@@ -42,6 +42,9 @@ class OverlayService : Service() {
     private val regions = mutableListOf<Region>()
     private var isEnabled = true
     private var forceSafeMode = false
+    private var isDetectionMode = false
+    private val touchHeatmap = mutableMapOf<Pair<Int, Int>, Int>()
+    private var detectionStartTime = 0L
 
     private var configReceiver: BroadcastReceiver? = null
 
@@ -60,6 +63,16 @@ class OverlayService : Service() {
         registerConfigReceiver()
         
         Log.i(TAG, "OverlayService ready - regions: ${regions.size}, enabled: $isEnabled")
+    }
+
+    private fun isLsposedModeFromConfig(): Boolean {
+        val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+        if (!configFile.exists()) return false
+        return try {
+            configFile.readLines().any { it.trim().startsWith("lsposed_mode=1") }
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun createNotificationChannel() {
@@ -158,7 +171,14 @@ class OverlayService : Service() {
             return
         }
 
+        // Don't create overlay if LSPosed mode is enabled
+        if (isLsposedModeFromConfig()) {
+            Log.i(TAG, "LSPosed mode active - skipping overlay view")
+            return
+        }
+        
         touchBlockView = TouchBlockView(this)
+
         touchBlockView?.setService(this)
         
         val params = WindowManager.LayoutParams(
@@ -200,14 +220,18 @@ class OverlayService : Service() {
                         val forceSafe = intent.getBooleanExtra("force_safe", true)
                         enableBlocking(forceSafe)
                     }
+                    "com.inputblocker.START_DETECTION" -> startDetection()
+                    "com.inputblocker.STOP_DETECTION" -> stopDetection()
                 }
             }
         }
-
+        
         val filter = IntentFilter().apply {
             addAction("com.inputblocker.RELOAD")
             addAction("com.inputblocker.DISABLE")
             addAction("com.inputblocker.ENABLE")
+            addAction("com.inputblocker.START_DETECTION")
+            addAction("com.inputblocker.STOP_DETECTION")
         }
         
         try {
@@ -215,6 +239,210 @@ class OverlayService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register receiver", e)
         }
+    }
+
+
+    private fun stopDetection() {
+        isDetectionMode = false
+        val detectedRegions = processHeatmap()
+        
+        val intent = Intent("com.inputblocker.DETECTION_RESULTS")
+        intent.putExtra("regions", ArrayList(detectedRegions))
+        sendBroadcast(intent)
+        
+        touchHeatmap.clear()
+        Log.i(TAG, "Detection stopped. Found ${detectedRegions.size} regions")
+        
+        // Restore blocking state
+        touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+    }
+
+    private fun startDetection() {
+        // We don't set isDetectionMode = true here yet to avoid recording "garbage" 
+        // during the screen cycle transition.
+        
+        Thread {
+            try {
+                Log.i(TAG, "Initiating detection sequence...")
+                
+                // 1. Disable lock screen
+                Runtime.getRuntime().exec(arrayOf("su", "-c", "locksettings set-disabled true"))
+                Thread.sleep(500)
+                
+                // 2. Force screen off
+                Runtime.getRuntime().exec(arrayOf("su", "-c", "input keyevent 26"))
+                Thread.sleep(1000)
+                
+                // 3. Force screen on
+                Runtime.getRuntime().exec(arrayOf("su", "-c", "input keyevent KEYCODE_WAKEUP"))
+                Thread.sleep(1000)
+                
+                // 4. NOW start the actual detection period
+                Log.i(TAG, "Screen cycled. Starting 10s detection window...")
+                isDetectionMode = true
+                touchHeatmap.clear()
+                detectionStartTime = System.currentTimeMillis()
+                touchBlockView?.setBlockingEnabled(true)
+                
+                // 5. Wait for the detection duration
+                Thread.sleep(10000) 
+                
+                // 6. Automatically stop and process results
+                stopDetection()
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Detection sequence failed: ${e.message}")
+                isDetectionMode = false
+                touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+            }
+        }.start()
+    }
+
+        }.start()
+        
+        // In detection mode, we block ALL touches to capture them
+        touchBlockView?.setBlockingEnabled(true)
+        Log.i(TAG, "Auto-detection sequence initiated...")
+    }
+
+    private fun stopDetection() {
+        isDetectionMode = false
+        val detectedRegions = processHeatmap()
+        
+        // 2. Re-enable the lock screen
+        try {
+            Runtime.getRuntime().exec(arrayOf("su", "-c", "locksettings set-disabled false"))
+            Log.i(TAG, "Lock screen re-enabled")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to re-enable lock screen: ${e.message}")
+        }
+
+        val intent = Intent("com.inputblocker.DETECTION_RESULTS")
+        intent.putExtra("regions", ArrayList(detectedRegions))
+        sendBroadcast(intent)
+        
+        touchHeatmap.clear()
+        Log.i(TAG, "Detection stopped. Found ${detectedRegions.size} regions")
+        
+        // Restore blocking state
+        touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+    }
+
+    private fun processHeatmap(): List<Region> {
+        if (touchHeatmap.isEmpty()) return emptyList()
+        
+        // DBSCAN-inspired Clustering Algorithm
+        // Parameters: eps (distance threshold), minPts (min points to form a cluster)
+        val eps = 80.0 // Max distance between points to be considered neighbors
+        val minPts = 3  // Minimum points to form a cluster
+        
+        val hotspots = touchHeatmap.filter { it.value >= minPts }.keys.toList()
+        if (hotspots.isEmpty()) return emptyList()
+        
+        val visited = mutableSetOf<Pair<Int, Int>>()
+        val clusters = mutableListOf<MutableList<Pair<Int, Int>>>()
+        
+        for (point in hotspots) {
+            if (point in visited) continue
+            
+            // Find neighbors
+            val neighbors = hotspots.filter { other ->
+                val dist = Math.sqrt(Math.pow((other.first - point.first).toDouble(), 2.0) + 
+                                     Math.pow((other.second - point.second).toDouble(), 2.0))
+                dist <= eps
+            }
+            
+            if (neighbors.size >= minPts) {
+                // Start a new cluster
+                val cluster = mutableListOf<Pair<Int, Int>>()
+                val queue = mutableListOf<Pair<Int, Int>>()
+                queue.add(point)
+                visited.add(point)
+                
+                var qIdx = 0
+                while (qIdx < queue.size) {
+                    val p = queue[qIdx++]
+                    cluster.add(p)
+                    
+                    val pNeighbors = hotspots.filter { other ->
+                        val dist = Math.sqrt(Math.pow((other.first - p.first).toDouble(), 2.0) + 
+                                             Math.pow((other.second - p.second).toDouble(), 2.0))
+                        dist <= eps
+                    }
+                    
+                    for (pn in pNeighbors) {
+                        if (pn !in visited) {
+                            visited.add(pn)
+                            queue.add(pn)
+                        }
+                    }
+                }
+                clusters.add(cluster)
+            } else {
+                visited.add(point)
+            }
+        }
+        
+        // Convert clusters to Bounding Box Regions
+        return clusters.map { cluster ->
+            var x1 = Int.MAX_VALUE
+            var y1 = Int.MAX_VALUE
+            var x2 = Int.MIN_VALUE
+            var y2 = Int.MIN_VALUE
+            
+            for (p in cluster) {
+                x1 = minOf(x1, p.first)
+                y1 = minOf(y1, p.second)
+                x2 = maxOf(x2, p.first)
+                y2 = maxOf(y2, p.second)
+            }
+            
+            // Add padding to the detected region for safety
+            Region(x1 - 40, y1 - 40, x2 + 40, y2 + 40)
+        }.filter { region -> 
+            // Filter out regions that are too tiny to be useful
+            (region.x2 - region.x1) > 20 && (region.y2 - region.y1) > 20 
+        }
+    }
+
+
+    private fun processHeatmap(): List<Region> {
+        if (touchHeatmap.isEmpty()) return emptyList()
+        
+        // Clustering Logic: Find areas with high touch frequency
+        val hotspots = touchHeatmap.filter { it.value > 5 } // Threshold: 5+ taps
+        if (hotspots.isEmpty()) return emptyList()
+        
+        val regions = mutableListOf<Region>()
+        val processedPoints = mutableSetOf<Pair<Int, Int>>()
+        
+        val sortedPoints = hotspots.keys.sortedByDescending { touchHeatmap[it] }
+        
+        for (point in sortedPoints) {
+            if (point in processedPoints) continue
+            
+            var x1 = point.first
+            var y1 = point.second
+            var x2 = point.first
+            var y2 = point.second
+            
+            // Expand region to include nearby hotspots (within 100px)
+            for ((otherPoint, count) in hotspots) {
+                if (count > 2 && Math.abs(otherPoint.first - point.first) < 100 && Math.abs(otherPoint.second - point.second) < 100) {
+                    x1 = minOf(x1, otherPoint.first)
+                    y1 = minOf(y1, otherPoint.second)
+                    x2 = maxOf(x2, otherPoint.first)
+                    y2 = maxOf(y2, otherPoint.second)
+                    processedPoints.add(otherPoint)
+                }
+            }
+            
+            // Add padding to the detected region
+            regions.add(Region(x1 - 20, y1 - 20, x2 + 20, y2 + 20))
+            processedPoints.add(point)
+        }
+        
+        return regions
     }
 
     private fun reloadConfig() {
@@ -307,14 +535,7 @@ class OverlayService : Service() {
     @Nullable
     override fun onBind(intent: Intent?): IBinder? = null
 
-    data class Region(
-        var x1: Int = 0,
-        var y1: Int = 0,
-        var x2: Int = 0,
-        var y2: Int = 0
-    ) : Serializable
-
-    class TouchBlockView(context: Context) : View(context) {
+    inner class TouchBlockView(context: Context) : View(context) {
         private var serviceRef = WeakReference<OverlayService>(null)
 
         fun setService(service: OverlayService) {
@@ -361,7 +582,6 @@ class OverlayService : Service() {
             
             val service = serviceRef.get()
             val forceSafeMode = service?.let { 
-                // Use a helper method since forceSafeMode is private
                 InputBlockerServiceManager.getModulePath(it).let { path ->
                     val configFile = File(path, "config/blocked_regions.conf")
                     if (configFile.exists()) {
@@ -397,6 +617,21 @@ class OverlayService : Service() {
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
+            if (isDetectionMode) {
+                val x = event.x.toInt()
+                val y = event.y.toInt()
+                
+                // Quantize coordinates to a 20x20 grid for clustering
+                val gridX = (x / 20) * 20
+                val gridY = (y / 20) * 20
+                val point = Pair(gridX, gridY)
+                
+                touchHeatmap[point] = touchHeatmap.getOrDefault(point, 0) + 1
+                Log.d(TAG, "Detected touch at ($x,$y) -> Grid($gridX,$gridY)")
+                
+                return true // Block everything during detection
+            }
+
             if (!enabled || regionsList.isEmpty()) {
                 return false
             }
@@ -410,96 +645,6 @@ class OverlayService : Service() {
                     }
                 }
             }
-            return false
-        }
-    }
-        
-        private val borderPaint = Paint().apply {
-            color = Color.parseColor("#00FF00")
-            style = Paint.Style.STROKE
-            strokeWidth = 4f
-        }
-        
-        private val textPaint = Paint().apply {
-            color = Color.parseColor("#00FF00")
-            textSize = 36f
-            textAlign = Paint.Align.LEFT
-            isFakeBoldText = true
-        }
-        
-        private val safeModePaint = Paint().apply {
-            color = Color.parseColor("#FFFF00")
-            textSize = 48f
-            textAlign = Paint.Align.CENTER
-            isFakeBoldText = true
-        }
-        
-        private val regionsList = mutableListOf<Region>()
-        private var enabled = true
-
-        fun setRegions(list: List<Region>) {
-            regionsList.clear()
-            regionsList.addAll(list)
-            invalidate()
-        }
-
-        fun setBlockingEnabled(enabled: Boolean) {
-            this.enabled = enabled
-            invalidate()
-        }
-
-        override fun onDraw(canvas: Canvas) {
-            super.onDraw(canvas)
-
-            if (!enabled) {
-                canvas.drawColor(Color.TRANSPARENT)
-                
-                if (forceSafeMode) {
-                    canvas.drawText("SAFE MODE", width / 2f, 100f, safeModePaint)
-                    canvas.drawText("(Blocking Disabled)", width / 2f, 150f, safeModePaint)
-                }
-                return
-            }
-
-            for (region in regionsList) {
-                val rect = android.graphics.RectF(
-                    region.x1.toFloat(), region.y1.toFloat(),
-                    region.x2.toFloat(), region.y2.toFloat()
-                )
-                
-                canvas.drawRect(rect, blockPaint)
-                canvas.drawRect(rect, borderPaint)
-            }
-
-            val text = if (regionsList.isNotEmpty()) {
-                "BLOCKED: ${regionsList.size} region(s)"
-            } else {
-                "No regions configured"
-            }
-            canvas.drawText(text, 10f, 50f, textPaint)
-        }
-
-        override fun onTouchEvent(event: MotionEvent): Boolean {
-            if (!enabled || regionsList.isEmpty()) {
-                return false
-            }
-
-            val x = event.x
-            val y = event.y
-
-            if (event.action == MotionEvent.ACTION_DOWN ||
-                event.action == MotionEvent.ACTION_MOVE) {
-                
-                for (region in regionsList) {
-                    if (x >= region.x1 && x <= region.x2 &&
-                        y >= region.y1 && y <= region.y2) {
-                        
-                        Log.d(TAG, "Blocked touch at ($x,$y)")
-                        return true
-                    }
-                }
-            }
-
             return false
         }
     }

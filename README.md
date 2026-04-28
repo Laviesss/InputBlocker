@@ -133,7 +133,7 @@ build-all.bat
 
 ```
 InputBlocker/
-├── magisk-module/           # Root module folder (install this)
+├── module/           # Root module folder (install this)
 │   └── common/              # APK auto-installed on boot
 ├── android-app/             # Companion app source
 ├── pc-tool-csharp/          # C# PC tool

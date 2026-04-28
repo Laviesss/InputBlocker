@@ -134,17 +134,17 @@ REM ============================================================
 if "%BUILD_MODULE%"=="1" (
     echo Building module
     
-    if not exist "%PROJECT_ROOT%\magisk-module\common" mkdir "%PROJECT_ROOT%\magisk-module\common"
+    if not exist "%PROJECT_ROOT%\module\common" mkdir "%PROJECT_ROOT%\module\common"
     
     if exist "%OUT_DIR%\InputBlocker.apk" (
-        copy /Y "%OUT_DIR%\InputBlocker.apk" "%PROJECT_ROOT%\magisk-module\common\InputBlocker.apk" >nul
-        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\magisk-module\*' -DestinationPath '%OUT_DIR%\InputBlocker.zip' -Force"
-        del "%PROJECT_ROOT%\magisk-module\common\InputBlocker.apk" 2>nul
-        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\magisk-module\*' -DestinationPath '%OUT_DIR%\InputBlocker-lite.zip' -Force"
+        copy /Y "%OUT_DIR%\InputBlocker.apk" "%PROJECT_ROOT%\module\common\InputBlocker.apk" >nul
+        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\module\*' -DestinationPath '%OUT_DIR%\InputBlocker.zip' -Force"
+        del "%PROJECT_ROOT%\module\common\InputBlocker.apk" 2>nul
+        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\module\*' -DestinationPath '%OUT_DIR%\InputBlocker-lite.zip' -Force"
         echo   Full module done
         echo   Lite module done
     ) else (
-        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\magisk-module\*' -DestinationPath '%OUT_DIR%\InputBlocker-lite.zip' -Force"
+        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\module\*' -DestinationPath '%OUT_DIR%\InputBlocker-lite.zip' -Force"
         echo   Lite module done
     )
     echo.

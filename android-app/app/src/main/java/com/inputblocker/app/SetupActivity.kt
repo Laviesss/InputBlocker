@@ -211,13 +211,6 @@ class SetupActivity : AppCompatActivity() {
         finish()
     }
 
-    data class Region(
-        var x1: Int = 0,
-        var y1: Int = 0,
-        var x2: Int = 0,
-        var y2: Int = 0
-    ) : Serializable
-
     class SetupView(context: android.content.Context) : View(context) {
 
         interface DrawingCallback {

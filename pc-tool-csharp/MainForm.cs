@@ -34,10 +34,10 @@ public class MainWindow : Window
 
     private Canvas canvas = new();
 
-    private static readonly IBrush RegionFill = new SolidColorBrush(Color.Parse("#4D96F25F"));
-    private static readonly IBrush RegionStroke = new SolidColorBrush(Color.Parse("#FF2196F3"));
-    private static readonly IBrush DrawStroke = new SolidColorBrush(Color.Parse("#FFFF5722"));
-    private static readonly IBrush DrawFill = new SolidColorBrush(Color.Parse("#4DFF5722"));
+    private static readonly IBrush RegionFill = new SolidColorBrush(Color.Parse("#4DB388FF"));
+    private static readonly IBrush RegionStroke = new SolidColorBrush(Color.Parse("#FFB388FF"));
+    private static readonly IBrush DrawStroke = new SolidColorBrush(Color.Parse("#FF448AFF"));
+    private static readonly IBrush DrawFill = new SolidColorBrush(Color.Parse("#4D448AFF"));
 
     public MainWindow()
     {
@@ -46,7 +46,7 @@ public class MainWindow : Window
         Height = 900;
         MinWidth = 500;
         MinHeight = 600;
-        Background = new SolidColorBrush(Color.Parse("#1E1E1E"));
+        Background = new SolidColorBrush(Color.Parse("#000000"));
 
         InitializeComponent();
         ConnectToDevice();

@@ -114,9 +114,32 @@ public class ADBHelper : IDisposable
         Console.WriteLine($"Screen size: {screenWidth}x{screenHeight}");
     }
 
+    public bool EnsureConnected()
+    {
+        if (connected && deviceSerial != null)
+        {
+            try
+            {
+                var state = RunProcess("adb", $"-s {deviceSerial} get-state");
+                if (state.Trim().Equals("device", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            catch
+            {
+                // Fall through to reconnect
+            }
+        }
+
+        Console.WriteLine("Device disconnected. Attempting to reconnect...");
+        Connect();
+        return connected;
+    }
+
     public MemoryStream? ScreenshotStream()
     {
-        if (!connected || deviceSerial == null) return null;
+        if (!EnsureConnected()) return null;
 
         try
         {
@@ -152,7 +175,7 @@ public class ADBHelper : IDisposable
 
     public bool PushConfig(List<BlockRegion> regions, bool enabled, bool forceSafeMode)
     {
-        if (!connected || deviceSerial == null)
+        if (!EnsureConnected())
         {
             Console.WriteLine("Device not connected");
             return false;
@@ -196,7 +219,7 @@ public class ADBHelper : IDisposable
     public List<BlockRegion> GetCurrentConfig()
     {
         var regions = new List<BlockRegion>();
-        if (!connected || deviceSerial == null) return regions;
+        if (!EnsureConnected()) return regions;
 
         try
         {

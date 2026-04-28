@@ -175,23 +175,11 @@ jobs:
           cd module
           zip -r ../release/InputBlocker.zip . -x "*.DS_Store"
 
-      - name: Create lite module
-        run: |
-          rm module/common/InputBlocker.apk
-          cd module
-          zip -r ../release/InputBlocker-lite.zip . -x "*.DS_Store"
-
       - name: Upload full module
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-RootModule-Full
           path: release/InputBlocker.zip
-
-      - name: Upload lite module
-        uses: actions/upload-artifact@v4
-        with:
-          name: InputBlocker-RootModule-Lite
-          path: release/InputBlocker-lite.zip
 
   create-release:
     needs: [setup, build-csharp, build-java, build-module]

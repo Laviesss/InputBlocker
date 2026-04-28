@@ -18,7 +18,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ANDROID_APP_DIR="$SCRIPT_DIR/android-app"
-MODULE_DIR="$SCRIPT_DIR/magisk-module"
+MODULE_DIR="$SCRIPT_DIR/module"
 OUTPUT_DIR="$SCRIPT_DIR/releases"
 
 RED='\033[0;31m'
@@ -116,7 +116,7 @@ fi
 rm -f "$ZIP_NAME"
 
 # Create zip
-zip -r "$ZIP_NAME" "magisk-module/" -x "*.DS_Store" 2>/dev/null
+zip -r "$ZIP_NAME" "module/" -x "*.DS_Store" 2>/dev/null
 
 if [ -f "$ZIP_NAME" ]; then
     mv -f "$ZIP_NAME" "$OUTPUT_DIR/"

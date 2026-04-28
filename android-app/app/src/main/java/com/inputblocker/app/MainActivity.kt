@@ -15,9 +15,9 @@ import android.view.MenuItem
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
+import com.google.android.material.switchmaterial.SwitchMaterial
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -39,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         private const val THEME_AMOLED = 3
     }
 
-    private lateinit var switchEnabled: Switch
+    private lateinit var switchEnabled: SwitchMaterial
     private lateinit var regionsList: LinearLayout
     private lateinit var tvStatus: TextView
     private lateinit var btnLaunchSetup: Button
@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTheme: Button
 
     private var isEnabled = true
+    private var isLsposedMode = false
     private val regions = mutableListOf<Region>()
     private var currentTheme = THEME_SYSTEM
 
@@ -74,15 +75,17 @@ class MainActivity : AppCompatActivity() {
         applyTheme()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
+        
         initViews()
         setupListeners()
+        setupDetectionReceiver()
         loadConfig()
         updateUI()
         applyThemeToViews()
         
         checkForUpdates()
     }
+
     
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
@@ -162,6 +165,36 @@ class MainActivity : AppCompatActivity() {
         applyThemeToViews()
     }
 
+    private fun setupDetectionReceiver() {
+        val receiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+                if (intent?.action == "com.inputblocker.DETECTION_RESULTS") {
+                    val detectedRegions = intent.getSerializableExtra("regions") as? ArrayList<Region>
+                    if (detectedRegions != null && detectedRegions.isNotEmpty()) {
+                        showDetectionResults(detectedRegions)
+                    } else {
+                        Toast.makeText(this@MainActivity, "No ghost taps detected.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"))
+    }
+
+    private fun showDetectionResults(suggestedRegions: List<Region>) {
+        AlertDialog.Builder(this)
+            .setTitle("Ghost Taps Detected!")
+            .setMessage("We found ${suggestedRegions.size} potential ghost tap regions. Would you like to add them to your blocked list?")
+            .setPositiveButton("Add All") { _, _ ->
+                regions.addAll(suggestedRegions)
+                saveConfig()
+                updateUI()
+                Toast.makeText(this, "Added ${suggestedRegions.size} regions", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Ignore", null)
+            .show()
+    }
+
     private fun loadThemePreference() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         currentTheme = prefs.getInt(PREF_THEME, THEME_SYSTEM)
@@ -204,25 +237,27 @@ class MainActivity : AppCompatActivity() {
         val surfaceColor = getSurfaceColor()
         val elevatedColor = getSurfaceElevatedColor()
         val textPrimary = getTextPrimaryColor()
-
+        
         findViewById<android.view.View>(android.R.id.content)?.setBackgroundColor(bgColor)
-
+        
         tvStatus?.apply {
             setTextColor(
                 if (isEnabled) ContextCompat.getColor(this@MainActivity, R.color.accent_green)
                 else ContextCompat.getColor(this@MainActivity, R.color.accent_red)
             )
         }
-
+        
         btnTheme?.backgroundTintList = ColorStateList.valueOf(
             ContextCompat.getColor(this, R.color.accent_blue)
         )
-
+        
         btnAddRegion?.apply {
             backgroundTintList = ColorStateList.valueOf(elevatedColor)
             setTextColor(textPrimary)
         }
     }
+
+
 
     private fun getBackgroundColor(): Int {
         return when (currentTheme) {
@@ -285,11 +320,33 @@ class MainActivity : AppCompatActivity() {
             saveEnabledState(isChecked)
             updateStatus()
         }
+        
+        // LSPosed Mode Toggle
+        findViewById<SwitchMaterial>(R.id.switch_lsposed).setOnCheckedChangeListener { _, isChecked ->
+            isLsposedMode = isChecked
+            saveLsposedPreference(isChecked)
+            updateStatus()
+            
+            if (isChecked) {
+                Toast.makeText(this, "LSPosed Mode enabled. Please enable this module in LSPosed Manager.", Toast.LENGTH_LONG).show()
+            }
+        }
 
         btnLaunchSetup.setOnClickListener { checkOverlayPermission() }
         btnAddRegion.setOnClickListener { showAddRegionDialog() }
         btnClearAll.setOnClickListener { confirmClearAll() }
         btnTheme.setOnClickListener { showThemeDialog() }
+    }
+
+    private fun startAutoDetection() {
+        val intent = Intent("com.inputblocker.START_DETECTION")
+        sendBroadcast(intent)
+        Toast.makeText(this, "Auto-detection started. Please wait for ghost taps...", Toast.LENGTH_LONG).show()
+    }
+
+    private fun stopAutoDetection() {
+        val intent = Intent("com.inputblocker.STOP_DETECTION")
+        sendBroadcast(intent)
     }
 
     private fun showThemeDialog() {
@@ -355,13 +412,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadConfig() {
         regions.clear()
-
+        
         val configFile = File(InputBlockerServiceManager.getConfigFile(this))
         if (!configFile.exists()) {
             configFile.parentFile?.mkdirs()
             return
         }
-
+        
         try {
             BufferedReader(FileReader(configFile)).use { reader ->
                 reader.lineSequence().forEach { line ->
@@ -370,6 +427,9 @@ class MainActivity : AppCompatActivity() {
                         trimmed.isEmpty() || trimmed.startsWith("#") -> return@forEach
                         trimmed.startsWith("enabled=") -> {
                             isEnabled = trimmed.substring(8) == "1"
+                        }
+                        trimmed.startsWith("lsposed_mode=") -> {
+                            isLsposedMode = trimmed.substring(13) == "1"
                         }
                         else -> {
                             val parts = trimmed.split(",")
@@ -391,6 +451,7 @@ class MainActivity : AppCompatActivity() {
             e.printStackTrace()
         }
     }
+
 
     private fun saveConfig() {
         val configFile = File(InputBlockerServiceManager.getConfigFile(this))
@@ -423,17 +484,44 @@ class MainActivity : AppCompatActivity() {
         saveConfig()
     }
 
+    private fun saveLsposedPreference(enabled: Boolean) {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        prefs.edit().putBoolean("lsposed_mode", enabled).apply()
+        
+        // We also add it to the config file so the Xposed module can see it
+        val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+        try {
+            var content = configFile.readText()
+            if (content.contains("lsposed_mode=")) {
+                content = content.replace(Regex("lsposed_mode=.*"), "lsposed_mode=${if (enabled) "1" else "0"}")
+            } else {
+                content += "\nlsposed_mode=${if (enabled) "1" else "0"}"
+            }
+            configFile.writeText(content)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     private fun updateUI() {
         switchEnabled.isChecked = isEnabled
+        findViewById<SwitchMaterial>(R.id.switch_lsposed).isChecked = isLsposedMode
         updateStatus()
         updateRegionsList()
     }
 
     private fun updateStatus() {
-        val status = if (isEnabled) "ENABLED" else "DISABLED"
-        tvStatus.text = "Status: $status"
+        val isEnabled = switchEnabled.isChecked
+        val status = if (isEnabled) "SYSTEM ACTIVE" else "ENGINE DISABLED"
+        tvStatus.text = status
         tvStatus.setTextColor(
             if (isEnabled) ContextCompat.getColor(this, R.color.accent_green)
+            else ContextCompat.getColor(this, R.color.accent_red)
+        )
+        
+        // Update the status label color or something else if needed
+        findViewById<TextView>(R.id.tv_status_label)?.setTextColor(
+            if (isEnabled) ContextCompat.getColor(this, R.color.amoled_text_secondary)
             else ContextCompat.getColor(this, R.color.accent_red)
         )
     }
@@ -441,13 +529,12 @@ class MainActivity : AppCompatActivity() {
     private fun updateRegionsList() {
         regionsList.removeAllViews()
 
-        val textColor = getTextSecondaryColor()
-
         if (regions.isEmpty()) {
             TextView(this).apply {
                 text = "No blocked regions configured.\nTap 'Visual Setup' to add regions."
-                setTextColor(textColor)
+                setTextColor(getTextSecondaryColor())
                 setPadding(32, 32, 32, 32)
+                gravity = android.view.Gravity.CENTER
                 regionsList.addView(this)
             }
             return
@@ -459,31 +546,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun addRegionView(index: Int, region: Region) {
-        val itemLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(16, 16, 16, 16)
-            setBackgroundColor(getSurfaceColor())
-        }
-
-        val tvRegion = TextView(this).apply {
-            val width = region.x2 - region.x1
-            val height = region.y2 - region.y1
-            text = "[${index + 1}] (${region.x1},${region.y1}) - (${region.x2},${region.y2})\nSize: ${width}x${height}"
-            setTextColor(getTextPrimaryColor())
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-        }
-
-        val btnRemove = Button(this).apply {
-            text = "X"
-            backgroundTintList = ColorStateList.valueOf(
-                ContextCompat.getColor(this@MainActivity, R.color.accent_red)
-            )
-            setOnClickListener { removeRegion(index) }
-        }
-
-        itemLayout.addView(tvRegion)
-        itemLayout.addView(btnRemove)
-        regionsList.addView(itemLayout)
+        val view = layoutInflater.inflate(R.layout.item_region, regionsList, false)
+        
+        val tvTitle = view.findViewById<TextView>(R.id.tv_region_title)
+        val tvCoords = view.findViewById<TextView>(R.id.tv_region_coords)
+        val tvSize = view.findViewById<TextView>(R.id.tv_region_size)
+        val btnRemove = view.findViewById<android.view.View>(R.id.btn_remove_region)
+        
+        val width = region.x2 - region.x1
+        val height = region.y2 - region.y1
+        
+        tvTitle.text = "Region #${index + 1}"
+        tvCoords.text = "(${region.x1}, ${region.y1}) - (${region.x2}, ${region.y2})"
+        tvSize.text = "Size: ${width}x${height}"
+        
+        btnRemove.setOnClickListener { removeRegion(index) }
+        
+        regionsList.addView(view)
     }
 
     private fun showAddRegionDialog() {
@@ -563,11 +642,4 @@ class MainActivity : AppCompatActivity() {
         saveConfig()
         runOnUiThread { updateUI() }
     }
-
-    data class Region(
-        var x1: Int = 0,
-        var y1: Int = 0,
-        var x2: Int = 0,
-        var y2: Int = 0
-    ) : Serializable
 }

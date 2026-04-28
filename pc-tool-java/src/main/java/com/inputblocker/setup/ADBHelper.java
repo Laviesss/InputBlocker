@@ -14,6 +14,10 @@ public class ADBHelper {
     private int screenHeight = 1920;
 
     public ADBHelper() throws IOException {
+        connect();
+    }
+
+    private void connect() throws IOException {
         ProcessBuilder pb = new ProcessBuilder("adb", "get-state");
         Process p = pb.start();
         try {
@@ -27,6 +31,29 @@ public class ADBHelper {
             }
         } catch (InterruptedException e) {
             throw new IOException("ADB interrupted", e);
+        }
+    }
+
+    private boolean ensureConnected() {
+        if (deviceSerial != null && !deviceSerial.isEmpty()) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "get-state");
+                Process p = pb.start();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                String state = reader.readLine();
+                if (state != null && state.trim().equalsIgnoreCase("device")) {
+                    return true;
+                }
+            } catch (Exception e) {
+                // Attempt reconnect
+            }
+        }
+
+        try {
+            connect();
+            return IsConnected();
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -63,6 +90,7 @@ public class ADBHelper {
     }
 
     public BufferedImage screenshot() {
+        if (!ensureConnected()) return null;
         try {
             ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "exec-out", "screencap", "-p");
             Process p = pb.start();
@@ -83,6 +111,7 @@ public class ADBHelper {
 
     public List<Region> getCurrentConfig() {
         List<Region> regions = new ArrayList<>();
+        if (!ensureConnected()) return regions;
         try {
             String configPath = "/data/adb/modules/inputblocker/config/blocked_regions.conf";
             ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "cat", configPath);
@@ -109,6 +138,7 @@ public class ADBHelper {
     }
 
     public boolean pushConfig(List<Region> regions, boolean enabled, boolean forceSafeMode) {
+        if (!ensureConnected()) return false;
         try {
             StringBuilder config = new StringBuilder();
             config.append("# InputBlocker Configuration\n");

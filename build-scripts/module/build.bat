@@ -21,30 +21,33 @@ echo ============================================================
 echo Mode: %BUILD_MODE%
 echo.
 
-if not exist "%PROJECT_ROOT%\magisk-module\common" mkdir "%PROJECT_ROOT%\magisk-module\common"
+    if not exist "%PROJECT_ROOT%\module\common" mkdir "%PROJECT_ROOT%\module\common"
+
 
 if "%BUILD_MODE%"=="full" (
-    if exist "%OUT%\InputBlocker.apk" (
-        copy /Y "%OUT%\InputBlocker.apk" "%PROJECT_ROOT%\magisk-module\common\InputBlocker.apk" >nul
-        echo APK included
+        if exist "%OUT%\InputBlocker.apk" (
+            copy /Y "%OUT%\InputBlocker.apk" "%PROJECT_ROOT%\module\common\InputBlocker.apk" >nul
+            echo APK included
+        ) else (
+            echo WARNING: APK not found in releases
+        )
     ) else (
-        echo WARNING: APK not found in releases
+        if exist "%PROJECT_ROOT%\module\common\InputBlocker.apk" (
+            del "%PROJECT_ROOT%\module\common\InputBlocker.apk" 2>nul
+        )
     )
-) else (
-    if exist "%PROJECT_ROOT%\magisk-module\common\InputBlocker.apk" (
-        del "%PROJECT_ROOT%\magisk-module\common\InputBlocker.apk" 2>nul
-    )
-)
+
 
 echo Creating module zip...
 
-if "%BUILD_MODE%"=="full" (
-    powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\magisk-module\*' -DestinationPath '%OUT%\InputBlocker.zip' -Force"
-    if exist "%OUT%\InputBlocker.zip" echo Done: %OUT%\InputBlocker.zip
-) else (
-    powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\magisk-module\*' -DestinationPath '%OUT%\InputBlocker-lite.zip' -Force"
-    if exist "%OUT%\InputBlocker-lite.zip" echo Done: %OUT%\InputBlocker-lite.zip
-)
+    if "%BUILD_MODE%"=="full" (
+        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\module\*' -DestinationPath '%OUT%\InputBlocker.zip' -Force"
+        if exist "%OUT%\InputBlocker.zip" echo Done: %OUT%\InputBlocker.zip
+    ) else (
+        powershell -Command "Compress-Archive -Path '%PROJECT_ROOT%\module\*' -DestinationPath '%OUT%\InputBlocker-lite.zip' -Force"
+        if exist "%OUT%\InputBlocker-lite.zip" echo Done: %OUT%\InputBlocker-lite.zip
+    )
+
 
 echo.
 echo ============================================================

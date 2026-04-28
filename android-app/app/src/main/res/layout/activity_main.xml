@@ -1,124 +1,221 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/app_background">
+    android:background="@color/app_background"
+    android:fillViewport="true">
 
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:padding="16dp"
-        android:layout_marginBottom="8dp">
+        android:padding="24dp">
 
+        <!-- Header -->
         <TextView
-            android:layout_width="0dp"
+            android:id="@+id/tv_app_name"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="InputBlocker"
-            android:textSize="28sp"
             android:textColor="@color/app_text_primary"
-            android:textStyle="bold"/>
+            android:textSize="32sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent" />
 
-        <Button
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/btn_theme"
+            style="@style/Widget.MaterialComponents.Button.TextButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Theme"
+            android:text="THEME"
+            android:textColor="@color/app_accent"
             android:textSize="12sp"
-            android:minWidth="80dp"/>
-    </LinearLayout>
+            app:layout_constraintBottom_toBottomOf="@+id/tv_app_name"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="@+id/tv_app_name"
+            app:rippleColor="@color/app_accent" />
 
-    <TextView
-        android:id="@+id/tv_status"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Status: ENABLED"
-        android:textSize="18sp"
-        android:textColor="@color/accent_green"
-        android:layout_marginBottom="16dp"/>
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="24dp">
-
-        <TextView
-            android:layout_width="wrap_content"
+        <!-- Status Card -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_status"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Enable Blocking:"
-            android:textColor="@color/app_text_primary"
+            android:layout_marginTop="32dp"
+            app:cardBackgroundColor="@color/app_surface"
+            app:cardCornerRadius="24dp"
+            app:layout_constraintTop_toBottomOf="@+id/tv_app_name"
+            app:strokeColor="@color/app_border"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="24dp">
+
+                <TextView
+                    android:id="@+id/tv_status_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:letterSpacing="0.1"
+                    android:text="Blocking Status"
+                    android:textColor="@color/app_text_secondary"
+                    android:textSize="12sp" />
+
+
+                <TextView
+                    android:id="@+id/tv_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="SYSTEM ACTIVE"
+                    android:textColor="@color/accent_green"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Toggles -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/card_toggles"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="@color/app_surface"
+            app:cardCornerRadius="24dp"
+            app:layout_constraintTop_toBottomOf="@+id/card_status"
+            app:strokeColor="@color/app_border"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_centerVertical="true"
+                        android:text="Enable Blocking"
+                        android:textColor="@color/app_text_primary"
+                        android:textSize="16sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switch_enabled"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentEnd="true"
+                        android:checked="true"
+                        app:thumbTint="@color/switch_thumb_selector"
+                        app:trackTint="@color/switch_track_selector" />
+                </RelativeLayout>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:background="@color/app_border" />
+
+                <RelativeLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_centerVertical="true"
+                        android:text="LSPosed System Mode"
+                        android:textColor="@color/app_text_primary"
+                        android:textSize="16sp" />
+
+                    <com.google.android.material.switchmaterial.SwitchMaterial
+                        android:id="@+id/switch_lsposed"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_alignParentEnd="true"
+                        app:thumbTint="@color/switch_thumb_selector"
+                        app:trackTint="@color/switch_track_selector" />
+                </RelativeLayout>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Visual Setup Button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btn_launch_setup"
+            android:layout_width="match_parent"
+            android:layout_height="64dp"
+            android:layout_marginTop="24dp"
+            android:text="VISUAL SETUP"
             android:textSize="16sp"
-            android:layout_marginEnd="16dp"/>
+            android:textStyle="bold"
+            app:backgroundTint="@color/accent_purple"
+            app:cornerRadius="20dp"
+            app:layout_constraintTop_toBottomOf="@+id/card_toggles" />
 
-        <Switch
-            android:id="@+id/switch_enabled"
+        <!-- Region List Header -->
+        <TextView
+            android:id="@+id/tv_regions_header"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:checked="true"/>
-    </LinearLayout>
+            android:layout_marginTop="32dp"
+            android:text="BLOCKED REGIONS"
+            android:textColor="@color/app_text_primary"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/btn_launch_setup" />
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Blocked Regions"
-        android:textColor="@color/app_text_primary"
-        android:textSize="18sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="8dp"/>
-
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginBottom="16dp"
-        android:background="@color/app_surface"
-        android:padding="8dp">
-
+        <!-- Regions Container -->
         <LinearLayout
             android:id="@+id/regions_list"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"/>
-    </ScrollView>
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            app:layout_constraintTop_toBottomOf="@+id/tv_regions_header" />
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
-
-        <Button
-            android:id="@+id/btn_launch_setup"
-            android:layout_width="0dp"
+        <!-- Bottom Buttons -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Visual Setup"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/accent_blue"/>
+            android:layout_marginTop="24dp"
+            android:orientation="horizontal"
+            app:layout_constraintTop_toBottomOf="@+id/regions_list">
 
-        <Button
-            android:id="@+id/btn_add_region"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Add Manually"
-            android:layout_marginEnd="8dp"
-            android:backgroundTint="@color/app_surface_elevated"
-            android:textColor="@color/app_text_primary"/>
-    </LinearLayout>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_add_region"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginEnd="8dp"
+                android:layout_weight="1"
+                android:text="MANUAL ADD"
+                android:textColor="@color/app_text_primary"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/app_border" />
 
-    <Button
-        android:id="@+id/btn_clear_all"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Clear All Regions"
-        android:backgroundTint="@color/accent_red"
-        android:layout_marginTop="8dp"/>
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_clear_all"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="0dp"
+                android:layout_height="56dp"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:text="CLEAR ALL"
+                android:textColor="@color/accent_red"
+                app:cornerRadius="20dp"
+                app:strokeColor="@color/accent_red" />
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
 
-</LinearLayout>
