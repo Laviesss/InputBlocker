@@ -9,6 +9,7 @@
     <color name="accent_green">#4CAF50</color>
     <color name="accent_red">#F44336</color>
     <color name="accent_orange">#FF9800</color>
+    <color name="white">#FFFFFF</color>
     
     <!-- Light Theme Colors -->
     <color name="light_background">#FAFAFA</color>
