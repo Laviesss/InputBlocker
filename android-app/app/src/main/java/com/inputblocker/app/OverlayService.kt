@@ -241,26 +241,7 @@ class OverlayService : Service() {
         }
     }
 
-
-    private fun stopDetection() {
-        isDetectionMode = false
-        val detectedRegions = processHeatmap()
-        
-        val intent = Intent("com.inputblocker.DETECTION_RESULTS")
-        intent.putExtra("regions", ArrayList(detectedRegions))
-        sendBroadcast(intent)
-        
-        touchHeatmap.clear()
-        Log.i(TAG, "Detection stopped. Found ${detectedRegions.size} regions")
-        
-        // Restore blocking state
-        touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
-    }
-
     private fun startDetection() {
-        // We don't set isDetectionMode = true here yet to avoid recording "garbage" 
-        // during the screen cycle transition.
-        
         Thread {
             try {
                 Log.i(TAG, "Initiating detection sequence...")
@@ -302,7 +283,7 @@ class OverlayService : Service() {
         isDetectionMode = false
         val detectedRegions = processHeatmap()
         
-        // 2. Re-enable the lock screen
+        // Re-enable the lock screen
         try {
             Runtime.getRuntime().exec(arrayOf("su", "-c", "locksettings set-disabled false"))
             Log.i(TAG, "Lock screen re-enabled")
