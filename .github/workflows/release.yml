@@ -252,15 +252,17 @@ jobs:
           name: InputBlocker-debug.apk
           path: module/common/
 
-      - name: Rename APK
-        run: mv module/common/app-debug.apk module/common/InputBlocker.apk
+      - name: Verify APK
+        run: |
+          ls -la module/common/
+          file module/common/app-debug.apk
 
       - name: Create module ZIP
         run: |
           mkdir -p release
+          cp module/common/app-debug.apk module/common/InputBlocker.apk
           cd module
           zip -r ../release/InputBlocker.zip . -x "*.DS_Store" "*.git*"
-          unzip -l ../release/InputBlocker.zip
 
       - name: Upload module
         uses: actions/upload-artifact@v4

@@ -1,0 +1,54 @@
+#!/system/bin/sh
+###############################################################
+# InputBlocker - Universal Module Installer
+# Works with Magisk, KernelSU, APatch, and SuperSU
+###############################################################
+
+# Standard module installation variables (provided by Magisk)
+# MAGISK_VER, MAGISK_VER_CODE, MODPATH, MODID
+
+install_module() {
+    ui_print "- Installing InputBlocker module..."
+    
+    # Create module directories
+    mkdir -p "$MODPATH"
+    mkdir -p "$MODPATH/system/bin"
+    mkdir -p "$MODPATH/common"
+    mkdir -p "$MODPATH/config"
+    
+    # Copy system binaries
+    cp -r "$MODDIR/system/"* "$MODPATH/system/" 2>/dev/null || true
+    
+    # Copy APK if exists
+    if [ -f "$MODDIR/common/InputBlocker.apk" ]; then
+        cp "$MODDIR/common/InputBlocker.apk" "$MODPATH/common/"
+    fi
+    
+    # Create default config
+    if [ ! -f "$MODPATH/config/blocked_regions.conf" ]; then
+        cat > "$MODPATH/config/blocked_regions.conf" << 'EOFCONFIG'
+# InputBlocker Configuration
+# Format: x1,y1,x2,y2 (top-left to bottom-right)
+enabled=1
+force_safe_mode=0
+
+# Add blocked regions:
+# Example: 0,0,100,200
+EOFCONFIG
+    fi
+    
+    # Set permissions
+    chmod -R 755 "$MODPATH/system/bin/" 2>/dev/null || true
+    chmod 644 "$MODPATH/config/blocked_regions.conf" 2>/dev/null || true
+    chmod 644 "$MODPATH/module.prop" 2>/dev/null || true
+    
+    ui_print "- InputBlocker installed successfully!"
+}
+
+# Only run if not already installed
+if [ -z "$MODPATH" ]; then
+    MODPATH="/data/adb/modules/inputblocker"
+fi
+
+# Detect and run
+install_module
