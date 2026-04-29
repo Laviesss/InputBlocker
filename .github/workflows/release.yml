@@ -130,7 +130,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
-          cache: true
 
       - name: Build ${{ matrix.platform }}
         run: |
@@ -193,7 +192,6 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-          cache: 'gradle'
 
       - name: Build JAR
         run: |
