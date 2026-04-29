@@ -133,34 +133,18 @@ jobs:
 
       - name: Build ${{ matrix.platform }}
         run: |
-          echo "🔨 Building C# tool for ${{ matrix.platform }}..."
+          echo "Building C# tool for ${{ matrix.platform }}..."
           mkdir -p release/${{ matrix.platform }}
-          
-          dotnet publish pc-tool-csharp/InputBlockerSetup.csproj \
-            -c Release \
-            -r ${{ matrix.platform }} \
-            --self-contained true \
-            -p:PublishSingleFile=true \
-            -p:EnableCompressionInSingleFile=true \
-            -p:PublishTrimmed=true \
-            -p:TrimMode=Link \
-            -o release/${{ matrix.platform }}
-          
-          echo "✅ Build completed for ${{ matrix.platform }}"
+          dotnet publish pc-tool-csharp/InputBlockerSetup.csproj -c Release -r ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=true -p:TrimMode=Link -o release/${{ matrix.platform }}
+          echo "Build completed for ${{ matrix.platform }}"
 
       - name: Make executable (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: |
-          echo "🔧 Making executable for Linux/macOS..."
-          chmod +x release/${{ matrix.platform }}/InputBlockerSetup
-          echo "✅ Executable permissions set"
+        run: chmod +x release/${{ matrix.platform }}/InputBlockerSetup
 
       - name: Rename artifact
         run: |
-          echo "📁 Renaming artifact..."
-          mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} \
-             release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
-          echo "✅ Artifact renamed to InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}"
+          mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -235,14 +219,11 @@ jobs:
 
       - name: Build debug APK
         run: |
-          echo "🔨 Building Android APK..."
+          echo "Building Android APK..."
           cd android-app
           chmod +x gradlew
-          ./gradlew assembleDebug \
-            --no-daemon \
-            --stacktrace \
-            --warning-mode none
-          echo "✅ APK built successfully"
+          ./gradlew assembleDebug --no-daemon --stacktrace --warning-mode none
+          echo "APK built successfully"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
@@ -272,18 +253,13 @@ jobs:
           path: module/common/
 
       - name: Rename APK
-        run: |
-          echo "📁 Moving APK to module..."
-          mv module/common/app-debug.apk module/common/InputBlocker.apk
-          echo "✅ APK renamed to InputBlocker.apk"
+        run: mv module/common/app-debug.apk module/common/InputBlocker.apk
 
       - name: Create module ZIP
         run: |
-          echo "📦 Creating module package..."
           mkdir -p release
           cd module
           zip -r ../release/InputBlocker.zip . -x "*.DS_Store" "*.git*"
-          echo "✅ Module package created: InputBlocker.zip"
 
       - name: Upload module
         uses: actions/upload-artifact@v4
