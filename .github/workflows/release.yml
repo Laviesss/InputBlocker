@@ -107,7 +107,7 @@ jobs:
             display_name: "Linux ARM64"
           
           # macOS builds
-          - os: macos-latest
+          - os: macos-13
             platform: osx-x64
             artifact_name: InputBlockerSetup-macos-intel
             ext: ""
