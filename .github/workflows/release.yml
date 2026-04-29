@@ -1,14 +1,35 @@
 name: Release
 
+# ============================================================================
+# InputBlocker Release Workflow
+# Automates building and releasing all components:
+# - C# PC tools (Windows, Linux, macOS x64/arm64)
+# - Java PC tool
+# - Android APK
+# - Root module with APK
+# ============================================================================
+
 on:
+  # Trigger on version tags (e.g., v1.0.0)
   push:
     tags:
       - 'v*'
+  
+  # Allow manual triggering for testing
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Custom version name (optional)'
+        required: false
+        default: ''
 
+# Use Node.js 24 to avoid deprecation warnings
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+# ============================================================================
+# JOB: Setup - Determine version and release type
+# ============================================================================
 jobs:
   setup:
     runs-on: ubuntu-latest
@@ -16,93 +37,155 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       is_release: ${{ steps.version.outputs.is_release }}
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Get full history for accurate version detection
 
-      - name: Determine version
+      - name: Determine version and release type
         id: version
         run: |
+          # Extract version from git tag
           if [[ "${{ github.event_name }}" == "push" && "${{ startsWith(github.ref, 'refs/tags/') }}" == "true" ]]; then
             VERSION="${GITHUB_REF#refs/tags/}"
             echo "is_release=true" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "📌 Release mode: Version tag detected - $VERSION"
           else
+            # Manual workflow dispatch - use custom version or generate dev version
             VERSION="${{ github.event.inputs.version }}"
             if [[ -z "$VERSION" ]]; then
               VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+              echo "⚠️ No version specified - using development version: $VERSION"
+            else
+              echo "📌 Manual mode: Using custom version - $VERSION"
             fi
             echo "is_release=false" >> $GITHUB_OUTPUT
             echo "version=$VERSION" >> $GITHUB_OUTPUT
           fi
 
+      - name: Display version information
+        run: |
+          echo "Version: ${{ steps.version.outputs.version }}"
+          echo "Is Release: ${{ steps.version.outputs.is_release }}"
+          echo "Event: ${{ github.event_name }}"
+          echo "Ref: ${{ github.ref }}"
+
+# ============================================================================
+# JOB: Build C# PC Tools
+# Builds self-contained executables for Windows, Linux, and macOS
+# ============================================================================
   build-csharp:
     needs: setup
     strategy:
       matrix:
         include:
+          # Windows builds
           - os: windows-latest
             platform: win-x64
             artifact_name: InputBlockerSetup-windows-x64
             ext: .exe
+            display_name: "Windows x64"
+          
           - os: windows-latest
             platform: win-arm64
             artifact_name: InputBlockerSetup-windows-arm64
             ext: .exe
+            display_name: "Windows ARM64"
+          
+          # Linux builds
           - os: ubuntu-latest
             platform: linux-x64
             artifact_name: InputBlockerSetup-linux-x64
             ext: ""
+            display_name: "Linux x64"
+          
           - os: ubuntu-latest
             platform: linux-arm64
             artifact_name: InputBlockerSetup-linux-arm64
             ext: ""
+            display_name: "Linux ARM64"
+          
+          # macOS builds
           - os: macos-latest
             platform: osx-x64
             artifact_name: InputBlockerSetup-macos-intel
             ext: ""
+            display_name: "macOS Intel"
+          
           - os: macos-latest
             platform: osx-arm64
             artifact_name: InputBlockerSetup-macos-apple-silicon
             ext: ""
+            display_name: "macOS Apple Silicon"
 
     runs-on: ${{ matrix.os }}
+    name: "Build C# Tool (${{ matrix.display_name }})"
     
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+          cache: true
 
       - name: Build ${{ matrix.platform }}
         run: |
+          echo "🔨 Building C# tool for ${{ matrix.platform }}..."
           mkdir -p release/${{ matrix.platform }}
-          dotnet publish pc-tool-csharp/InputBlockerSetup.csproj -c Release -r ${{ matrix.platform }} --self-contained true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -o release/${{ matrix.platform }}
+          
+          dotnet publish pc-tool-csharp/InputBlockerSetup.csproj \
+            -c Release \
+            -r ${{ matrix.platform }} \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:EnableCompressionInSingleFile=true \
+            -p:PublishTrimmed=true \
+            -p:TrimMode=Link \
+            -o release/${{ matrix.platform }}
+          
+          echo "✅ Build completed for ${{ matrix.platform }}"
 
       - name: Make executable (Linux/macOS)
         if: matrix.os != 'windows-latest'
-        run: chmod +x release/${{ matrix.platform }}/InputBlockerSetup
+        run: |
+          echo "🔧 Making executable for Linux/macOS..."
+          chmod +x release/${{ matrix.platform }}/InputBlockerSetup
+          echo "✅ Executable permissions set"
 
       - name: Rename artifact
-        run: mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+        run: |
+          echo "📁 Renaming artifact..."
+          mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} \
+             release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+          echo "✅ Artifact renamed to InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}"
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
           path: release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+          retention-days: 30
+        if: always()  # Upload even if previous steps failed
 
+# ============================================================================
+# JOB: Build Java PC Tool
+# Builds JAR file for Java-based setup tool
+# ============================================================================
   build-java:
     needs: setup
-    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     
+    runs-on: ${{ matrix.os }}
+    name: "Build Java Tool (${{ matrix.os }})"
+    
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -110,25 +193,35 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
+          cache: 'gradle'
 
       - name: Build JAR
         run: |
+          echo "🔨 Building Java tool..."
           cd pc-tool-java
           chmod +x gradlew
           ./gradlew jar --no-daemon
+          echo "✅ Java tool built successfully"
 
-      - name: Upload Artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-Setup-Java-${{ matrix.os }}
           path: pc-tool-java/build/libs/InputBlockerSetup-1.0.0.jar
+          retention-days: 30
+        if: always()
 
+# ============================================================================
+# JOB: Build Android APK
+# Builds debug APK for testing and distribution
+# ============================================================================
   build-apk:
     needs: setup
     runs-on: ubuntu-latest
+    name: "Build Android APK"
     
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Setup Java
@@ -139,70 +232,101 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
 
       - name: Build debug APK
         run: |
+          echo "🔨 Building Android APK..."
           cd android-app
           chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace
+          ./gradlew assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            --warning-mode none
+          echo "✅ APK built successfully"
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-debug.apk
           path: android-app/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 30
+        if: always()
 
+# ============================================================================
+# JOB: Build Root Module
+# Packages the module with APK for Magisk/KernelSU/APatch/SuperSU
+# ============================================================================
   build-module:
     needs: [setup, build-apk]
     runs-on: ubuntu-latest
+    name: "Build Root Module"
     
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Download debug APK
         uses: actions/download-artifact@v4
         with:
-          name: android-debug-apk
+          name: InputBlocker-debug.apk
           path: module/common/
 
       - name: Rename APK
-        run: mv module/common/app-debug.apk module/common/InputBlocker.apk
-
-      - name: Create full module
         run: |
+          echo "📁 Moving APK to module..."
+          mv module/common/app-debug.apk module/common/InputBlocker.apk
+          echo "✅ APK renamed to InputBlocker.apk"
+
+      - name: Create module ZIP
+        run: |
+          echo "📦 Creating module package..."
           mkdir -p release
           cd module
-          zip -r ../release/InputBlocker.zip . -x "*.DS_Store"
+          zip -r ../release/InputBlocker.zip . -x "*.DS_Store" "*.git*"
+          echo "✅ Module package created: InputBlocker.zip"
 
-      - name: Upload full module
+      - name: Upload module
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-RootModule-Full
           path: release/InputBlocker.zip
+          retention-days: 30
+        if: always()
 
+# ============================================================================
+# JOB: Create GitHub Release
+# Creates release with all artifacts when triggered by version tag
+# ============================================================================
   create-release:
     needs: [setup, build-csharp, build-java, build-module]
     runs-on: ubuntu-latest
     if: needs.setup.outputs.is_release == 'true'
+    name: "Create GitHub Release"
     
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: false
 
-      - name: Prepare release
+      - name: Prepare release files
         run: |
+          echo "📁 Preparing release files..."
           mkdir -p release
+          
+          # Copy all artifacts to release directory
           for dir in artifacts/*/; do
             filename=$(basename "$dir")
             if [ -f "$dir$filename" ]; then
               cp "$dir$filename" "release/"
             else
+              # Handle case where artifact is in root of directory
               for f in "$dir"*; do
                 if [ -f "$f" ]; then
                   cp "$f" "release/"
@@ -210,12 +334,43 @@ jobs:
               done
             fi
           done
+          
+          echo "✅ Release files prepared:"
           ls -la release/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: "${{ needs.setup.outputs.version }}"
+          name: "InputBlocker ${{ needs.setup.outputs.version }}"
+          body: |
+            ## 📦 InputBlocker ${{ needs.setup.outputs.version }}
+            
+            **Build Date:** $(date)
+            **Commit:** ${{ github.sha }}
+            
+            ### 🔧 What's Included
+            
+            This release includes:
+            - ✅ C# PC Setup Tool (Windows, Linux, macOS)
+            - ✅ Java PC Setup Tool
+            - ✅ Android Companion App (APK)
+            - ✅ Root Module (Magisk/KernelSU/APatch/SuperSU compatible)
+            
+            ### 📱 Installation
+            
+            1. **Install the root module** (`InputBlocker.zip`)
+            2. **Reboot** your device
+            3. **Open the InputBlocker app** to configure blocked regions
+            
+            ### 🛠️ Build Information
+            - Built with: GitHub Actions
+            - .NET SDK: 8.0.x
+            - Java: Temurin 17
+            - Android Gradle Plugin: Latest
           files: release/*
           generate_release_notes: true
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

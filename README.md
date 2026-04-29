@@ -77,16 +77,27 @@ inputblocker reset-crash     # Reset crash protection
 
 ### Config File
 
-Location is automatically detected based on your root manager:
-- `/data/adb/modules/inputblocker/config/blocked_regions.conf`
-- `/data/su.d/inputblocker/config/blocked_regions.conf`
+The config file location is automatically detected based on your root manager (Magisk, KernelSU, APatch, or SuperSU).
 
+**Typical locations:**
+- Magisk: `/data/adb/modules/inputblocker/config/blocked_regions.conf`
+- KernelSU: `/data/ksu/modules/inputblocker/config/blocked_regions.conf`
+- APatch: `/data/apatch/modules/inputblocker/config/blocked_regions.conf`
+- SuperSU: `/su/su.d/inputblocker/config/blocked_regions.conf`
+
+**Example config:**
 ```conf
+# InputBlocker Configuration
+# Format: x1,y1,x2,y2 (top-left to bottom-right coordinates)
+# enabled=1 (1=enable blocking, 0=disable)
+# force_safe_mode=1 (1=enable crash protection)
+
 enabled=1
 force_safe_mode=0
 
-# Format: x1,y1,x2,y2
-980,1720,1080,1920    # Bottom-right corner
+# Add blocked regions below (one per line):
+# Example: 0,0,100,200 blocks top-left 100x200 area
+# Example: 980,1720,1080,1920 blocks bottom-right corner
 ```
 
 ## Building from Source
