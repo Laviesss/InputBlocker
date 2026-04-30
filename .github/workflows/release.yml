@@ -260,9 +260,12 @@ jobs:
       - name: Create module ZIP
         run: |
           mkdir -p release
-          # APK stays in common/ for service.sh to install
+          ls -la module/
           cd module
-          zip -r ../release/InputBlocker.zip * -x "*.DS_Store" "*.git*"
+          echo "=== Files ==="
+          find . -type f
+          echo "=== ZIP ==="
+          zip -r ../release/InputBlocker.zip . -x "*.DS_Store" "*.git*"
           unzip -l ../release/InputBlocker.zip
 
       - name: Upload module
