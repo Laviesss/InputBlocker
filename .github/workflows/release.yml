@@ -263,6 +263,7 @@ jobs:
           cp module/common/app-debug.apk module/common/InputBlocker.apk
           cd module
           zip -r ../release/InputBlocker.zip . -x "*.DS_Store" "*.git*"
+          unzip -l ../release/InputBlocker.zip
 
       - name: Upload module
         uses: actions/upload-artifact@v4

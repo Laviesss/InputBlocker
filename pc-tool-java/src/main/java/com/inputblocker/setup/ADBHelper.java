@@ -12,9 +12,44 @@ public class ADBHelper {
     private Process adbProcess;
     private int screenWidth = 1080;
     private int screenHeight = 1920;
+    private String modulePath;
 
     public ADBHelper() throws IOException {
         connect();
+        modulePath = detectModulePath();
+    }
+
+    // Auto-detect module path based on root manager
+    private String detectModulePath() {
+        String[] paths = {
+            "/data/adb/modules/inputblocker",       // Magisk
+            "/data/ksu/modules/inputblocker",     // KernelSU
+            "/data/apatch/modules/inputblocker",    // APatch
+            "/su/su.d/inputblocker"             // SuperSU
+        };
+
+        for (String path : paths) {
+            try {
+                ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", 
+                    "test", "-d", path, "&&", "echo", "EXISTS", "||", "echo", "MISSING");
+                Process p = pb.start();
+                BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+                String result = reader.readLine();
+                if (result != null && result.contains("EXISTS")) {
+                    System.out.println("Detected module path: " + path);
+                    return path;
+                }
+            } catch (IOException e) {
+                // Continue to next path
+            }
+        }
+
+        System.out.println("Module not found, using default path");
+        return paths[0];
+    }
+
+    public String getModulePath() {
+        return modulePath;
     }
 
     private void connect() throws IOException {
@@ -113,7 +148,7 @@ public class ADBHelper {
         List<Region> regions = new ArrayList<>();
         if (!ensureConnected()) return regions;
         try {
-            String configPath = "/data/adb/modules/inputblocker/config/blocked_regions.conf";
+            String configPath = modulePath + "/config/blocked_regions.conf";
             ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "cat", configPath);
             Process p = pb.start();
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
@@ -156,15 +191,9 @@ public class ADBHelper {
                 writer.write(config.toString());
             }
 
-            ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "mkdir", "-p", "/data/adb/modules/inputblocker/config");
-            Process p1 = pb.start();
-            if (!p1.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p1.destroyForcibly();
-
-            pb = new ProcessBuilder("adb", "-s", deviceSerial, "push", tempFile.getAbsolutePath(), "/data/adb/modules/inputblocker/config/blocked_regions.conf");
-            Process p2 = pb.start();
-            if (!p2.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p2.destroyForcibly();
-
-            pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "chmod", "644", "/data/adb/modules/inputblocker/config/blocked_regions.conf");
+ProcessBuilder pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "mkdir", "-p", modulePath + "/config");
+        pb = new ProcessBuilder("adb", "-s", deviceSerial, "push", tempFile.getAbsolutePath(), modulePath + "/config/blocked_regions.conf");
+        pb = new ProcessBuilder("adb", "-s", deviceSerial, "shell", "chmod", "644", modulePath + "/config/blocked_regions.conf");
             Process p3 = pb.start();
             if (!p3.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)) p3.destroyForcibly();
 

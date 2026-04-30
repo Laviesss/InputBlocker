@@ -12,16 +12,43 @@ public class ADBHelper : IDisposable
     private bool connected = false;
     private int screenWidth = 1080;
     private int screenHeight = 1920;
+    private string? cachedModulePath;
 
     public int ScreenWidth => screenWidth;
     public int ScreenHeight => screenHeight;
     public bool IsConnected => connected;
     public string? DeviceSerial => deviceSerial;
+    public string? ModulePath => cachedModulePath;
 
     public ADBHelper()
     {
         StartADBServer();
         Connect();
+        cachedModulePath = DetectModulePath();
+    }
+
+    // Auto-detect module path based on root manager
+    private string DetectModulePath()
+    {
+        string[] paths = {
+            "/data/adb/modules/inputblocker",      // Magisk
+            "/data/ksu/modules/inputblocker",  // KernelSU
+            "/data/apatch/modules/inputblocker", // APatch
+            "/su/su.d/inputblocker"          // SuperSU
+        };
+
+        foreach (string path in paths)
+        {
+            var result = RunProcess("adb", $"-s {deviceSerial} shell test -d '{path}' && echo EXISTS || echo MISSING");
+            if (result.Contains("EXISTS"))
+            {
+                Console.WriteLine($"Detected module path: {path}");
+                return path;
+            }
+        }
+
+        Console.WriteLine("Module not found, using default path");
+        return paths[0];
     }
 
     private void StartADBServer()
@@ -200,9 +227,9 @@ public class ADBHelper : IDisposable
             string tempFile = Path.Combine(Path.GetTempPath(), "inputblocker_config.txt");
             File.WriteAllText(tempFile, config.ToString());
 
-            RunProcess("adb", $"-s {deviceSerial} shell mkdir -p /data/adb/modules/inputblocker/config");
-            RunProcess("adb", $"-s {deviceSerial} push \"{tempFile}\" /data/adb/modules/inputblocker/config/blocked_regions.conf");
-            RunProcess("adb", $"-s {deviceSerial} shell chmod 644 /data/adb/modules/inputblocker/config/blocked_regions.conf");
+            RunProcess("adb", $"-s {deviceSerial} shell mkdir -p {cachedModulePath}/config");
+            RunProcess("adb", $"-s {deviceSerial} push \"{tempFile}\" {cachedModulePath}/config/blocked_regions.conf");
+            RunProcess("adb", $"-s {deviceSerial} shell chmod 644 {cachedModulePath}/config/blocked_regions.conf");
 
             File.Delete(tempFile);
 
@@ -223,7 +250,7 @@ public class ADBHelper : IDisposable
 
         try
         {
-            var output = RunProcess("adb", $"-s {deviceSerial} shell cat /data/adb/modules/inputblocker/config/blocked_regions.conf");
+            var output = RunProcess("adb", $"-s {deviceSerial} shell cat {cachedModulePath}/config/blocked_regions.conf");
             var lines = output.Split('\n');
 
             foreach (var rawLine in lines)
