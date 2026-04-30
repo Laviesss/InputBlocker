@@ -259,11 +259,23 @@ jobs:
 
       - name: Create module ZIP
         run: |
-          mkdir -p release
+          echo "=== Checking module structure ==="
+          ls -la module/
+          echo ""
+          echo "=== Creating directories ==="
           mkdir -p module/system/app/InputBlocker
+          ls -la module/system/
+          echo ""
+          echo "=== Copying APK ==="
+          ls -la module/common/
           cp module/common/app-debug.apk module/system/app/InputBlocker/InputBlocker.apk
+          ls -la module/system/app/InputBlocker/
+          echo ""
+          echo "=== Creating ZIP ==="
           cd module
           zip -r ../release/InputBlocker.zip * -x "*.DS_Store" "*.git*"
+          echo ""
+          echo "=== ZIP Contents ==="
           unzip -l ../release/InputBlocker.zip
 
       - name: Upload module
