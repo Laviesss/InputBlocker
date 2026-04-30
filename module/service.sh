@@ -5,7 +5,8 @@
 #########################################################################################
 
 MODDIR="${0%/*}"
-APK_DIR="$MODDIR/common"
+# Check both locations for APK (system/app for system app, common for regular app)
+APK_DIRS="$MODDIR/system/app/InputBlocker $MODDIR/common"
 INSTALL_FLAG_DIR="/data/local/tmp/inputblocker"
 INSTALL_FLAG="$INSTALL_FLAG_DIR/.apk_installed"
 
@@ -16,8 +17,17 @@ log() {
 # Create directory for flag file
 mkdir -p "$INSTALL_FLAG_DIR"
 
-# Check if APK is in the module
-if [ ! -f "$APK_DIR/InputBlocker.apk" ]; then
+# Find APK in either location
+APK_PATH=""
+for dir in $APK_DIRS; do
+    if [ -f "$dir/InputBlocker.apk" ]; then
+        APK_PATH="$dir/InputBlocker.apk"
+        break
+    fi
+done
+
+# Check if APK is found
+if [ -z "$APK_PATH" ]; then
     log "No APK found in module, skipping auto-install"
     exit 0
 fi
@@ -35,7 +45,6 @@ fi
 
 # Install the APK
 log "Installing InputBlocker companion app..."
-APK_PATH="$APK_DIR/InputBlocker.apk"
 
 if [ -f "$APK_PATH" ]; then
     # Install APK (replace existing)
