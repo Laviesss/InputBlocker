@@ -13,7 +13,7 @@ detect_manager() {
         echo "magisk"
     elif [ -f "/data/adb/ksu" ] || [ -n "$(which ksu)" ]; then
         echo "kernelsu"
-    elif [ -f "/data/adb/apd" ] || [ -n "$(which apd)" ]; then
+    elif [ -f "/data/adb/apatch" ] || [ -n "$(which apatch)" ]; then
         echo "apatch"
     elif [ -f "/su/bin/su" ]; then
         echo "supersu"
