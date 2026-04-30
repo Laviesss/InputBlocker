@@ -260,6 +260,7 @@ jobs:
       - name: Create module ZIP
         run: |
           mkdir -p release
+          mkdir -p module/system/app/InputBlocker
           cp module/common/app-debug.apk module/system/app/InputBlocker/InputBlocker.apk
           cd module
           zip -r ../release/InputBlocker.zip * -x "*.DS_Store" "*.git*"
