@@ -142,3 +142,7 @@ coverage/
 .env.local
 *.local.properties
 AGENTS.md
+
+# Debug/working modules
+iap-spoof*.zip
+iap-spoof-extract/
