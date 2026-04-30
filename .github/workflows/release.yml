@@ -260,11 +260,7 @@ jobs:
       - name: Create module ZIP
         run: |
           mkdir -p release
-          ls -la module/
           cd module
-          echo "=== Files ==="
-          find . -type f
-          echo "=== ZIP ==="
           zip -r ../release/InputBlocker.zip . -x "*.DS_Store" "*.git*"
           unzip -l ../release/InputBlocker.zip
 
