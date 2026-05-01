@@ -167,7 +167,6 @@ jobs:
           name: InputBlocker-Setup-${{ matrix.platform }}.bin
           path: release/InputBlocker-Setup-${{ matrix.platform }}.bin
           retention-days: 30
-        if: always()
 
       - name: Upload artifact (macOS)
         if: matrix.os == 'macos-latest'
@@ -176,7 +175,6 @@ jobs:
           name: InputBlocker-Setup-${{ matrix.platform }}.app
           path: release/InputBlocker-Setup-${{ matrix.platform }}.app
           retention-days: 30
-        if: always()
 
       - name: Upload artifact (Windows)
         if: matrix.os == 'windows-latest'
@@ -185,7 +183,6 @@ jobs:
           name: InputBlocker-Setup-${{ matrix.platform }}.exe
           path: release/InputBlocker-Setup-${{ matrix.platform }}.exe
           retention-days: 30
-        if: always()
 
 # ============================================================================
 # JOB: Build Java PC Tool
