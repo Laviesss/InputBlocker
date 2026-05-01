@@ -138,42 +138,33 @@ jobs:
 
       - name: Rename artifact (Linux)
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          if [ "${{ matrix.platform }}" == "linux-x64" ] || [ "${{ matrix.platform }}" == "linux-arm64" ]; then
-            mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}.bin
-          fi
+        run: mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}
         shell: bash
 
       - name: Rename artifact (macOS)
         if: matrix.os == 'macos-latest'
-        run: |
-          if [ "${{ matrix.platform }}" == "osx-arm64" ]; then
-            mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}.app
-          fi
+        run: mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}
         shell: bash
 
       - name: Rename artifact (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          if ("${{ matrix.platform }}" -eq "win-x64" -or "${{ matrix.platform }}" -eq "win-arm64") {
-            mv release\${{ matrix.platform }}\InputBlockerSetup.exe release\InputBlocker-Setup-${{ matrix.platform }}.exe
-          }
+        run: mv release\${{ matrix.platform }}\InputBlockerSetup.exe release\InputBlocker-Setup-${{ matrix.platform }}.exe
         shell: pwsh
 
       - name: Upload artifact (Linux)
         if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: InputBlocker-Setup-${{ matrix.platform }}.bin
-          path: release/InputBlocker-Setup-${{ matrix.platform }}.bin
+          name: InputBlocker-Setup-${{ matrix.platform }}
+          path: release/InputBlocker-Setup-${{ matrix.platform }}
           retention-days: 30
 
       - name: Upload artifact (macOS)
         if: matrix.os == 'macos-latest'
         uses: actions/upload-artifact@v4
         with:
-          name: InputBlocker-Setup-${{ matrix.platform }}.app
-          path: release/InputBlocker-Setup-${{ matrix.platform }}.app
+          name: InputBlocker-Setup-${{ matrix.platform }}
+          path: release/InputBlocker-Setup-${{ matrix.platform }}
           retention-days: 30
 
       - name: Upload artifact (Windows)
