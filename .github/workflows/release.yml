@@ -138,7 +138,13 @@ jobs:
 
       - name: Rename artifact
         run: |
-          mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+          if [ "${{ matrix.platform }}" == "linux-x64" ] || [ "${{ matrix.platform }}" == "linux-arm64" ]; then
+            mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}.bin
+          elif [ "${{ matrix.platform }}" == "osx-arm64" ]; then
+            mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}.app
+          else
+            mv release/${{ matrix.platform }}/InputBlockerSetup${{ matrix.ext }} release/InputBlocker-Setup-${{ matrix.platform }}${{ matrix.ext }}
+          fi
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
