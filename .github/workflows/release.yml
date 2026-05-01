@@ -211,7 +211,7 @@ jobs:
         with:
           packages: 'platform-tools'
 
-- name: Build debug APK
+      - name: Build debug APK
         run: |
           echo "Building Android APK..."
           cd android-app
