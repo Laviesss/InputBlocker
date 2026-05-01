@@ -5,23 +5,23 @@
 #########################################################################################
 
 MODDIR="${0%/*}"
-# Check both locations for APK (system/app for system app, common for regular app)
-APK_DIRS="$MODDIR/system/app/InputBlocker $MODDIR/common"
-INSTALL_FLAG_DIR="/data/local/tmp/inputblocker"
-INSTALL_FLAG="$INSTALL_FLAG_DIR/.apk_installed"
+INSTALL_FLAG="/data/local/tmp/inputblocker/.apk_installed"
 
 log() {
     log -t InputBlocker "$1"
 }
 
 # Create directory for flag file
-mkdir -p "$INSTALL_FLAG_DIR"
+mkdir -p /data/local/tmp/inputblocker
 
-# Find APK in either location
+log "Service started, MODDIR=$MODDIR"
+
+# Find APK
 APK_PATH=""
-for dir in $APK_DIRS; do
+for dir in "$MODDIR/common" "$MODDIR/system/app"; do
     if [ -f "$dir/InputBlocker.apk" ]; then
         APK_PATH="$dir/InputBlocker.apk"
+        log "Found APK at: $APK_PATH"
         break
     fi
 done
@@ -29,6 +29,11 @@ done
 # Check if APK is found
 if [ -z "$APK_PATH" ]; then
     log "No APK found in module, skipping auto-install"
+    # Debug: list what's in the module
+    log "Module contents:"
+    ls -la "$MODDIR/" 2>/dev/null || log "Cannot list MODDIR"
+    ls -la "$MODDIR/common/" 2>/dev/null || log "No common dir"
+    ls -la "$MODDIR/system/" 2>/dev/null || log "No system dir"
     exit 0
 fi
 

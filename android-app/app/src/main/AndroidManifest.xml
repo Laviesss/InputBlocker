@@ -76,6 +76,14 @@
             </intent-filter>
         </receiver>
 
+        <!-- LSPosed Module Metadata -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="170" />
+
         <!-- Shutdown Receiver -->
         <receiver
             android:name=".ShutdownReceiver"

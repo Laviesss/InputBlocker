@@ -221,8 +221,8 @@ jobs:
         run: |
           echo "Building Android APK..."
           cd android-app
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon --stacktrace --warning-mode none
+chmod +x gradlew
+./gradlew assembleDebug --no-daemon --rerun-tasks --stacktrace --warning-mode none
           echo "APK built successfully"
 
       - name: Upload debug APK
@@ -252,10 +252,13 @@ jobs:
           name: InputBlocker-debug.apk
           path: module/common/
 
+      - name: Rename APK to InputBlocker.apk
+        run: mv module/common/app-debug.apk module/common/InputBlocker.apk
+
       - name: Verify APK
         run: |
           ls -la module/common/
-          file module/common/app-debug.apk
+          file module/common/InputBlocker.apk
 
       - name: Create module ZIP
         run: |
