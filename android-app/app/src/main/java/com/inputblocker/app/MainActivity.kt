@@ -48,6 +48,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnAddRegion: Button
     private lateinit var btnClearAll: Button
     private lateinit var btnTheme: Button
+    private lateinit var btnAutoDetect: Button
 
     private var isEnabled = true
     private var isLsposedMode = false
@@ -314,6 +315,7 @@ class MainActivity : AppCompatActivity() {
         btnAddRegion = findViewById(R.id.btn_add_region)
         btnClearAll = findViewById(R.id.btn_clear_all)
         btnTheme = findViewById(R.id.btn_theme)
+        btnAutoDetect = findViewById(R.id.btn_auto_detect)
     }
 
     private fun setupListeners() {
@@ -338,6 +340,7 @@ class MainActivity : AppCompatActivity() {
         btnAddRegion.setOnClickListener { showAddRegionDialog() }
         btnClearAll.setOnClickListener { confirmClearAll() }
         btnTheme.setOnClickListener { showThemeDialog() }
+        btnAutoDetect.setOnClickListener { startAutoDetection() }
     }
 
     private fun startAutoDetection() {
