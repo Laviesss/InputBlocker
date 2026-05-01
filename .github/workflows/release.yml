@@ -211,12 +211,12 @@ jobs:
         with:
           packages: 'platform-tools'
 
-      - name: Build debug APK
+- name: Build debug APK
         run: |
           echo "Building Android APK..."
           cd android-app
-chmod +x gradlew
-./gradlew assembleDebug --no-daemon --rerun-tasks --stacktrace --warning-mode none
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --rerun-tasks --stacktrace --warning-mode none
           echo "APK built successfully"
 
       - name: Upload debug APK
