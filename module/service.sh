@@ -4,72 +4,70 @@
 # Auto-installs companion app on first boot after module installation
 #########################################################################################
 
-MODDIR="${0%/*}"
+APK_PATH="/data/adb/modules/inputblocker/common/InputBlocker.apk"
 INSTALL_FLAG="/data/local/tmp/inputblocker/.apk_installed"
 
 log() {
     log -t InputBlocker "$1"
 }
 
-# Create directory for flag file
-mkdir -p /data/local/tmp/inputblocker
+log "InputBlocker service started"
 
-log "Service started, MODDIR=$MODDIR"
+# Remove flag to force reinstall (in case previous attempt failed)
+rm -f "$INSTALL_FLAG"
 
-# Find APK
-APK_PATH=""
-for dir in "$MODDIR/common" "$MODDIR/system/app"; do
-    if [ -f "$dir/InputBlocker.apk" ]; then
-        APK_PATH="$dir/InputBlocker.apk"
-        log "Found APK at: $APK_PATH"
-        break
-    fi
+# Wait for boot to complete
+while [ "$(getprop sys.boot_completed)" != "1" ]; do
+    sleep 2
 done
 
-# Check if APK is found
-if [ -z "$APK_PATH" ]; then
-    log "No APK found in module, skipping auto-install"
-    # Debug: list what's in the module
-    log "Module contents:"
-    ls -la "$MODDIR/" 2>/dev/null || log "Cannot list MODDIR"
-    ls -la "$MODDIR/common/" 2>/dev/null || log "No common dir"
-    ls -la "$MODDIR/system/" 2>/dev/null || log "No system dir"
+sleep 5  # Extra wait for package manager
+
+log "Boot completed, checking for APK..."
+
+# Check if APK exists
+if [ ! -f "$APK_PATH" ]; then
+    log "APK not found at $APK_PATH"
+    # Try alternative paths
+    for path in "/data/adb/modules/inputblocker/common/InputBlocker.apk" \
+                "/data/local/tmp/inputblocker/InputBlocker.apk" \
+                "/sdcard/InputBlocker.apk"; do
+        if [ -f "$path" ]; then
+            APK_PATH="$path"
+            log "Found APK at alternative path: $APK_PATH"
+            break
+        fi
+    done
+fi
+
+if [ ! -f "$APK_PATH" ]; then
+    log "No APK found anywhere, exiting"
     exit 0
 fi
 
-# Check if already installed
-if [ -f "$INSTALL_FLAG" ]; then
-    INSTALLED_VERSION=$(cat "$INSTALL_FLAG" 2>/dev/null)
-    CURRENT_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
-    
-    if [ "$INSTALLED_VERSION" = "$CURRENT_VERSION" ] && [ -n "$INSTALLED_VERSION" ]; then
-        log "APK already installed with same version"
-        exit 0
-    fi
-fi
+# Install APK
+log "Installing APK from: $APK_PATH"
+log "File size: $(ls -l "$APK_PATH" 2>/dev/null | awk '{print $5}') bytes"
 
-# Install the APK
-log "Installing InputBlocker companion app..."
-
-if [ -f "$APK_PATH" ]; then
-    # Install APK (replace existing)
-    pm install -r "$APK_PATH" 2>/dev/null
-    
+# Try installation with verbose output
+cmd package install-existing com.inputblocker.app 2>/dev/null && {
+    log "Installation via cmd succeeded"
+    echo "installed" > "$INSTALL_FLAG"
+} || {
+    log "cmd install failed, trying pm install"
+    pm install -r "$APK_PATH" 2>&1 | while read line; do
+        log "pm: $line"
+    done
     if [ $? -eq 0 ]; then
-        log "APK installed successfully"
-        # Get APK version and store installed flag
-        APK_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
-        if [ -n "$APK_VERSION" ]; then
-            echo "$APK_VERSION" > "$INSTALL_FLAG"
-            log "Stored version: $APK_VERSION"
-        else
-            echo "installed" > "$INSTALL_FLAG"
-        fi
+        log "pm install succeeded"
+        echo "installed" > "$INSTALL_FLAG"
     else
-        log "Failed to install APK"
+        log "pm install failed"
+        # Copy to accessible location and signal user
+        cp "$APK_PATH" /sdcard/Download/InputBlocker.apk 2>/dev/null
+        log "Copied APK to /sdcard/Download/ for manual install"
     fi
-else
-    log "APK file not found at $APK_PATH"
-fi
+}
 
+log "Service finished"
 exit 0
