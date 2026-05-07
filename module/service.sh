@@ -94,14 +94,37 @@ pm install -r "$APK_PATH" 2>&1 | while read line; do;
 done;
 
 if [ $? -eq 0 ]; then
-    log "pm install succeeded"
-    APK_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
-    if [ -n "$APK_VERSION" ]; then;
-        echo "$APK_VERSION" > "$INSTALL_FLAG"
-        log "Stored version: $APK_VERSION"
+    # VERIFY: Actually check if app is installed
+    sleep 2
+    VERIFY=$(pm list packages | grep "com.inputblocker.app")
+    if [ -n "$VERIFY" ]; then
+        log "VERIFIED: App installed successfully"
+        APK_VERSION=$(dumpsys package com.inputblocker.app 2>/dev/null | grep versionName | head -1 | cut -d= -f2)
+        if [ -n "$APK_VERSION" ]; then
+            echo "$APK_VERSION" > "$INSTALL_FLAG"
+            log "Stored version: $APK_VERSION"
+        else
+            echo "installed" > "$INSTALL_FLAG"
+        fi
     else
-        echo "installed" > "$INSTALL_FLAG"
-    fi;
+        log "WARNING: pm returned success but app not in package list"
+        log "Trying alternative method..."
+        
+        # Method 2: Copy to accessible location and try again
+        cp "$APK_PATH" /sdcard/Download/InputBlocker.apk 2>/dev/null
+        pm install -r /sdcard/Download/InputBlocker.apk 2>&1 | while read line; do
+            log "pm2: $line"
+        done
+    
+        VERIFY2=$(pm list packages | grep "com.inputblocker.app")
+        if [ -n "$VERIFY2" ]; then
+            log "VERIFIED: Install succeeded from /sdcard/Download/"
+            echo "installed" > "$INSTALL_FLAG"
+        else
+            log "ERROR: All install methods failed"
+            log "APK available at: $APK_PATH"
+        fi
+    fi
 else
     log "pm install failed, trying alternative..."
     
