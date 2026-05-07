@@ -31,7 +31,9 @@ for path in \
     "$MODDIR/InputBlocker.apk" \
     "/data/adb/modules/inputblocker/common/InputBlocker.apk" \
     "/data/local/tmp/inputblocker/InputBlocker.apk" \
-    "/sdcard/Download/InputBlocker.apk"; do
+    "/sdcard/Download/InputBlocker.apk" \
+    "/storage/emulated/0/Download/InputBlocker.apk" \
+    "/storage/emulated/0/Download/InputBlocker.zip"; do
     if [ -f "$path" ]; then
         APK_PATH="$path"
         log "Found APK at: $APK_PATH"
@@ -89,7 +91,7 @@ else
         echo "installed" > "$INSTALL_FLAG"
     else
         log "ERROR: All install methods failed"
-        log "APK copied to /sdcard/Download/InputBlocker.apk for manual install"
+        log "APK available at: $APK_PATH"
     fi
 fi
 
