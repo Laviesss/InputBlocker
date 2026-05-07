@@ -350,6 +350,13 @@ jobs:
           echo "✅ Release files prepared:"
           ls -la release/
 
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum * > checksums.sha256
+          cat checksums.sha256
+          cd ..
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -357,30 +364,74 @@ jobs:
           name: "InputBlocker ${{ needs.setup.outputs.version }}"
           body: |
             ## 📦 InputBlocker ${{ needs.setup.outputs.version }}
-            
-            **Build Date:** $(date)
-            **Commit:** ${{ github.sha }}
-            
+
+            **Build Date:** `$(date)`
+            **Commit:** `${{ github.sha }}`
+
+            ---
+
             ### 🔧 What's Included
-            
-            This release includes:
-            - ✅ C# PC Setup Tool (Windows, Linux, macOS)
-            - ✅ Java PC Setup Tool
-            - ✅ Android Companion App (APK)
-            - ✅ Root Module (Magisk/KernelSU/APatch/SuperSU compatible)
-            
-            ### 📱 Installation
-            
-            1. **Install the root module** (`InputBlocker.zip`)
-            2. **Reboot** your device
-            3. **Open the InputBlocker app** to configure blocked regions
-            
+
+            | Component | Description |
+            |-----------|-------------|
+            | ✅ **C# PC Tool** | Windows (x64/ARM64), Linux (x64/ARM64), macOS (Apple Silicon) |
+            | ✅ **Java PC Tool** | Cross-platform JAR (requires Java 17+) |
+            | ✅ **Android App** | Companion APK for touch region configuration |
+            | ✅ **Root Module** | Magisk, KernelSU, APatch, SuperSU compatible |
+
+            ---
+
+            ### 📱 Installation (Android)
+
+            1. **Install the root module** - Flash `InputBlocker.zip` via Magisk Manager
+            2. **Reboot** your device to activate the module
+            3. **Open InputBlocker app** to configure blocked regions
+            4. (Optional) **Enable LSPosed mode** in app settings for system-level blocking
+
+            ---
+
+            ### 💻 Installation (PC Tools)
+
+            **Windows:**
+            - `InputBlocker-Setup-win-x64.exe` - 64-bit Windows
+            - `InputBlocker-Setup-win-arm64.exe` - ARM64 Windows (Surface Pro X, etc.)
+
+            **Linux:**
+            - `InputBlocker-Setup-linux-x64` - 64-bit Linux
+            - `InputBlocker-Setup-linux-arm64` - ARM64 Linux (Raspberry Pi, etc.)
+
+            **macOS:**
+            - `InputBlocker-Setup-osx-arm64` - Apple Silicon (M1/M2/M3)
+
+            **Java (All platforms):**
+            - `InputBlocker-Setup-Java-*.jar` - Requires Java 17+ installed
+
+            Run the tool and connect your device via USB to configure touch regions.
+
+            ---
+
             ### 🛠️ Build Information
-            - Built with: GitHub Actions
-            - .NET SDK: 8.0.x
-            - Java: Temurin 17
-            - Android Gradle Plugin: Latest
-          files: release/*
+
+            - **Built with:** GitHub Actions
+            - **.NET SDK:** 8.0.x (C# tools)
+            - **Java:** Eclipse Temurin 17 (APK & Java tool)
+            - **Android Gradle Plugin:** Latest
+            - **Target SDK:** Android 14 (API 34)
+
+            ---
+
+            ### 📖 Documentation
+
+            - [📘 Full Documentation](https://github.com/Laviesss/InputBlocker/blob/main/DOCUMENTATION.md)
+            - [🔧 Build Instructions](https://github.com/Laviesss/InputBlocker/blob/main/BUILD.md)
+            - [🐛 Report Issues](https://github.com/Laviesss/InputBlocker/issues)
+
+            ---
+
+            **Checksums:** See `checksums.sha256` below for file verification.
+          files: |
+            release/*
+            release/checksums.sha256
           generate_release_notes: true
           draft: false
           prerelease: false
