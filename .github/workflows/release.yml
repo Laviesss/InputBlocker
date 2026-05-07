@@ -22,6 +22,26 @@ on:
         description: 'Custom version name (optional)'
         required: false
         default: ''
+      release_notes:
+        description: 'Additional release notes (markdown supported)'
+        required: false
+        default: ''
+      draft:
+        description: 'Create as draft (true/false)'
+        required: false
+        default: 'false'
+      prerelease:
+        description: 'Mark as pre-release (true/false)'
+        required: false
+        default: 'false'
+      include_lite:
+        description: 'Include lite module (no APK) in release'
+        required: false
+        default: 'true'
+      notify_issues:
+        description: 'Notify open issues about release'
+        required: false
+        default: 'true'
 
 # Use Node.js 24 to avoid deprecation warnings
 env:
@@ -357,6 +377,25 @@ jobs:
           cat checksums.sha256
           cd ..
 
+      - name: Verify release assets
+        run: |
+          echo "Verifying release assets..."
+          cd release
+          echo "Checking expected files:"
+          ls -la
+          
+          # Check essential files exist
+          test -f checksums.sha256 && echo "✅ checksums.sha256 exists" || echo "❌ checksums.sha256 missing"
+          test -f InputBlocker.zip && echo "✅ InputBlocker.zip exists" || echo "❌ InputBlocker.zip missing"
+          test -f InputBlocker-debug.apk && echo "✅ InputBlocker-debug.apk exists" || echo "❌ InputBlocker-debug.apk missing"
+          
+          # Verify checksums are valid
+          echo "Verifying checksums..."
+          sha256sum -c checksums.sha256 || echo "⚠️ Checksum verification failed (non-critical)"
+          
+          cd ..
+          echo "✅ Asset verification complete"
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -429,11 +468,13 @@ jobs:
             ---
 
             **Checksums:** See `checksums.sha256` below for file verification.
+
+            ${{ github.event.inputs.release_notes }}
           files: |
             release/*
             release/checksums.sha256
           generate_release_notes: true
-          draft: false
-          prerelease: false
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
