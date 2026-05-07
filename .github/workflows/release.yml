@@ -137,22 +137,22 @@ jobs:
         run: chmod +x release/${{ matrix.platform }}/InputBlockerSetup
 
       - name: Rename artifact (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}
         shell: bash
 
       - name: Rename artifact (macOS)
-        if: matrix.os == 'macos-latest'
+        if: ${{ matrix.os == 'macos-latest' }}
         run: mv release/${{ matrix.platform }}/InputBlockerSetup release/InputBlocker-Setup-${{ matrix.platform }}
         shell: bash
 
       - name: Rename artifact (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ matrix.os == 'windows-latest' }}
         run: mv release\${{ matrix.platform }}\InputBlockerSetup.exe release\InputBlocker-Setup-${{ matrix.platform }}.exe
         shell: pwsh
 
       - name: Upload artifact (Linux)
-        if: matrix.os == 'ubuntu-latest'
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-Setup-${{ matrix.platform }}
@@ -160,7 +160,7 @@ jobs:
           retention-days: 30
 
       - name: Upload artifact (macOS)
-        if: matrix.os == 'macos-latest'
+        if: ${{ matrix.os == 'macos-latest' }}
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-Setup-${{ matrix.platform }}
@@ -168,7 +168,7 @@ jobs:
           retention-days: 30
 
       - name: Upload artifact (Windows)
-        if: matrix.os == 'windows-latest'
+        if: ${{ matrix.os == 'windows-latest' }}
         uses: actions/upload-artifact@v4
         with:
           name: InputBlocker-Setup-${{ matrix.platform }}.exe
@@ -213,7 +213,7 @@ jobs:
           name: InputBlocker-Setup-Java-${{ matrix.os }}
           path: pc-tool-java/build/libs/InputBlockerSetup-1.0.0.jar
           retention-days: 30
-        if: always()
+        if: ${{ always() }}
 
 # ============================================================================
 # JOB: Build Android APK
@@ -253,7 +253,17 @@ jobs:
           name: InputBlocker-debug.apk
           path: android-app/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
-        if: always()
+        if: ${{ always() }}
+
+# ============================================================================
+
+      - name: Upload module
+        uses: actions/upload-artifact@v4
+        with:
+          name: InputBlocker-RootModule-Full
+          path: release/InputBlocker.zip
+          retention-days: 30
+        if: ${{ always() }}
 
 # ============================================================================
 # JOB: Build Root Module
