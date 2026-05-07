@@ -52,6 +52,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.version }}
       is_release: ${{ steps.version.outputs.is_release }}
+      is_test: ${{ steps.version.outputs.is_test }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
