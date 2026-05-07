@@ -58,27 +58,39 @@ jobs:
         with:
           fetch-depth: 0  # Get full history for accurate version detection
 
-      - name: Determine version and release type
-        id: version
-        run: |
-          # Extract version from git tag
-          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/tags/"* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-            echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "📌 Release mode: Version tag detected - $VERSION"
-          else
-            # Manual workflow dispatch - use custom version or generate dev version
-            VERSION="${{ github.event.inputs.version }}"
-            if [[ -z "$VERSION" ]]; then
-              VERSION="dev-$(date +%Y%m%d-%H%M%S)"
-              echo "⚠️ No version specified - using development version: $VERSION"
-            else
-              echo "📌 Manual mode: Using custom version - $VERSION"
-            fi
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-          fi
+       - name: Determine version and release type
+         id: version
+         run: |
+           # Extract version from git tag
+           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/tags/"* ]]; then
+             VERSION="${GITHUB_REF#refs/tags/}"
+             
+             # Check if it's a test tag (starts with vtest)
+             if [[ "$VERSION" == vtest* ]]; then
+               echo "is_release=false" >> $GITHUB_OUTPUT
+               echo "is_test=true" >> $GITHUB_OUTPUT
+               echo "version=$VERSION" >> $GITHUB_OUTPUT
+               echo "🧪 Test mode: Test tag detected - $VERSION (will create draft release)"
+             else
+               # Production version tag (starts with v but not vtest)
+               echo "is_release=true" >> $GITHUB_OUTPUT
+               echo "is_test=false" >> $GITHUB_OUTPUT
+               echo "version=$VERSION" >> $GITHUB_OUTPUT
+               echo "📌 Release mode: Production tag detected - $VERSION"
+             fi
+           else
+             # Manual workflow dispatch - use custom version or generate dev version
+             VERSION="${{ github.event.inputs.version }}"
+             if [[ -z "$VERSION" ]]; then
+               VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+               echo "⚠️ No version specified - using development version: $VERSION"
+             else
+               echo "📌 Manual mode: Using custom version - $VERSION"
+             fi
+             echo "is_release=false" >> $GITHUB_OUTPUT
+             echo "is_test=false" >> $GITHUB_OUTPUT
+             echo "version=$VERSION" >> $GITHUB_OUTPUT
+           fi
 
       - name: Display version information
         run: |
@@ -325,17 +337,31 @@ jobs:
 
 # ============================================================================
 # JOB: Create GitHub Release
-# Creates release with all artifacts when triggered by version tag
+# Creates release with all artifacts for all version tags
+# Test tags (vtest*) create draft releases
+# Production tags (v*) create regular releases
 # ============================================================================
   create-release:
     needs: [setup, build-csharp, build-java, build-module]
     runs-on: ubuntu-latest
-    if: needs.setup.outputs.is_release == 'true'
     name: "Create GitHub Release"
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        
+      - name: Determine release type
+        id: release_type
+        run: |
+          if [[ "${{ needs.setup.outputs.is_test }}" == "true" ]]; then
+            echo "draft=true" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "🧪 Creating draft release for test tag"
+          else
+            echo "draft=false" >> $GITHUB_OUTPUT
+            echo "prerelease=false" >> $GITHUB_OUTPUT
+            echo "📦 Creating production release"
+          fi
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -395,71 +421,10 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ needs.setup.outputs.version }}"
-          name: "InputBlocker ${{ needs.setup.outputs.version }}"
-          body: |
-            ## 📦 InputBlocker ${{ needs.setup.outputs.version }}
-
-            **Build Date:** `$(date)`
-            **Commit:** `${{ github.sha }}` ({{ github.repository }})
-
-            ---
-
-            ### 🔧 What's Included
-
-            | Component | Description |
-            |-----------|-------------|
-            | ✅ **C# PC Tool** | Windows (x64/ARM64), Linux (x64/ARM64), macOS (Apple Silicon) |
-            | ✅ **Java PC Tool** | Cross-platform JAR (requires Java 17+) |
-            | ✅ **Android App** | Companion APK for touch region configuration |
-            | ✅ **Root Module** | Magisk, KernelSU, APatch, SuperSU compatible |
-
-            ---
-
-            ### 📱 Installation (Android)
-
-            1. **Install the root module** - Flash `InputBlocker.zip` via Magisk/KernelSU/APatch Manager
-            2. **Reboot** your device to activate the module
-            3. **Open InputBlocker app** to configure blocked regions
-            4. (Optional) **Enable LSPosed mode** in app settings for system-level blocking
-
-            ---
-
-            ### 💻 Installation (PC Tools)
-
-            **Windows:** `InputBlocker-Setup-win-x64.exe` / `InputBlocker-Setup-win-arm64.exe`
-            **Linux:** `InputBlocker-Setup-linux-x64` / `InputBlocker-Setup-linux-arm64`
-            **macOS:** `InputBlocker-Setup-osx-arm64`
-            **Java (All):** `InputBlocker-Setup-Java-*.jar` (requires Java 17+)
-
-            Run the tool and connect your device via USB to configure touch regions.
-
-            ---
-
-            ### 🛠️ Build Information
-
-            - **Built with:** GitHub Actions
-            - **.NET SDK:** 8.0.x (C# tools)
-            - **Java:** Eclipse Temurin 17 (APK & Java tool)
-            - **Android Gradle Plugin:** Latest
-            - **Target SDK:** Android 14 (API 34)
-
-            ---
-
-            ### 📖 Documentation
-
-            - [📘 Full Documentation](https://github.com/Laviesss/InputBlocker/blob/main/DOCUMENTATION.md)
-            - [🔧 Build Instructions](https://github.com/Laviesss/InputBlocker/blob/main/BUILD.md)
-            - [🐛 Report Issues](https://github.com/Laviesss/InputBlocker/issues)
-
-            ---
-
-            **Checksums:** See `checksums.sha256` below for file verification.
-
-            ${{ github.event.inputs.release_notes }}
-          files: |
-            release/*
-            release/checksums.sha256
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: ${{ steps.release_type.outputs.draft == 'true' }}
+          prerelease: ${{ steps.release_type.outputs.prerelease == 'true' }}
           generate_release_notes: true
           draft: ${{ github.event.inputs.draft || false }}
           prerelease: ${{ github.event.inputs.prerelease || false }}
