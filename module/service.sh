@@ -5,10 +5,6 @@
 #########################################################################################
 
 MODDIR="${0%/*}"
-APK_PATHS="/data/adb/modules/inputblocker/common/InputBlocker.apk
-        /data/adb/modules/inputblocker/InputBlocker.apk
-        /data/local/tmp/inputblocker/InputBlocker.apk
-        /sdcard/Download/InputBlocker.apk"
 INSTALL_FLAG="/data/local/tmp/inputblocker/.apk_installed"
 
 log() {
@@ -30,7 +26,12 @@ log "Boot completed, checking for APK..."
 
 # Find APK - try multiple possible locations
 APK_PATH=""
-for path in $APK_PATHS; do
+for path in \
+    "$MODDIR/common/InputBlocker.apk" \
+    "$MODDIR/InputBlocker.apk" \
+    "/data/adb/modules/inputblocker/common/InputBlocker.apk" \
+    "/data/local/tmp/inputblocker/InputBlocker.apk" \
+    "/sdcard/Download/InputBlocker.apk"; do
     if [ -f "$path" ]; then
         APK_PATH="$path"
         log "Found APK at: $APK_PATH"
@@ -40,7 +41,8 @@ for path in $APK_PATHS; do
 done
 
 if [ -z "$APK_PATH" ]; then
-    log "ERROR: No APK found anywhere. Searched: $APK_PATHS"
+    log "ERROR: No APK found anywhere"
+    log "Searched MODDIR=$MODDIR"
     exit 0
 fi
 
