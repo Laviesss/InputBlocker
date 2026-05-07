@@ -401,7 +401,7 @@ jobs:
             ## 📦 InputBlocker ${{ needs.setup.outputs.version }}
 
             **Build Date:** `$(date)`
-            **Commit:** `${{ github.sha }}`
+            **Commit:** `${{ github.sha }}` ({{ github.repository }})
 
             ---
 
@@ -418,7 +418,7 @@ jobs:
 
             ### 📱 Installation (Android)
 
-            1. **Install the root module** - Flash `InputBlocker.zip` via Magisk Manager
+            1. **Install the root module** - Flash `InputBlocker.zip` via Magisk/KernelSU/APatch Manager
             2. **Reboot** your device to activate the module
             3. **Open InputBlocker app** to configure blocked regions
             4. (Optional) **Enable LSPosed mode** in app settings for system-level blocking
@@ -427,19 +427,10 @@ jobs:
 
             ### 💻 Installation (PC Tools)
 
-            **Windows:**
-            - `InputBlocker-Setup-win-x64.exe` - 64-bit Windows
-            - `InputBlocker-Setup-win-arm64.exe` - ARM64 Windows (Surface Pro X, etc.)
-
-            **Linux:**
-            - `InputBlocker-Setup-linux-x64` - 64-bit Linux
-            - `InputBlocker-Setup-linux-arm64` - ARM64 Linux (Raspberry Pi, etc.)
-
-            **macOS:**
-            - `InputBlocker-Setup-osx-arm64` - Apple Silicon (M1/M2/M3)
-
-            **Java (All platforms):**
-            - `InputBlocker-Setup-Java-*.jar` - Requires Java 17+ installed
+            **Windows:** `InputBlocker-Setup-win-x64.exe` / `InputBlocker-Setup-win-arm64.exe`
+            **Linux:** `InputBlocker-Setup-linux-x64` / `InputBlocker-Setup-linux-arm64`
+            **macOS:** `InputBlocker-Setup-osx-arm64`
+            **Java (All):** `InputBlocker-Setup-Java-*.jar` (requires Java 17+)
 
             Run the tool and connect your device via USB to configure touch regions.
 
