@@ -57,27 +57,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Get full history for accurate version detection
-
-       - name: Determine version and release type
-         id: version
-         run: |
-           # Extract version from git tag
-           if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/tags/"* ]]; then
-             VERSION="${GITHUB_REF#refs/tags/}"
-             
-             # Check if it's a test tag (starts with vtest)
-             if [[ "$VERSION" == vtest* ]]; then
-               echo "is_release=false" >> $GITHUB_OUTPUT
-               echo "is_test=true" >> $GITHUB_OUTPUT
-               echo "version=$VERSION" >> $GITHUB_OUTPUT
-               echo "🧪 Test mode: Test tag detected - $VERSION (will create draft release)"
-             else
-               # Production version tag (starts with v but not vtest)
-               echo "is_release=true" >> $GITHUB_OUTPUT
-               echo "is_test=false" >> $GITHUB_OUTPUT
-               echo "version=$VERSION" >> $GITHUB_OUTPUT
-               echo "📌 Release mode: Production tag detected - $VERSION"
+          fetch-depth: 0
+      - name: Determine version and release type
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/tags/"* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/}"
+            if [[ "$VERSION" == vtest* ]]; then
+              echo "is_release=false" >> $GITHUB_OUTPUT
+              echo "is_test=true" >> $GITHUB_OUTPUT
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+              echo "🧪 Test mode: Test tag detected - $VERSION (will create draft release)"
+            else
+              echo "is_release=true" >> $GITHUB_OUTPUT
+              echo "is_test=false" >> $GITHUB_OUTPUT
+              echo "version=$VERSION" >> $GITHUB_OUTPUT
+              echo "📌 Release mode: Production tag detected - $VERSION"
+            fi
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            if [[ -z "$VERSION" ]]; then
+              VERSION="dev-$(date +%Y%m%d-%H%M%S)"
+              echo "⚠️ No version specified - using development version: $VERSION"
+            else
+              echo "📌 Manual mode: Using custom version - $VERSION"
+            fi
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "is_test=false" >> $GITHUB_OUTPUT
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          fi
              fi
            else
              # Manual workflow dispatch - use custom version or generate dev version
