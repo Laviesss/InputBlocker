@@ -432,10 +432,8 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}
-          draft: ${{ steps.release_type.outputs.draft == 'true' }}
-          prerelease: ${{ steps.release_type.outputs.prerelease == 'true' }}
-          generate_release_notes: true
-          draft: ${{ github.event.inputs.draft || false }}
-          prerelease: ${{ github.event.inputs.prerelease || false }}
+           draft: ${{ github.event.inputs.draft == 'true' || steps.release_type.outputs.draft == 'true' }}
+           prerelease: ${{ github.event.inputs.prerelease == 'true' || steps.release_type.outputs.prerelease == 'true' }}
+           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
