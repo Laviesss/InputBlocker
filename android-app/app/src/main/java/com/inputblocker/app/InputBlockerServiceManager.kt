@@ -108,8 +108,13 @@ object InputBlockerServiceManager {
                     content.insert(0, "enabled=0\nforce_safe_mode=1\n\n")
                 }
                 
-                configFile.writeText(content.toString())
-                Log.i(TAG, "Safe mode enabled - blocking disabled")
+                val tempFile = File(configPath + ".tmp")
+                tempFile.writeText(content.toString())
+                if (tempFile.renameTo(configFile)) {
+                    Log.i(TAG, "Safe mode enabled - blocking disabled")
+                } else {
+                    Log.e(TAG, "Failed to atomically update config file")
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enable safe mode", e)

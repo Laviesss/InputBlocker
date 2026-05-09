@@ -241,21 +241,37 @@ class OverlayService : Service() {
         }
     }
 
+    private fun runRootCommand(command: String): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            process.waitFor() == 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Root command failed: $command - ${e.message}")
+            false
+        }
+    }
+
     private fun startDetection() {
         Thread {
             try {
                 Log.i(TAG, "Initiating detection sequence...")
                 
                 // 1. Disable lock screen
-                Runtime.getRuntime().exec(arrayOf("su", "-c", "locksettings set-disabled true"))
+                if (!runRootCommand("locksettings set-disabled true")) {
+                    Log.w(TAG, "Failed to disable lock screen, continuing anyway...")
+                }
                 Thread.sleep(500)
                 
                 // 2. Force screen off
-                Runtime.getRuntime().exec(arrayOf("su", "-c", "input keyevent 26"))
+                if (!runRootCommand("input keyevent 26")) {
+                    Log.w(TAG, "Failed to force screen off, continuing anyway...")
+                }
                 Thread.sleep(1000)
                 
                 // 3. Force screen on
-                Runtime.getRuntime().exec(arrayOf("su", "-c", "input keyevent KEYCODE_WAKEUP"))
+                if (!runRootCommand("input keyevent KEYCODE_WAKEUP")) {
+                    Log.w(TAG, "Failed to force screen on, continuing anyway...")
+                }
                 Thread.sleep(1000)
                 
                 // 4. NOW start the actual detection period
@@ -284,11 +300,10 @@ class OverlayService : Service() {
         val detectedRegions = processHeatmap()
         
         // Re-enable the lock screen
-        try {
-            Runtime.getRuntime().exec(arrayOf("su", "-c", "locksettings set-disabled false"))
+        if (!runRootCommand("locksettings set-disabled false")) {
+            Log.e(TAG, "Failed to re-enable lock screen")
+        } else {
             Log.i(TAG, "Lock screen re-enabled")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to re-enable lock screen: ${e.message}")
         }
 
         val intent = Intent("com.inputblocker.DETECTION_RESULTS")

@@ -61,11 +61,10 @@ done
 # If still not found, search entire filesystem (slow but thorough)
 if [ -z "$APK_PATH" ]; then
     log "ERROR: No APK found in common paths, searching filesystem..."
-    find /data/adb/modules/inputblocker -name "InputBlocker.apk" 2>/dev/null | while read line; do
-        log "FOUND via find: $line"
-        APK_PATH="$line"
-        break
-    done
+    APK_PATH=$(find /data/adb/modules/inputblocker -name "InputBlocker.apk" 2>/dev/null | head -1)
+    if [ -n "$APK_PATH" ]; then
+        log "FOUND via find: $APK_PATH"
+    fi
 fi
 
 if [ -z "$APK_PATH" ]; then
@@ -89,11 +88,13 @@ log "Installing APK from: $APK_PATH"
 
 # Method 1: Try pm install -r (replace existing)
 log "Trying pm install..."
-pm install -r "$APK_PATH" 2>&1 | while read line; do;
-    log "pm: $line"
-done;
+LOG_FILE="/data/local/tmp/inputblocker/pm_install.log"
+pm install -r "$APK_PATH" > "$LOG_FILE" 2>&1
+INSTALL_EXIT=$?
+while read line; do log "pm: $line"; done < "$LOG_FILE"
+rm -f "$LOG_FILE"
 
-if [ $? -eq 0 ]; then
+if [ $INSTALL_EXIT -eq 0 ]; then
     # VERIFY: Actually check if app is installed
     sleep 2
     VERIFY=$(pm list packages | grep "com.inputblocker.app")
@@ -112,35 +113,37 @@ if [ $? -eq 0 ]; then
         
         # Method 2: Copy to accessible location and try again
         cp "$APK_PATH" /sdcard/Download/InputBlocker.apk 2>/dev/null
-        pm install -r /sdcard/Download/InputBlocker.apk 2>&1 | while read line; do
-            log "pm2: $line"
-        done
-    
-        VERIFY2=$(pm list packages | grep "com.inputblocker.app")
-        if [ -n "$VERIFY2" ]; then
-            log "VERIFIED: Install succeeded from /sdcard/Download/"
+        pm install -r /sdcard/Download/InputBlocker.apk > "$LOG_FILE" 2>&1
+        INSTALL_EXIT2=$?
+        while read line; do log "pm2: $line"; done < "$LOG_FILE"
+        rm -f "$LOG_FILE"
+        
+        if [ $INSTALL_EXIT2 -eq 0 ]; then
+            log "Install succeeded from /sdcard/Download/"
             echo "installed" > "$INSTALL_FLAG"
         else
             log "ERROR: All install methods failed"
-            log "APK available at: $APK_PATH"
+            log "APK copied to /sdcard/Download/InputBlocker.apk for manual install"
         fi
     fi
 else
     log "pm install failed, trying alternative..."
     
-    # Method 2: Copy to accessible location and try again
+    # Method 3: Copy to accessible location and try again
     cp "$APK_PATH" /sdcard/Download/InputBlocker.apk 2>/dev/null
-    pm install -r /sdcard/Download/InputBlocker.apk 2>&1 | while read line; do;
-        log "pm2: $line"
-    done;
+    pm install -r /sdcard/Download/InputBlocker.apk > "$LOG_FILE" 2>&1
+    INSTALL_EXIT3=$?
+    while read line; do log "pm2: $line"; done < "$LOG_FILE"
+    rm -f "$LOG_FILE"
     
-    if [ $? -eq 0 ]; then
+    if [ $INSTALL_EXIT3 -eq 0 ]; then
         log "Install succeeded from /sdcard/Download/"
         echo "installed" > "$INSTALL_FLAG"
     else
         log "ERROR: All install methods failed"
         log "APK copied to /sdcard/Download/InputBlocker.apk for manual install"
-    fi;
+    fi
+fi
 fi;
 
 log "========== INPUTBLOCKER SERVICE FINISHED =========="
