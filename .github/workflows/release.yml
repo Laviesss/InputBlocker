@@ -307,7 +307,7 @@ jobs:
           path: module/common/
 
       - name: Rename APK to InputBlocker.apk
-        run: mv module/common/InputBlocker-debug.apk module/common/InputBlocker.apk
+        run: mv module/common/app-debug.apk module/common/InputBlocker.apk
 
       - name: Verify APK
         run: |
