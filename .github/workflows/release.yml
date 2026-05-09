@@ -419,6 +419,7 @@ jobs:
           name: Release ${{ github.ref_name }}
           draft: ${{ github.event.inputs.draft == 'true' || steps.release_type.outputs.draft == 'true' }}
           prerelease: ${{ github.event.inputs.prerelease == 'true' || steps.release_type.outputs.prerelease == 'true' }}
-          generate_release_notes: true
+           generate_release_notes: true
+           files: release/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
