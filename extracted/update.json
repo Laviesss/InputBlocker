@@ -1,0 +1,9 @@
+{
+  "version": "v1.0.0",
+  "versionCode": 1,
+  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/latest/download/InputBlocker.zip",
+  "changelog": "- Initial release\n- Block ghost taps with rectangular regions\n- Auto-install companion app on boot\n- LSPosed support for system-level blocking",
+  "support": ["Magisk", "KernelSU", "APatch"],
+  "minApi": 23,
+  "md5sum": ""
+}

@@ -31,6 +31,7 @@ class VolumeButtonListenerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     
     private var volumeReceiver: BroadcastReceiver? = null
+    private var buttonReceiver: BroadcastReceiver? = null
     private var audioManager: AudioManager? = null
     private var isListening = false
     private var lastVolume = -1
@@ -68,24 +69,84 @@ class VolumeButtonListenerService : Service() {
         
         try {
             registerReceiver(volumeReceiver, filter)
+            
+            buttonReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    if (intent?.action == "com.inputblocker.BUTTON_PRESSED") {
+                        val key = intent.getStringExtra("key") ?: "unknown"
+                        handleButtonPressed(key)
+                    }
+                }
+            }
+            val btnFilter = IntentFilter("com.inputblocker.BUTTON_PRESSED")
+            registerReceiver(buttonReceiver, btnFilter)
+            
             isListening = true
-            Log.i(TAG, "Volume button listener started")
+            Log.i(TAG, "Volume and Power button listeners started")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register receiver", e)
         }
     }
 
     private fun handleVolumeChange() {
-        val currentVolume = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+        val now = System.currentTimeMillis()
+        if (timeoutTimer != null) timeoutTimer?.cancel()
         
-        if (lastVolume >= 0) {
-            if (currentVolume > lastVolume) {
-                Log.d(TAG, "Volume UP: $lastVolume -> $currentVolume")
-                onVolumeButtonPressed(true)
-            } else if (currentVolume < lastVolume) {
-                Log.d(TAG, "Volume DOWN: $lastVolume -> $currentVolume")
-                onVolumeButtonPressed(false)
+        val currentVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
+        if (currentVol == lastVolume) return
+        
+        val type = if (currentVol < lastVolume) "VOL_DOWN" else "VOL_UP"
+        lastVolume = currentVol
+        
+        handleButtonPressed(type)
+    }
+
+    private fun handleButtonPressed(key: String) {
+        val now = System.currentTimeMillis()
+        if (timeoutTimer != null) timeoutTimer?.cancel()
+        
+        buttonPressTimes.add(now)
+        buttonTypes.add(if (key == "POWER") 1 else 0)
+        
+        if (buttonPressTimes.size > 10) {
+            buttonPressTimes.removeAt(0)
+            buttonTypes.removeAt(0)
+        }
+        
+        checkPatterns()
+        
+        timeoutTimer = Timer().apply {
+            schedule(object : TimerTask() {
+                override fun run() {
+                    buttonPressTimes.clear()
+                    buttonTypes.clear()
+                    Log.i(TAG, "Pattern timeout - resetting counts")
+                }
+            }, TIMEOUT_MS)
+        }
+    }
+
+    private fun checkPatterns() {
+        if (buttonPressTimes.size < 3) return
+        
+        // Check for Volume Down x3 -> Volume Up x3 (Existing)
+        // (This is handled by handleVolumeChange, but we can integrate it here if we want)
+        
+        // Check for Power Button x5 (New Advanced Kill Switch)
+        if (buttonPressTimes.size >= 5) {
+            val last5 = buttonTypes.takeLast(5)
+            if (last5.all { it == 1 }) {
+                Log.i(TAG, "Power button x5 detected! Triggering emergency disable")
+                triggerEmergencyDisable()
             }
+        }
+    }
+
+    private fun triggerEmergencyDisable() {
+        val intent = Intent("com.inputblocker.DISABLE")
+        sendBroadcast(intent)
+        Toast.makeText(this, "EMERGENCY DISABLE: Power sequence detected", Toast.LENGTH_LONG).show()
+    }
         }
         
         lastVolume = currentVolume

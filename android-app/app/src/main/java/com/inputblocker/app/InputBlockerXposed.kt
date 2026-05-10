@@ -18,16 +18,9 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     }
 
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
-        // Initialize Xposed hook in the system server process
         XposedBridge.log("InputBlocker Xposed module initialized")
         
-        // We hook InputDispatcher to intercept touch events at the system level
         try {
-            // The following code had syntax errors and was non-functional as-is.
-            // Hooking InputDispatcher is highly version-dependent.
-            // This is kept as a reference for future implementation.
-            
-            /*
             XposedHelpers.findAndHookMethod(
                 "com.android.server.input.InputDispatcher",
                 null,
@@ -39,12 +32,18 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                         if (!cachedEnabled) return
 
                         val motionEvent = param.args.find { it is android.view.MotionEvent } as? android.view.MotionEvent ?: return
-                        val x = motionEvent.x
-                        val y = motionEvent.y
+                        
+                        // Get screen size for normalization
+                        val display = android.app.ActivityThread.currentApplication()?.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager
+                        val metrics = android.util.DisplayMetrics()
+                        display?.defaultDisplay?.getMetrics(metrics)
+                        
+                        val nx = motionEvent.x / metrics.widthPixels
+                        val ny = motionEvent.y / metrics.heightPixels
 
                         for (region in cachedRegions) {
-                            if (x >= region.x1 && x <= region.x2 && y >= region.y1 && y <= region.y2) {
-                                XposedBridge.log("InputBlocker-Xposed: Blocking touch at ($x, $y)")
+                            if (nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2) {
+                                XposedBridge.log("InputBlocker-Xposed: Blocking touch at normalized ($nx, $ny)")
                                 param.setResult(null) 
                                 return
                             }
@@ -52,7 +51,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                     }
                 }
             )
-            */
         } catch (e: Exception) {
             XposedBridge.log("InputBlocker-Xposed: Error hooking InputDispatcher: ${e.message}")
         }
@@ -63,10 +61,10 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         if (now - lastLoadTime < CACHE_TTL) return
 
         try {
-            val configPath = "/data/adb/modules/inputblocker/config/blocked_regions.conf"
+            val configPath = "/data/adb/modules/inputblocker/config/profiles/default.conf"
             val file = File(configPath)
             if (!file.exists()) return
-
+            
             val newRegions = mutableListOf<Region>()
             var newEnabled = true
 
@@ -83,10 +81,10 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             if (parts.size == 4) {
                                 try {
                                     newRegions.add(Region(
-                                        parts[0].trim().toInt(),
-                                        parts[1].trim().toInt(),
-                                        parts[2].trim().toInt(),
-                                        parts[3].trim().toInt()
+                                        parts[0].trim().toFloat(),
+                                        parts[1].trim().toFloat(),
+                                        parts[2].trim().toFloat(),
+                                        parts[3].trim().toFloat()
                                     ))
                                 } catch (e: Exception) {}
                             }

@@ -146,3 +146,8 @@ AGENTS.md
 # Debug/working modules
 iap-spoof*.zip
 iap-spoof-extract/
+
+# Memory files
+context.md
+agents.md
+todo.md

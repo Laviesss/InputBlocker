@@ -46,6 +46,8 @@ class OverlayService : Service() {
     private val touchHeatmap = mutableMapOf<Pair<Int, Int>, Int>()
     private var detectionStartTime = 0L
 
+    private var currentProfile = "default"
+    private var blockingExpirationTime = 0L
     private var configReceiver: BroadcastReceiver? = null
 
     override fun onCreate() {
@@ -61,12 +63,30 @@ class OverlayService : Service() {
         loadConfig()
         createOverlayView()
         registerConfigReceiver()
+        startExpirationTimer()
         
         Log.i(TAG, "OverlayService ready - regions: ${regions.size}, enabled: $isEnabled")
     }
 
+    private fun startExpirationTimer() {
+        Thread {
+            while (true) {
+                try {
+                    Thread.sleep(60000) // Check every minute
+                    if (isEnabled && blockingExpirationTime > 0 && System.currentTimeMillis() > blockingExpirationTime) {
+                        Log.i(TAG, "Blocking session expired")
+                        disableBlocking()
+                        Toast.makeText(this, "Blocking session expired", Toast.LENGTH_LONG).show()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Expiration timer error", e)
+                }
+            }
+        }.start()
+    }
+
     private fun isLsposedModeFromConfig(): Boolean {
-        val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+        val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
         if (!configFile.exists()) return false
         return try {
             configFile.readLines().any { it.trim().startsWith("lsposed_mode=1") }
@@ -117,11 +137,12 @@ class OverlayService : Service() {
     private fun loadConfig() {
         regions.clear()
         
-        val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+        val configFile = File(InputBlockerServiceManager.getConfigFile(this, currentProfile))
         if (!configFile.exists()) {
-            Log.w(TAG, "Config file not found")
+            Log.w(TAG, "Config file not found for profile: $currentProfile")
             return
         }
+
 
         try {
             BufferedReader(FileReader(configFile)).use { reader ->
@@ -143,16 +164,16 @@ class OverlayService : Service() {
                         else -> {
                             val parts = trimmed.split(",")
                             if (parts.size == 4) {
-                                try {
-                                    regions.add(Region(
-                                        parts[0].trim().toInt(),
-                                        parts[1].trim().toInt(),
-                                        parts[2].trim().toInt(),
-                                        parts[3].trim().toInt()
-                                    ))
-                                } catch (e: NumberFormatException) {
-                                    Log.w(TAG, "Invalid region line: $trimmed")
-                                }
+                                 try {
+                                     regions.add(Region(
+                                         parts[0].trim().toFloat(),
+                                         parts[1].trim().toFloat(),
+                                         parts[2].trim().toFloat(),
+                                         parts[3].trim().toFloat()
+                                     ))
+                                 } catch (e: NumberFormatException) {
+                                     Log.w(TAG, "Invalid region line: $trimmed")
+                                 }
                             }
                         }
                     }
@@ -420,13 +441,20 @@ class OverlayService : Service() {
         Log.i(TAG, "Blocking disabled")
     }
 
-    private fun enableBlocking(clearSafeMode: Boolean) {
+    private fun enableBlocking(clearSafeMode: Boolean, durationMs: Long = 0L) {
         if (clearSafeMode) {
             forceSafeMode = false
             clearSafeModeFlag()
         }
         
         isEnabled = true
+        
+        if (durationMs > 0) {
+            blockingExpirationTime = System.currentTimeMillis() + durationMs
+            Log.i(TAG, "Blocking enabled for ${durationMs/1000}s")
+        } else {
+            blockingExpirationTime = 0L
+        }
         
         touchBlockView?.setBlockingEnabled(true)
         
@@ -455,11 +483,17 @@ class OverlayService : Service() {
         Log.i(TAG, "onStartCommand")
         
         intent?.action?.let { action ->
-            when (action) {
-                "RELOAD" -> reloadConfig()
-                "DISABLE" -> disableBlocking()
-                "ENABLE" -> enableBlocking(true)
-            }
+                when (action) {
+                    "RELOAD" -> reloadConfig()
+                    "DISABLE" -> disableBlocking()
+                    "ENABLE" -> enableBlocking(true)
+                    "CHANGE_PROFILE" -> {
+                        val profile = intent.getStringExtra("profile") ?: "default"
+                        currentProfile = profile
+                        reloadConfig()
+                        Log.i(TAG, "Profile changed to: $profile")
+                    }
+                }
         }
         
         return START_STICKY
@@ -548,14 +582,14 @@ class OverlayService : Service() {
                 return
             }
 
-            for (region in regionsList) {
-                val rect = android.graphics.RectF(
-                    region.x1.toFloat(), region.y1.toFloat(),
-                    region.x2.toFloat(), region.y2.toFloat()
-                )
-                canvas.drawRect(rect, blockPaint)
-                canvas.drawRect(rect, borderPaint)
-            }
+                for (region in regionsList) {
+                    val rect = android.graphics.RectF(
+                        region.x1 * width, region.y1 * height,
+                        region.x2 * width, region.y2 * height
+                    )
+                    canvas.drawRect(rect, blockPaint)
+                    canvas.drawRect(rect, borderPaint)
+                }
 
             val text = if (regionsList.isNotEmpty()) {
                 "BLOCKED: ${regionsList.size} region(s)"
@@ -588,8 +622,10 @@ class OverlayService : Service() {
             val y = event.y
             if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
                 for (region in regionsList) {
-                    if (x >= region.x1 && x <= region.x2 && y >= region.y1 && y <= region.y2) {
-                        Log.d(TAG, "Blocked touch at ($x,$y)")
+                    val nx = x / width
+                    val ny = y / height
+                    if (nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2) {
+                        Log.d(TAG, "Blocked touch at ($x,$y) -> Normalized($nx,$ny)")
                         return true
                     }
                 }

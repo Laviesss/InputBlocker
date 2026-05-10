@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import java.io.File
+import java.io.BufferedReader
+import java.io.InputStreamReader
+import java.util.concurrent.TimeUnit
 
 object InputBlockerServiceManager {
     
@@ -14,6 +17,19 @@ object InputBlockerServiceManager {
     
     private var cachedModulePath: String? = null
     
+    fun runRootCommand(command: String): String {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val output = reader.readText()
+            process.waitFor(5, TimeUnit.SECONDS)
+            output
+        } catch (e: Exception) {
+            Log.e(TAG, "Root command failed: $command", e)
+            ""
+        }
+    }
+
     fun getModulePath(context: Context): String {
         cachedModulePath?.let { return it }
         
@@ -36,8 +52,8 @@ object InputBlockerServiceManager {
         return cachedModulePath!!
     }
     
-    fun getConfigFile(context: Context): String {
-        return getModulePath(context) + "/config/blocked_regions.conf"
+    fun getConfigFile(context: Context, profile: String = "default"): String {
+        return getModulePath(context) + "/config/profiles/$profile.conf"
     }
     
     fun startServices(context: Context) {

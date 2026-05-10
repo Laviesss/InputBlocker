@@ -145,9 +145,23 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Later", null)
             .show()
+        private fun showProfileDialog() {
+        val profiles = arrayOf("default", "gaming", "media", "work") // Basic presets
+        
+        AlertDialog.Builder(this)
+            .setTitle("Select Profile")
+            .setSingleChoiceItems(profiles, 0) { _, which ->
+                val selectedProfile = profiles[which]
+                val intent = Intent("com.inputblocker.CHANGE_PROFILE")
+                intent.putExtra("profile", selectedProfile)
+                sendBroadcast(intent)
+                Toast.makeText(this, "Profile switched to: $selectedProfile", Toast.LENGTH_SHORT).show()
+                loadConfig()
+                updateUI()
+            }
+            .setPositiveButton("OK", null)
+            .show()
     }
-    
-    private fun showAboutDialog() {
         val version = try {
             packageManager.getPackageInfo(packageName, 0).versionName
         } catch (e: Exception) {
@@ -172,9 +186,9 @@ class MainActivity : AppCompatActivity() {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
                 if (intent?.action == "com.inputblocker.DETECTION_RESULTS") {
-                    val detectedRegions = intent.getSerializableExtra("regions") as? ArrayList<Region>
-                    if (detectedRegions != null && detectedRegions.isNotEmpty()) {
-                        showDetectionResults(detectedRegions)
+                    val capturedTouches = intent.getSerializableExtra("regions") as? ArrayList<Pair<Float, Float>>
+                    if (capturedTouches != null && capturedTouches.isNotEmpty()) {
+                        showDetectionResults(capturedTouches)
                     } else {
                         Toast.makeText(this@MainActivity, "No ghost taps detected.", Toast.LENGTH_SHORT).show()
                     }
@@ -184,18 +198,60 @@ class MainActivity : AppCompatActivity() {
         registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"))
     }
 
-    private fun showDetectionResults(suggestedRegions: List<Region>) {
-        AlertDialog.Builder(this)
-            .setTitle("Ghost Taps Detected!")
-            .setMessage("We found ${suggestedRegions.size} potential ghost tap regions. Would you like to add them to your blocked list?")
-            .setPositiveButton("Add All") { _, _ ->
-                regions.addAll(suggestedRegions)
-                saveConfig()
-                updateUI()
-                Toast.makeText(this, "Added ${suggestedRegions.size} regions", Toast.LENGTH_SHORT).show()
+    private fun showDetectionResults(capturedTouches: List<Pair<Float, Float>>) {
+        // Perform Clustering
+        val suggestedRegions = clusterTouches(capturedTouches)
+        
+        val intent = Intent(this, DetectionReviewActivity::class.java)
+        intent.putExtra("regions", ArrayList(suggestedRegions))
+        startActivity(intent)
+    }
+
+    private fun clusterTouches(touches: List<Pair<Float, Float>>): List<Region> {
+        if (touches.isEmpty()) return emptyList()
+        
+        val regions = mutableListOf<Region>()
+        val used = BooleanArray(touches.size) { false }
+        val threshold = 0.05f // 5% of screen width/height
+        
+        for (i in touches.indices) {
+            if (used[i]) continue
+            
+            var minX = touches[i].first
+            var maxX = touches[i].first
+            var minY = touches[i].second
+            var maxY = touches[i].second
+            
+            val cluster = mutableListOf<Int>()
+            cluster.add(i)
+            used[i] = true
+            
+            // Simple iterative expansion clustering
+            var changed = true
+            while (changed) {
+                changed = false
+                for (j in touches.indices) {
+                    if (used[j]) continue
+                    val tx = touches[j].first
+                    val ty = touches[j].second
+                    
+                    if (tx >= minX - threshold && tx <= maxX + threshold &&
+                        ty >= minY - threshold && ty <= maxY + threshold) {
+                        
+                        minX = Math.min(minX, tx)
+                        maxX = Math.max(maxX, tx)
+                        minY = Math.min(minY, ty)
+                        maxY = Math.max(maxY, ty)
+                        
+                        cluster.add(j)
+                        used[j] = true
+                        changed = true
+                    }
+                }
             }
-            .setNegativeButton("Ignore", null)
-            .show()
+            regions.add(Region(minX, minY, maxX, maxY))
+        }
+        return regions
     }
 
     private fun loadThemePreference() {
@@ -341,12 +397,49 @@ class MainActivity : AppCompatActivity() {
         btnClearAll.setOnClickListener { confirmClearAll() }
         btnTheme.setOnClickListener { showThemeDialog() }
         btnAutoDetect.setOnClickListener { startAutoDetection() }
+        
+        // Profile Selection Trigger (Assumed ID: btn_profile)
+        findViewById<Button>(R.id.btn_profile)?.setOnClickListener { showProfileDialog() }
     }
 
     private fun startAutoDetection() {
-        val intent = Intent("com.inputblocker.START_DETECTION")
-        sendBroadcast(intent)
-        Toast.makeText(this, "Auto-detection started. Please wait for ghost taps...", Toast.LENGTH_LONG).show()
+        Thread {
+            try {
+                Log.i("MainActivity", "Starting Auto-Detection sequence...")
+                
+                // 1. Disable screen lock
+                InputBlockerServiceManager.runRootCommand("settings put secure lockscreen.disabled 1")
+                Log.i("MainActivity", "Screen lock disabled")
+                
+                Thread.sleep(500)
+                
+                // 2. Turn off screen
+                InputBlockerServiceManager.runRootCommand("input keyevent 26")
+                Log.i("MainActivity", "Screen turned off")
+                
+                Thread.sleep(2000) // Wait for device to settle
+                
+                // 3. Turn screen back on
+                InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP")
+                Log.i("MainActivity", "Screen turned on")
+                
+                Thread.sleep(1000)
+                
+                // 4. Launch Sensing Screen
+                runOnUiThread {
+                    val intent = Intent(this, SensingActivity::class.java)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(intent)
+                    Toast.makeText(this, "Sensing mode active!", Toast.LENGTH_LONG).show()
+                }
+                
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Auto-detection sequence failed", e)
+                runOnUiThread {
+                    Toast.makeText(this, "Detection failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }.start()
     }
 
     private fun stopAutoDetection() {
@@ -418,11 +511,47 @@ class MainActivity : AppCompatActivity() {
     private fun loadConfig() {
         regions.clear()
         
-        val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+        // Use the default profile for loading region list in MainActivity
+        val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
         if (!configFile.exists()) {
             configFile.parentFile?.mkdirs()
             return
         }
+        
+        try {
+            BufferedReader(FileReader(configFile)).use { reader ->
+                reader.lineSequence().forEach { line ->
+                    val trimmed = line.trim()
+                    when {
+                        trimmed.isEmpty() || trimmed.startsWith("#") -> return@forEach
+                        trimmed.startsWith("enabled=") -> {
+                            isEnabled = trimmed.substring(8) == "1"
+                        }
+                        trimmed.startsWith("lsposed_mode=") -> {
+                            isLsposedMode = trimmed.substring(13) == "1"
+                        }
+                        else -> {
+                            val parts = trimmed.split(",")
+                            if (parts.size == 4) {
+                                try {
+                                    regions.add(Region(
+                                        parts[0].trim().toFloat(),
+                                        parts[1].trim().toFloat(),
+                                        parts[2].trim().toFloat(),
+                                        parts[3].trim().toFloat()
+                                    ))
+                                } catch (e: NumberFormatException) {
+                                    // Skip invalid lines
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error loading config", e)
+        }
+    }
         
         try {
             BufferedReader(FileReader(configFile)).use { reader ->

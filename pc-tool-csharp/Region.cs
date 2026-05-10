@@ -4,27 +4,27 @@ namespace InputBlockerSetup;
 
 public class BlockRegion
 {
-    public int X1 { get; set; }
-    public int Y1 { get; set; }
-    public int X2 { get; set; }
-    public int Y2 { get; set; }
+    public float X1 { get; set; }
+    public float Y1 { get; set; }
+    public float X2 { get; set; }
+    public float Y2 { get; set; }
 
-    public int Width => Math.Abs(X2 - X1);
-    public int Height => Math.Abs(Y2 - Y1);
+    public float Width => Math.Abs(X2 - X1);
+    public float Height => Math.Abs(Y2 - Y1);
 
-    public int Left => Math.Min(X1, X2);
-    public int Right => Math.Max(X1, X2);
-    public int Top => Math.Min(Y1, Y2);
-    public int Bottom => Math.Max(Y1, Y2);
+    public float Left => Math.Min(X1, X2);
+    public float Right => Math.Max(X1, X2);
+    public float Top => Math.Min(Y1, Y2);
+    public float Bottom => Math.Max(Y1, Y2);
 
     public BlockRegion() { }
 
-    public BlockRegion(int x1, int y1, int x2, int y2)
+    public BlockRegion(float x1, float y1, float x2, float y2)
     {
         SetCoords(x1, y1, x2, y2);
     }
 
-    public void SetCoords(int x1, int y1, int x2, int y2)
+    public void SetCoords(float x1, float y1, float x2, float y2)
     {
         X1 = Math.Min(x1, x2);
         Y1 = Math.Min(y1, y2);
@@ -32,14 +32,14 @@ public class BlockRegion
         Y2 = Math.Max(y1, y2);
     }
 
-    public bool Contains(int x, int y)
+    public bool Contains(float x, float y)
     {
         return x >= Left && x <= Right && y >= Top && y <= Bottom;
     }
 
     public string ToConfigString()
     {
-        return $"{Left},{Top},{Right},{Bottom}";
+        return $"{Left:F4},{Top:F4},{Right:F4},{Bottom:F4}";
     }
 
     public static BlockRegion? FromConfigString(string s)
@@ -49,10 +49,10 @@ public class BlockRegion
             string[] parts = s.Split(',');
             if (parts.Length != 4) return null;
             return new BlockRegion(
-                int.Parse(parts[0].Trim()),
-                int.Parse(parts[1].Trim()),
-                int.Parse(parts[2].Trim()),
-                int.Parse(parts[3].Trim())
+                float.Parse(parts[0].Trim()),
+                float.Parse(parts[1].Trim()),
+                float.Parse(parts[2].Trim()),
+                float.Parse(parts[3].Trim())
             );
         }
         catch
@@ -63,6 +63,6 @@ public class BlockRegion
 
     public override string ToString()
     {
-        return $"({Left},{Top}) -> ({Right},{Bottom}) [{Width}x{Height}]";
+        return $"({Left:F4},{Top:F4}) -> ({Right:F4},{Bottom:F4}) [{Width:F4}x{Height:F4}]";
     }
 }

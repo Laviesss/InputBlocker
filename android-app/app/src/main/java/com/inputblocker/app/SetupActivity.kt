@@ -245,7 +245,12 @@ class SetupActivity : AppCompatActivity() {
         private var backgroundColor = Color.parseColor("#88000000")
 
         private var callback: DrawingCallback? = null
-
+        private var selectedRegion: Region? = null
+        private var isResizing = false
+        private var resizeHandle = 0 // 0: none, 1: TL, 2: TR, 3: BL, 4: BR
+        private var dragOffsetX = 0f
+        private var dragOffsetY = 0f
+        
         fun setThemeColors(accent: Int, bg: Int) {
             accentColor = accent
             borderPaint.color = accent
@@ -264,58 +269,70 @@ class SetupActivity : AppCompatActivity() {
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-
+            
             canvas.drawColor(backgroundColor)
-
+            
             for (i in regionsList.indices) {
                 val region = regionsList[i]
-                val rect = RectF(region.x1.toFloat(), region.y1.toFloat(), region.x2.toFloat(), region.y2.toFloat())
-
+                val rect = RectF(
+                    region.x1 * screenWidth, region.y1 * screenHeight,
+                    region.x2 * screenWidth, region.y2 * screenHeight
+                )
+                
                 val p = Paint(fillPaint).apply {
-                    color = Color.argb(51, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+                    color = if (region == selectedRegion) Color.parseColor("#66B388FF") else Color.argb(51, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
                 }
                 canvas.drawRect(rect, p)
-
+                
                 val bp = Paint(borderPaint).apply {
-                    color = accentColor
+                    color = if (region == selectedRegion) Color.YELLOW else accentColor
                 }
                 canvas.drawRect(rect, bp)
-
+                
                 val label = (i + 1).toString()
-                val centerX = (region.x1 + region.x2) / 2f
-                val centerY = (region.y1 + region.y2) / 2f
-
+                val centerX = rect.centerX()
+                val centerY = rect.centerY()
+                
                 val labelBg = Paint().apply {
                     color = accentColor
                 }
                 canvas.drawCircle(centerX, centerY, 24f, labelBg)
-
+                
                 val labelPaint = Paint(textPaint).apply {
                     color = Color.WHITE
                 }
                 canvas.drawText(label, centerX, centerY + 12f, labelPaint)
+                
+                if (region == selectedRegion) {
+                    val handleSize = 20f
+                    val handlePaint = Paint().apply { color = Color.WHITE; style = Paint.Style.FILL }
+                    canvas.drawRect(rect.left - handleSize/2, rect.top - handleSize/2, rect.left + handleSize/2, rect.top + handleSize/2, handlePaint)
+                    canvas.drawRect(rect.right - handleSize/2, rect.top - handleSize/2, rect.right + handleSize/2, rect.top + handleSize/2, handlePaint)
+                    canvas.drawRect(rect.left - handleSize/2, rect.bottom - handleSize/2, rect.left + handleSize/2, rect.bottom + handleSize/2, handlePaint)
+                    canvas.drawRect(rect.right - handleSize/2, rect.bottom - handleSize/2, rect.right + handleSize/2, rect.bottom + handleSize/2, handlePaint)
+                }
             }
-
+            
             currentRect?.let { rect ->
                 val p = Paint(fillPaint).apply {
                     color = Color.parseColor("#44FF5722")
                 }
                 canvas.drawRect(rect, p)
-
+                
                 val bp = Paint(borderPaint).apply {
                     color = Color.parseColor("#FF5722")
                 }
                 canvas.drawRect(rect, bp)
-
+                
                 val size = "${rect.width().toInt()}x${rect.height().toInt()}"
                 val cx = rect.centerX()
                 val cy = rect.centerY()
-
+                
                 val bg = Paint().apply {
                     color = Color.parseColor("#CC000000")
                 }
                 canvas.drawRect(cx - 60f, cy - 20f, cx + 60f, cy + 20f, bg)
-
+                
                 val tp = Paint(textPaint).apply {
                     textSize = 24f
                 }
@@ -326,16 +343,135 @@ class SetupActivity : AppCompatActivity() {
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val x = event.x
             val y = event.y
-
+            
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    // 1. Check if we touched a resize handle of the selected region
+                    selectedRegion?.let { region ->
+                        val rect = RectF(region.x1 * screenWidth, region.y1 * screenHeight, region.x2 * screenWidth, region.y2 * screenHeight)
+                        val handleSize = 40f
+                        
+                        if (x in (rect.left - handleSize..rect.left + handleSize) && y in (rect.top - handleSize..rect.top + handleSize)) {
+                            isResizing = true
+                            resizeHandle = 1 // TL
+                            return true
+                        }
+                        if (x in (rect.right - handleSize..rect.right + handleSize) && y in (rect.top - handleSize..rect.top + handleSize)) {
+                            isResizing = true
+                            resizeHandle = 2 // TR
+                            return true
+                        }
+                        if (x in (rect.left - handleSize..rect.left + handleSize) && y in (rect.bottom - handleSize..rect.bottom + handleSize)) {
+                            isResizing = true
+                            resizeHandle = 3 // BL
+                            return true
+                        }
+                        if (x in (rect.right - handleSize..rect.right + handleSize) && y in (rect.bottom - handleSize..rect.bottom + handleSize)) {
+                            isResizing = true
+                            resizeHandle = 4 // BR
+                            return true
+                        }
+                    }
+                    
+                    // 2. Check if we touched an existing region to select/move it
+                    for (region in regionsList) {
+                        val rect = RectF(region.x1 * screenWidth, region.y1 * screenHeight, region.x2 * screenWidth, region.y2 * screenHeight)
+                        if (rect.contains(x, y)) {
+                            selectedRegion = region
+                            dragOffsetX = x - rect.centerX()
+                            dragOffsetY = y - rect.centerY()
+                            invalidate()
+                            return true
+                        }
+                    }
+                    
+                    // 3. Otherwise, start drawing a new region
                     startX = x
                     startY = y
                     isDrawing = true
                     currentRect = RectF()
+                    selectedRegion = null
                     invalidate()
                     return true
                 }
+                
+                MotionEvent.ACTION_MOVE -> {
+                    if (isResizing && selectedRegion != null) {
+                        val r = selectedRegion!!
+                        when (resizeHandle) {
+                            1 -> { r.x1 = (x / screenWidth).coerceAtLeast(0f); r.y1 = (y / screenHeight).coerceAtLeast(0f) }
+                            2 -> { r.x2 = (x / screenWidth).coerceAtMost(1f); r.y1 = (y / screenHeight).coerceAtLeast(0f) }
+                            3 -> { r.x1 = (x / screenWidth).coerceAtLeast(0f); r.y2 = (y / screenHeight).coerceAtMost(1f) }
+                            4 -> { r.x2 = (x / screenWidth).coerceAtMost(1f); r.y2 = (y / screenHeight).coerceAtMost(1f) }
+                        }
+                        invalidate()
+                        return true
+                    }
+                    
+                    if (selectedRegion != null && !isResizing) {
+                        val r = selectedRegion!!
+                        val w = (r.x2 - r.x1) * screenWidth
+                        val h = (r.y2 - r.y1) * screenHeight
+                        val nx = (x - dragOffsetX) / screenWidth
+                        val ny = (y - dragOffsetY) / screenHeight
+                        
+                        val dx = nx - (r.x1 + w/2 / screenWidth)
+                        val dy = ny - (r.y1 + h/2 / screenHeight)
+                        
+                        r.x1 += dx
+                        r.x2 += dx
+                        r.y1 += dy
+                        r.y2 += dy
+                        invalidate()
+                        return true
+                    }
+                    
+                    if (isDrawing) {
+                        currentRect?.set(
+                            minOf(startX, x),
+                            minOf(startY, y),
+                            maxOf(startX, x),
+                            maxOf(startY, y)
+                        )
+                        invalidate()
+                    }
+                    return true
+                }
+                
+                MotionEvent.ACTION_UP -> {
+                    if (isResizing) {
+                        isResizing = false
+                        resizeHandle = 0
+                    }
+                    if (isDrawing && currentRect != null) {
+                        if (currentRect!!.width() > 20 && currentRect!!.height() > 20) {
+                            val region = Region(
+                                currentRect!!.left / screenWidth,
+                                currentRect!!.top / screenHeight,
+                                currentRect!!.right / screenWidth,
+                                currentRect!!.bottom / screenHeight
+                            )
+                            callback?.onRegionDrawn(region)
+                        }
+                        currentRect = null
+                        isDrawing = false
+                        invalidate()
+                    }
+                    return true
+                }
+                
+                MotionEvent.ACTION_CANCEL -> {
+                    currentRect = null
+                    isDrawing = false
+                    selectedRegion = null
+                    isResizing = false
+                    invalidate()
+                    return true
+                }
+            }
+            
+            return super.onTouchEvent(event)
+        }
 
                 MotionEvent.ACTION_MOVE -> {
                     if (isDrawing) {
@@ -353,12 +489,12 @@ class SetupActivity : AppCompatActivity() {
                 MotionEvent.ACTION_UP -> {
                     if (isDrawing && currentRect != null) {
                         if (currentRect!!.width() > 20 && currentRect!!.height() > 20) {
-                            val region = Region(
-                                currentRect!!.left.toInt(),
-                                currentRect!!.top.toInt(),
-                                currentRect!!.right.toInt(),
-                                currentRect!!.bottom.toInt()
-                            )
+                    val region = Region(
+                        currentRect!!.left / screenWidth,
+                        currentRect!!.top / screenHeight,
+                        currentRect!!.right / screenWidth,
+                        currentRect!!.bottom / screenHeight
+                    )
                             callback?.onRegionDrawn(region)
                         }
                         currentRect = null

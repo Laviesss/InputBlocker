@@ -21,6 +21,18 @@
         android:theme="@style/Theme.InputBlocker"
         tools:targetApi="34">
 
+        <!-- Detection Review Activity -->
+        <activity
+            android:name=".DetectionReviewActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker.FullScreen" />
+
+        <!-- Sensing Activity for Ghost Tap Recording -->
+        <activity
+            android:name=".SensingActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker.FullScreen" />
+
         <!-- Main Activity -->
         <activity
             android:name=".MainActivity"

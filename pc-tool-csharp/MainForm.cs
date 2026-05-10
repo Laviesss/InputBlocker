@@ -300,15 +300,16 @@ public class MainWindow : Window
         if (isDrawing && currentDrawRegion != null && adb != null && adb.ScreenWidth > 0)
         {
             var point = e.GetPosition(canvas);
-            double scaleX = canvas.Bounds.Width / adb.ScreenWidth;
-            double scaleY = canvas.Bounds.Height / adb.ScreenHeight;
+            
+            float nx = (float)(point.X / canvas.Bounds.Width);
+            float ny = (float)(point.Y / canvas.Bounds.Height);
 
-            int x1 = (int)(Math.Min(drawStartX, point.X) / scaleX);
-            int y1 = (int)(Math.Min(drawStartY, point.Y) / scaleY);
-            int x2 = (int)(Math.Max(drawStartX, point.X) / scaleX);
-            int y2 = (int)(Math.Max(drawStartY, point.Y) / scaleY);
-
-            currentDrawRegion.SetCoords(x1, y1, x2, y2);
+            currentDrawRegion.SetCoords(
+                (float)(drawStartX / canvas.Bounds.Width), 
+                (float)(drawStartY / canvas.Bounds.Height), 
+                nx, 
+                ny
+            );
             InvalidateVisual();
         }
     }
@@ -329,19 +330,16 @@ public class MainWindow : Window
         }
     }
 
-    private void DeleteRegionAt(int x, int y)
+    private void DeleteRegionAt(double x, double y)
     {
         if (adb == null || adb.ScreenWidth == 0) return;
 
-        double scaleX = canvas.Bounds.Width / adb.ScreenWidth;
-        double scaleY = canvas.Bounds.Height / adb.ScreenHeight;
-
-        int scaledX = (int)(x / scaleX);
-        int scaledY = (int)(y / scaleY);
+        float nx = (float)(x / canvas.Bounds.Width);
+        float ny = (float)(y / canvas.Bounds.Height);
 
         for (int i = regions.Count - 1; i >= 0; i--)
         {
-            if (regions[i].Contains(scaledX, scaledY))
+            if (regions[i].Contains(nx, ny))
             {
                 var removed = regions[i];
                 regions.RemoveAt(i);
@@ -417,29 +415,29 @@ public class MainWindow : Window
             for (int i = 0; i < regions.Count; i++)
             {
                 var r = regions[i];
-                int x1 = (int)(r.Left * scaleX);
-                int y1 = (int)(r.Top * scaleY);
-                int x2 = (int)(r.Right * scaleX);
-                int y2 = (int)(r.Bottom * scaleY);
-                int w = x2 - x1;
-                int h = y2 - y1;
+                float x1 = r.Left * (float)canvas.Bounds.Width;
+                float y1 = r.Top * (float)canvas.Bounds.Height;
+                float x2 = r.Right * (float)canvas.Bounds.Width;
+                float y2 = r.Bottom * (float)canvas.Bounds.Height;
+                float w = x2 - x1;
+                float h = y2 - y1;
 
                 context.FillRectangle(RegionFill, new Rect(x1, y1, w, h));
                 context.DrawRectangle(RegionStroke, new Pen(RegionStroke, 3), new Rect(x1, y1, w, h));
 
-                int cx = (x1 + x2) / 2;
-                int cy = (y1 + y2) / 2;
+                float cx = (x1 + x2) / 2;
+                float cy = (y1 + y2) / 2;
                 context.FillRectangle(RegionStroke, new Rect(cx - 15, cy - 15, 30, 30));
             }
 
             if (currentDrawRegion != null && isDrawing)
             {
-                int x1 = (int)(currentDrawRegion.Left * scaleX);
-                int y1 = (int)(currentDrawRegion.Top * scaleY);
-                int x2 = (int)(currentDrawRegion.Right * scaleX);
-                int y2 = (int)(currentDrawRegion.Bottom * scaleY);
-                int w = x2 - x1;
-                int h = y2 - y1;
+                float x1 = currentDrawRegion.Left * (float)canvas.Bounds.Width;
+                float y1 = currentDrawRegion.Top * (float)canvas.Bounds.Height;
+                float x2 = currentDrawRegion.Right * (float)canvas.Bounds.Width;
+                float y2 = currentDrawRegion.Bottom * (float)canvas.Bounds.Height;
+                float w = x2 - x1;
+                float h = y2 - y1;
 
                 context.FillRectangle(DrawFill, new Rect(x1, y1, w, h));
                 context.DrawRectangle(DrawStroke, new Pen(DrawStroke, 3), new Rect(x1, y1, w, h));

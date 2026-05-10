@@ -1,0 +1,8 @@
+id=inputblocker
+name=InputBlocker
+version=v1.0.0
+versionCode=1
+author=Laviesss
+description=Block ghost taps and unwanted touch inputs by defining rectangular regions
+minMagisk=20400
+updateJson=https://raw.githubusercontent.com/Laviesss/InputBlocker/main/module/update.json
