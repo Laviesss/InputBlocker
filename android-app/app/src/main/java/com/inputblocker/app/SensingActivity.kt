@@ -89,12 +89,13 @@ class SensingActivity : Activity() {
     }
 
     private fun finishDetection() {
-        val intent = Intent("com.inputblocker.DETECTION_RESULTS")
-        // We need to wrap the Pair in a Serializable list
-        intent.putExtra("regions", ArrayList(capturedTouches))
-        sendBroadcast(intent)
+        val intent = Intent(this, DetectionReviewActivity::class.java)
+        // We've already captured touches in the companion object, 
+        // but we pass a flag or the size to trigger processing.
+        intent.putExtra("points_captured", true)
+        startActivity(intent)
         
-        Toast.makeText(this, "Detection finished. Processing results...", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Sensing complete. Reviewing results...", Toast.LENGTH_LONG).show()
         finish()
     }
 }
