@@ -5,6 +5,9 @@
 # Local context files (for developer reference only)
 CONTEXT.md
 TODO.md
+.sisyphus/
+AGENTS.md
+research-prompt.md
 
 # Build outputs
 bin/
@@ -146,6 +149,9 @@ AGENTS.md
 # Debug/working modules
 iap-spoof*.zip
 iap-spoof-extract/
+extracted/
+extracted_v1/
+InputBlocker.zip
 
 # Memory files
 context.md
