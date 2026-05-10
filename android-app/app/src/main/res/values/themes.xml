@@ -42,7 +42,7 @@
         <item name="colorOnPrimary">#FFFFFF</item>
         <item name="colorSecondary">@color/accent_green</item>
         <item name="colorSecondaryVariant">#388E3C</item>
-        <item name="colorOnSecondary">#FFFFFF</мулятор>
+        <item name="colorOnSecondary">#FFFFFF</item>
         <item name="android:windowBackground">@color/amoled_background</item>
         <item name="android:statusBarColor">@color/amoled_background</item>
         <item name="android:navigationBarColor">@color/amoled_background</item>
