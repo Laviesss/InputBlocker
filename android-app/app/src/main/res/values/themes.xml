@@ -36,16 +36,15 @@
         <item name="android:navigationBarColor">@color/dark_background</item>
     </style>
 
-    <style name="Theme.InputBlocker.AMOLED" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="colorPrimary">@color/accent_blue</item>
-        <item name="colorPrimaryVariant">#1976D2</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">@color/accent_green</item>
-        <item name="colorSecondaryVariant">#388E3C</item>
-        <item name="colorOnSecondary">#FFFFFF</item>
-        <item name="android:windowBackground">@color/amoled_background</item>
-        <item name="android:statusBarColor">@color/amoled_background</item>
-        <item name="android:navigationBarColor">@color/amoled_background</item>
+    <style name="Theme.InputBlocker.FullScreen" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowContentOverlay">@null</item>
+    </style>
+
+    <style name="Theme.InputBlocker.Overlay" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
     </style>
 
     <style name="Theme.InputBlocker.FullScreen" parent="Theme.MaterialComponents.NoActionBar">
