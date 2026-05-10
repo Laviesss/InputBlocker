@@ -47,10 +47,5 @@
         <item name="android:windowContentOverlay">@null</item>
     </style>
 
-    <style name="Theme.InputBlocker.FullScreen" parent="Theme.MaterialComponents.NoActionBar">
-        <item name="android:windowFullscreen">true</item>
-        <item name="android:windowContentOverlay">@null</item>
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowBackground">@android:color/black</item>
     </style>
 </resources>
