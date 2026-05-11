@@ -43,6 +43,9 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+permissions:
+  contents: write
+
 # ============================================================================
 # JOB: Setup - Determine version and release type
 # ============================================================================
