@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
+import java.util.ArrayList
 
 class DetectionReviewActivity : Activity() {
 
@@ -157,8 +158,7 @@ class DetectionReviewActivity : Activity() {
     }
 
     inner class ReviewCanvas(context: Context) : View(context) {
-        enum class Handle { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
-
+        
         private val blockPaint = Paint().apply {
             color = Color.parseColor("#4DB388FF")
             style = Paint.Style.FILL
@@ -185,7 +185,6 @@ class DetectionReviewActivity : Activity() {
         private var activeHandle: Handle? = null
         private var lastX = 0f
         private var lastY = 0f
-
 
         fun setRegions(list: List<Region>) {
             regionsList.clear()
@@ -325,4 +324,6 @@ class DetectionReviewActivity : Activity() {
             }
         }
     }
+
+    enum class Handle { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 }

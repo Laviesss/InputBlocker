@@ -34,7 +34,12 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                         val motionEvent = param.args.find { it is android.view.MotionEvent } as? android.view.MotionEvent ?: return
                         
                         // Get screen size for normalization
-                        val display = android.app.ActivityThread.currentApplication()?.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager
+                        val app = try {
+                            XposedHelpers.callStaticMethod(XposedHelpers.findClass("android.app.ActivityThread", null), "currentApplication") as? android.app.Application
+                        } catch (e: Exception) {
+                            null
+                        }
+                        val display = app?.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager
                         val metrics = android.util.DisplayMetrics()
                         display?.defaultDisplay?.getMetrics(metrics)
                         

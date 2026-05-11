@@ -190,9 +190,9 @@ class MainActivity : AppCompatActivity() {
             override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
                 if (intent?.action == "com.inputblocker.DETECTION_RESULTS") {
                     @Suppress("DEPRECATION")
-                    val capturedTouches = intent.getSerializableExtra("regions") as? ArrayList<Pair<Float, Float>>
-                    if (!capturedTouches.isNullOrEmpty()) {
-                        showDetectionResults(capturedTouches)
+                    val capturedRegions = intent.getSerializableExtra("regions") as? ArrayList<Region>
+                    if (!capturedRegions.isNullOrEmpty()) {
+                        showDetectionReview(capturedRegions)
                     } else {
                         Toast.makeText(this@MainActivity, "No ghost taps detected.", Toast.LENGTH_SHORT).show()
                     }
@@ -200,17 +200,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
+        val filter = IntentFilter("com.inputblocker.DETECTION_RESULTS")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"), RECEIVER_NOT_EXPORTED)
+            registerReceiver(receiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
-            registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"))
+            registerReceiver(receiver, filter)
         }
     }
 
-    private fun showDetectionResults(capturedTouches: List<Pair<Float, Float>>) {
-        // Perform Clustering
-        val suggestedRegions = clusterTouches(capturedTouches)
-        
+    private fun showDetectionReview(suggestedRegions: List<Region>) {
         val intent = Intent(this, DetectionReviewActivity::class.java)
         intent.putExtra("regions", ArrayList(suggestedRegions))
         startActivity(intent)
@@ -219,7 +217,7 @@ class MainActivity : AppCompatActivity() {
     private fun clusterTouches(touches: List<Pair<Float, Float>>): List<Region> {
         if (touches.isEmpty()) return emptyList()
         
-        val regionsListResult = mutableListOf<Region>()
+        val regionsResult = mutableListOf<Region>()
         val used = BooleanArray(touches.size) { false }
         val threshold = 0.05f // 5% of screen width/height
         
@@ -255,9 +253,9 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-            regionsListResult.add(Region(minX, minY, maxX, maxY))
+            regionsResult.add(Region(minX, minY, maxX, maxY))
         }
-        return regionsListResult
+        return regionsResult
     }
 
     private fun loadThemePreference() {
@@ -383,7 +381,7 @@ class MainActivity : AppCompatActivity() {
         btnTheme.setOnClickListener { showThemeDialog() }
         btnAutoDetect.setOnClickListener { startAutoDetection() }
         
-        // Profile Selection Trigger (Added check for Button type if needed, but the ID was missing in layout)
+        // Profile Selection Trigger (Optional)
         // findViewById<Button>(R.id.btn_profile)?.setOnClickListener { showProfileDialog() }
     }
 

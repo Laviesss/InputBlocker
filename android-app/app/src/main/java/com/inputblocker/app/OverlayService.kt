@@ -28,6 +28,7 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
 import java.io.Serializable
+import java.util.ArrayList
 
 class OverlayService : Service() {
 
@@ -76,7 +77,9 @@ class OverlayService : Service() {
                     if (isEnabled && blockingExpirationTime > 0 && System.currentTimeMillis() > blockingExpirationTime) {
                         Log.i(TAG, "Blocking session expired")
                         disableBlocking()
-                        Toast.makeText(this, "Blocking session expired", Toast.LENGTH_LONG).show()
+                        runOnUiThread {
+                            Toast.makeText(this, "Blocking session expired", Toast.LENGTH_LONG).show()
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Expiration timer error", e)
@@ -256,7 +259,11 @@ class OverlayService : Service() {
         }
         
         try {
-            registerReceiver(configReceiver, filter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(configReceiver, filter, RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(configReceiver, filter)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register receiver", e)
         }
@@ -300,7 +307,9 @@ class OverlayService : Service() {
                 isDetectionMode = true
                 touchHeatmap.clear()
                 detectionStartTime = System.currentTimeMillis()
-                touchBlockView?.setBlockingEnabled(true)
+                runOnUiThread {
+                    touchBlockView?.setBlockingEnabled(true)
+                }
                 
                 // 5. Wait for the detection duration
                 Thread.sleep(10000) 
@@ -311,7 +320,9 @@ class OverlayService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "Detection sequence failed: ${e.message}")
                 isDetectionMode = false
-                touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+                runOnUiThread {
+                    touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+                }
             }
         }.start()
     }
@@ -335,16 +346,17 @@ class OverlayService : Service() {
         Log.i(TAG, "Detection stopped. Found ${detectedRegions.size} regions")
         
         // Restore blocking state
-        touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+        runOnUiThread {
+            touchBlockView?.setBlockingEnabled(isEnabled && !forceSafeMode)
+        }
     }
 
     private fun processHeatmap(): List<Region> {
         if (touchHeatmap.isEmpty()) return emptyList()
         
         // DBSCAN-inspired Clustering Algorithm
-        // Parameters: eps (distance threshold), minPts (min points to form a cluster)
-        val eps = 80.0 // Max distance between points to be considered neighbors
-        val minPts = 3  // Minimum points to form a cluster
+        val eps = 80.0 
+        val minPts = 3  
         
         val hotspots = touchHeatmap.filter { it.value >= minPts }.keys.toList()
         if (hotspots.isEmpty()) return emptyList()
@@ -394,33 +406,44 @@ class OverlayService : Service() {
         }
         
         // Convert clusters to Bounding Box Regions
+        val displayMetrics = resources.displayMetrics
+        val width = displayMetrics.widthPixels.toFloat()
+        val height = displayMetrics.heightPixels.toFloat()
+
         return clusters.map { cluster ->
-            var x1 = Int.MAX_VALUE
-            var y1 = Int.MAX_VALUE
-            var x2 = Int.MIN_VALUE
-            var y2 = Int.MIN_VALUE
+            var minX = Int.MAX_VALUE
+            var minY = Int.MAX_VALUE
+            var maxX = Int.MIN_VALUE
+            var maxY = Int.MIN_VALUE
             
             for (p in cluster) {
-                x1 = minOf(x1, p.first)
-                y1 = minOf(y1, p.second)
-                x2 = maxOf(x2, p.first)
-                y2 = maxOf(y2, p.second)
+                minX = minOf(minX, p.first)
+                minY = minOf(minY, p.second)
+                maxX = maxOf(maxX, p.first)
+                maxY = maxOf(maxY, p.second)
             }
             
-            // Add padding to the detected region for safety
-            Region(x1 - 40, y1 - 40, x2 + 40, y2 + 40)
+            // Convert to normalized coordinates [0, 1]
+            Region(
+                (minX - 40) / width, 
+                (minY - 40) / height, 
+                (maxX + 40) / width, 
+                (maxY + 40) / height
+            )
         }.filter { region -> 
-            // Filter out regions that are too tiny to be useful
-            (region.x2 - region.x1) > 20 && (region.y2 - region.y1) > 20 
+            // Filter out regions that are too tiny (less than 2% of screen)
+            (region.x2 - region.x1) > 0.02f && (region.y2 - region.y1) > 0.02f 
         }
     }
 
     private fun reloadConfig() {
         loadConfig()
         
-        touchBlockView?.apply {
-            setRegions(regions)
-            setBlockingEnabled(isEnabled && !forceSafeMode)
+        runOnUiThread {
+            touchBlockView?.apply {
+                setRegions(regions)
+                setBlockingEnabled(isEnabled && !forceSafeMode)
+            }
         }
         
         val nm = getSystemService(NotificationManager::class.java)
@@ -432,12 +455,14 @@ class OverlayService : Service() {
     private fun disableBlocking() {
         isEnabled = false
         
-        touchBlockView?.setBlockingEnabled(false)
+        runOnUiThread {
+            touchBlockView?.setBlockingEnabled(false)
+            Toast.makeText(this, "InputBlocker disabled", Toast.LENGTH_SHORT).show()
+        }
         
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
         
-        Toast.makeText(this, "InputBlocker disabled", Toast.LENGTH_SHORT).show()
         Log.i(TAG, "Blocking disabled")
     }
 
@@ -456,12 +481,14 @@ class OverlayService : Service() {
             blockingExpirationTime = 0L
         }
         
-        touchBlockView?.setBlockingEnabled(true)
+        runOnUiThread {
+            touchBlockView?.setBlockingEnabled(true)
+            Toast.makeText(this, "InputBlocker enabled", Toast.LENGTH_SHORT).show()
+        }
         
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
         
-        Toast.makeText(this, "InputBlocker enabled", Toast.LENGTH_SHORT).show()
         Log.i(TAG, "Blocking enabled")
     }
 
@@ -493,6 +520,7 @@ class OverlayService : Service() {
                         reloadConfig()
                         Log.i(TAG, "Profile changed to: $profile")
                     }
+                    else -> Log.d(TAG, "Unhandled onStartCommand action: $action")
                 }
         }
         
@@ -517,6 +545,11 @@ class OverlayService : Service() {
 
     @Nullable
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun runOnUiThread(action: Runnable) {
+        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        handler.post(action)
+    }
 
     inner class TouchBlockView(context: Context) : View(context) {
         private var serviceRef = WeakReference<OverlayService>(null)
@@ -564,18 +597,11 @@ class OverlayService : Service() {
             super.onDraw(canvas)
             
             val service = serviceRef.get()
-            val forceSafeMode = service?.let { 
-                InputBlockerServiceManager.getModulePath(it).let { path ->
-                    val configFile = File(path, "config/blocked_regions.conf")
-                    if (configFile.exists()) {
-                        configFile.readLines().any { line -> line.startsWith("force_safe_mode=1") }
-                    } else false
-                }
-            } ?: false
+            val forceSafeModeVal = service?.forceSafeMode ?: false
 
             if (!enabled) {
                 canvas.drawColor(Color.TRANSPARENT)
-                if (forceSafeMode) {
+                if (forceSafeModeVal) {
                     canvas.drawText("SAFE MODE", width / 2f, 100f, safeModePaint)
                     canvas.drawText("(Blocking Disabled)", width / 2f, 150f, safeModePaint)
                 }
@@ -600,7 +626,8 @@ class OverlayService : Service() {
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
-            if (isDetectionMode) {
+            val service = serviceRef.get()
+            if (service?.isDetectionMode == true) {
                 val x = event.x.toInt()
                 val y = event.y.toInt()
                 
@@ -609,7 +636,7 @@ class OverlayService : Service() {
                 val gridY = (y / 20) * 20
                 val point = Pair(gridX, gridY)
                 
-                touchHeatmap[point] = touchHeatmap.getOrDefault(point, 0) + 1
+                service.touchHeatmap[point] = service.touchHeatmap.getOrDefault(point, 0) + 1
                 Log.d(TAG, "Detected touch at ($x,$y) -> Grid($gridX,$gridY)")
                 
                 return true // Block everything during detection

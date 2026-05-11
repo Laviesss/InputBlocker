@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.io.Serializable
+import java.util.ArrayList
 
 class SetupActivity : AppCompatActivity() {
 
@@ -171,7 +172,7 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        setupView.setDrawingCallback(object : SetupView.DrawingCallback {
+        setupView.setDrawingCallback(object : SetupViewCallback {
             override fun onRegionDrawn(region: Region) {
                 regions.add(region)
                 updateRegionCount()
@@ -211,12 +212,15 @@ class SetupActivity : AppCompatActivity() {
         finish()
     }
 
-    class SetupView(context: android.content.Context) : View(context) {
+    interface SetupViewCallback {
+        fun onRegionDrawn(region: Region)
+        fun onRegionCountChanged(count: Int)
+    }
 
-        interface DrawingCallback {
-            fun onRegionDrawn(region: Region)
-            fun onRegionCountChanged(count: Int)
-        }
+    inner class SetupView(context: android.content.Context, attrs: android.util.AttributeSet? = null) : View(context, attrs) {
+
+        private var accentColor = Color.parseColor("#2196F3")
+        private var backgroundColorVal = Color.parseColor("#88000000")
 
         private val borderPaint = Paint().apply {
             color = accentColor
@@ -241,10 +245,7 @@ class SetupActivity : AppCompatActivity() {
         private var startY = 0f
         private var isDrawing = false
         
-        private var accentColor = Color.parseColor("#2196F3")
-        private var backgroundColor = Color.parseColor("#88000000")
-
-        private var callback: DrawingCallback? = null
+        private var callback: SetupViewCallback? = null
         private var selectedRegion: Region? = null
         private var isResizing = false
         private var resizeHandle = 0 // 0: none, 1: TL, 2: TR, 3: BL, 4: BR
@@ -253,11 +254,13 @@ class SetupActivity : AppCompatActivity() {
         
         fun setThemeColors(accent: Int, bg: Int) {
             accentColor = accent
+            backgroundColorVal = bg
             borderPaint.color = accent
             fillPaint.color = Color.argb(51, Color.red(accent), Color.green(accent), Color.blue(accent))
+            invalidate()
         }
 
-        fun setDrawingCallback(callback: DrawingCallback) {
+        fun setDrawingCallback(callback: SetupViewCallback) {
             this.callback = callback
         }
 
@@ -270,7 +273,7 @@ class SetupActivity : AppCompatActivity() {
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
             
-            canvas.drawColor(backgroundColor)
+            canvas.drawColor(backgroundColorVal)
             
             for (i in regionsList.indices) {
                 val region = regionsList[i]
@@ -280,7 +283,7 @@ class SetupActivity : AppCompatActivity() {
                 )
                 
                 val p = Paint(fillPaint).apply {
-                    color = if (region == selectedRegion) Color.parseColor("#66B388FF") else Color.argb(51, Color.red(accentColor), Color.green(accentColor), Color.blue(accentColor))
+                    color = if (region == selectedRegion) Color.parseColor("#66B388FF") else fillPaint.color
                 }
                 canvas.drawRect(rect, p)
                 
@@ -399,10 +402,10 @@ class SetupActivity : AppCompatActivity() {
                     if (isResizing && selectedRegion != null) {
                         val r = selectedRegion!!
                         when (resizeHandle) {
-                            1 -> { r.x1 = (x / screenWidth).coerceAtLeast(0f); r.y1 = (y / screenHeight).coerceAtLeast(0f) }
-                            2 -> { r.x2 = (x / screenWidth).coerceAtMost(1f); r.y1 = (y / screenHeight).coerceAtLeast(0f) }
-                            3 -> { r.x1 = (x / screenWidth).coerceAtLeast(0f); r.y2 = (y / screenHeight).coerceAtMost(1f) }
-                            4 -> { r.x2 = (x / screenWidth).coerceAtMost(1f); r.y2 = (y / screenHeight).coerceAtMost(1f) }
+                            1 -> { r.x1 = (x / screenWidth).coerceIn(0f, r.x2 - 0.05f); r.y1 = (y / screenHeight).coerceIn(0f, r.y2 - 0.05f) }
+                            2 -> { r.x2 = (x / screenWidth).coerceIn(r.x1 + 0.05f, 1f); r.y1 = (y / screenHeight).coerceIn(0f, r.y2 - 0.05f) }
+                            3 -> { r.x1 = (x / screenWidth).coerceIn(0f, r.x2 - 0.05f); r.y2 = (y / screenHeight).coerceIn(r.y1 + 0.05f, 1f) }
+                            4 -> { r.x2 = (x / screenWidth).coerceIn(r.x1 + 0.05f, 1f); r.y2 = (y / screenHeight).coerceIn(r.y1 + 0.05f, 1f) }
                         }
                         invalidate()
                         return true
@@ -410,18 +413,19 @@ class SetupActivity : AppCompatActivity() {
                     
                     if (selectedRegion != null && !isResizing) {
                         val r = selectedRegion!!
-                        val w = (r.x2 - r.x1) * screenWidth
-                        val h = (r.y2 - r.y1) * screenHeight
-                        val nx = (x - dragOffsetX) / screenWidth
-                        val ny = (y - dragOffsetY) / screenHeight
+                        val w = r.x2 - r.x1
+                        val h = r.y2 - r.y1
                         
-                        val dx = nx - (r.x1 + w/2 / screenWidth)
-                        val dy = ny - (r.y1 + h/2 / screenHeight)
+                        val newCenterX = x / screenWidth
+                        val newCenterY = y / screenHeight
                         
-                        r.x1 += dx
-                        r.x2 += dx
-                        r.y1 += dy
-                        r.y2 += dy
+                        val newX1 = (newCenterX - w/2).coerceIn(0f, 1f - w)
+                        val newY1 = (newCenterY - h/2).coerceIn(0f, 1f - h)
+                        
+                        r.x1 = newX1
+                        r.x2 = newX1 + w
+                        r.y1 = newY1
+                        r.y2 = newY1 + h
                         invalidate()
                         return true
                     }
@@ -472,48 +476,5 @@ class SetupActivity : AppCompatActivity() {
             
             return super.onTouchEvent(event)
         }
-
-                MotionEvent.ACTION_MOVE -> {
-                    if (isDrawing) {
-                        currentRect?.set(
-                            minOf(startX, x),
-                            minOf(startY, y),
-                            maxOf(startX, x),
-                            maxOf(startY, y)
-                        )
-                        invalidate()
-                    }
-                    return true
-                }
-
-                MotionEvent.ACTION_UP -> {
-                    if (isDrawing && currentRect != null) {
-                        if (currentRect!!.width() > 20 && currentRect!!.height() > 20) {
-                    val region = Region(
-                        currentRect!!.left / screenWidth,
-                        currentRect!!.top / screenHeight,
-                        currentRect!!.right / screenWidth,
-                        currentRect!!.bottom / screenHeight
-                    )
-                            callback?.onRegionDrawn(region)
-                        }
-                        currentRect = null
-                        isDrawing = false
-                        invalidate()
-                    }
-                    return true
-                }
-
-                MotionEvent.ACTION_CANCEL -> {
-                    currentRect = null
-                    isDrawing = false
-                    invalidate()
-                    return true
-                }
-            }
-
-            return super.onTouchEvent(event)
-        }
     }
-}
 }
