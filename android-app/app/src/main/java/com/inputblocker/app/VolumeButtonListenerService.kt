@@ -7,10 +7,14 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
 import android.os.Binder
+import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
+import android.os.VibrationEffect
 import android.os.Vibrator
+import android.os.VibratorManager
 import android.util.Log
+import android.widget.Toast
 import java.io.File
 import java.io.FileWriter
 import java.util.Timer
@@ -33,7 +37,6 @@ class VolumeButtonListenerService : Service() {
     private var volumeReceiver: BroadcastReceiver? = null
     private var buttonReceiver: BroadcastReceiver? = null
     private var audioManager: AudioManager? = null
-    private var isListening = false
     private var lastVolume = -1
     
     private val binder = LocalBinder()
@@ -68,7 +71,11 @@ class VolumeButtonListenerService : Service() {
         }
         
         try {
-            registerReceiver(volumeReceiver, filter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(volumeReceiver, filter, RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(volumeReceiver, filter)
+            }
             
             buttonReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
@@ -79,9 +86,12 @@ class VolumeButtonListenerService : Service() {
                 }
             }
             val btnFilter = IntentFilter("com.inputblocker.BUTTON_PRESSED")
-            registerReceiver(buttonReceiver, btnFilter)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(buttonReceiver, btnFilter, RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(buttonReceiver, btnFilter)
+            }
             
-            isListening = true
             Log.i(TAG, "Volume and Power button listeners started")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register receiver", e)
@@ -89,9 +99,6 @@ class VolumeButtonListenerService : Service() {
     }
 
     private fun handleVolumeChange() {
-        val now = System.currentTimeMillis()
-        if (timeoutTimer != null) timeoutTimer?.cancel()
-        
         val currentVol = audioManager?.getStreamVolume(AudioManager.STREAM_MUSIC) ?: 0
         if (currentVol == lastVolume) return
         
@@ -130,7 +137,10 @@ class VolumeButtonListenerService : Service() {
         if (buttonPressTimes.size < 3) return
         
         // Check for Volume Down x3 -> Volume Up x3 (Existing)
-        // (This is handled by handleVolumeChange, but we can integrate it here if we want)
+        if (checkSequence()) {
+            triggerKillSwitch()
+            return
+        }
         
         // Check for Power Button x5 (New Advanced Kill Switch)
         if (buttonPressTimes.size >= 5) {
@@ -147,29 +157,6 @@ class VolumeButtonListenerService : Service() {
         sendBroadcast(intent)
         Toast.makeText(this, "EMERGENCY DISABLE: Power sequence detected", Toast.LENGTH_LONG).show()
     }
-        }
-        
-        lastVolume = currentVolume
-    }
-
-    private fun onVolumeButtonPressed(isUp: Boolean) {
-        val now = System.currentTimeMillis()
-        
-        buttonPressTimes.add(now)
-        buttonTypes.add(if (isUp) 1 else 0)
-        
-        resetTimeoutTimer()
-        
-        Log.d(TAG, "Button pressed: ${if (isUp) "UP" else "DOWN"} (sequence: ${getSequenceString()})")
-        
-        if (checkSequence()) {
-            triggerKillSwitch()
-        }
-    }
-
-    private fun getSequenceString(): String {
-        return buttonTypes.joinToString("") { if (it == 0) "D" else "U" }
-    }
 
     private fun checkSequence(): Boolean {
         if (buttonTypes.size < 6) return false
@@ -180,40 +167,20 @@ class VolumeButtonListenerService : Service() {
         
         for (i in buttonPressTimes.indices) {
             if (buttonPressTimes[i] - firstTime > TIMEOUT_MS) {
-                buttonPressTimes.clear()
-                buttonTypes.clear()
                 return false
             }
             
             if (buttonTypes[i] == 0) downCount++ else upCount++
         }
         
-        if (downCount == REQUIRED_DOWN_COUNT && upCount == REQUIRED_UP_COUNT) {
+        if (downCount >= REQUIRED_DOWN_COUNT && upCount >= REQUIRED_UP_COUNT) {
             val lastTime = buttonPressTimes.last()
             if (lastTime - firstTime <= TIMEOUT_MS) {
                 return true
             }
         }
         
-        if (buttonTypes.size > 6) {
-            buttonPressTimes.clear()
-            buttonTypes.clear()
-        }
-        
         return false
-    }
-
-    private fun resetTimeoutTimer() {
-        timeoutTimer?.cancel()
-        
-        timeoutTimer = Timer()
-        timeoutTimer?.schedule(object : TimerTask() {
-            override fun run() {
-                Log.d(TAG, "Sequence timeout - clearing")
-                buttonPressTimes.clear()
-                buttonTypes.clear()
-            }
-        }, TIMEOUT_MS + 100)
     }
 
     private fun triggerKillSwitch() {
@@ -224,11 +191,26 @@ class VolumeButtonListenerService : Service() {
         
         disableBlocking()
         
-        val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        vibrateDevice()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun vibrateDevice() {
+        val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+
         vibrator?.let {
             if (it.hasVibrator()) {
                 val pattern = longArrayOf(0, 200, 100, 200, 100, 200)
-                it.vibrate(pattern, -1)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    it.vibrate(VibrationEffect.createWaveform(pattern, -1))
+                } else {
+                    it.vibrate(pattern, -1)
+                }
             }
         }
     }
@@ -261,6 +243,12 @@ class VolumeButtonListenerService : Service() {
                 unregisterReceiver(it)
             } catch (e: Exception) { }
         }
+
+        buttonReceiver?.let {
+            try {
+                unregisterReceiver(it)
+            } catch (e: Exception) { }
+        }
         
         timeoutTimer?.cancel()
         
@@ -268,9 +256,6 @@ class VolumeButtonListenerService : Service() {
             if (it.isHeld) it.release()
         }
         
-        isListening = false
         Log.i(TAG, "Volume button listener stopped")
     }
-
-    fun isListening(): Boolean = isListening
 }

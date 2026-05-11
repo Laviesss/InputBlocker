@@ -516,3 +516,4 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 }
+}

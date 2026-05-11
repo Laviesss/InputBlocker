@@ -4,13 +4,13 @@ import android.Manifest
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.IntentFilter
-import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
 import android.widget.Button
@@ -27,7 +27,6 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
 import java.io.FileWriter
-import java.io.Serializable
 import java.util.ArrayList
 
 class MainActivity : AppCompatActivity() {
@@ -138,14 +137,16 @@ class MainActivity : AppCompatActivity() {
     private fun showUpdateDialog(info: UpdateChecker.UpdateInfo, currentVersion: String) {
         AlertDialog.Builder(this)
             .setTitle("Update Available")
-            .setMessage("A new version ($info.version) is available!\n\nYou have: $currentVersion\n\nWould you like to download it?")
+            .setMessage("A new version (${info.version}) is available!\n\nYou have: $currentVersion\n\nWould you like to download it?")
             .setPositiveButton("Download") { _, _ ->
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(info.releaseUrl))
                 startActivity(intent)
             }
             .setNegativeButton("Later", null)
             .show()
-        private fun showProfileDialog() {
+    }
+
+    private fun showProfileDialog() {
         val profiles = arrayOf("default", "gaming", "media", "work") // Basic presets
         
         AlertDialog.Builder(this)
@@ -162,6 +163,8 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("OK", null)
             .show()
     }
+
+    private fun showAboutDialog() {
         val version = try {
             packageManager.getPackageInfo(packageName, 0).versionName
         } catch (e: Exception) {
@@ -186,8 +189,9 @@ class MainActivity : AppCompatActivity() {
         val receiver = object : android.content.BroadcastReceiver() {
             override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
                 if (intent?.action == "com.inputblocker.DETECTION_RESULTS") {
+                    @Suppress("DEPRECATION")
                     val capturedTouches = intent.getSerializableExtra("regions") as? ArrayList<Pair<Float, Float>>
-                    if (capturedTouches != null && capturedTouches.isNotEmpty()) {
+                    if (!capturedTouches.isNullOrEmpty()) {
                         showDetectionResults(capturedTouches)
                     } else {
                         Toast.makeText(this@MainActivity, "No ghost taps detected.", Toast.LENGTH_SHORT).show()
@@ -195,7 +199,12 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"))
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"), RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(receiver, IntentFilter("com.inputblocker.DETECTION_RESULTS"))
+        }
     }
 
     private fun showDetectionResults(capturedTouches: List<Pair<Float, Float>>) {
@@ -210,7 +219,7 @@ class MainActivity : AppCompatActivity() {
     private fun clusterTouches(touches: List<Pair<Float, Float>>): List<Region> {
         if (touches.isEmpty()) return emptyList()
         
-        val regions = mutableListOf<Region>()
+        val regionsListResult = mutableListOf<Region>()
         val used = BooleanArray(touches.size) { false }
         val threshold = 0.05f // 5% of screen width/height
         
@@ -222,8 +231,6 @@ class MainActivity : AppCompatActivity() {
             var minY = touches[i].second
             var maxY = touches[i].second
             
-            val cluster = mutableListOf<Int>()
-            cluster.add(i)
             used[i] = true
             
             // Simple iterative expansion clustering
@@ -238,20 +245,19 @@ class MainActivity : AppCompatActivity() {
                     if (tx >= minX - threshold && tx <= maxX + threshold &&
                         ty >= minY - threshold && ty <= maxY + threshold) {
                         
-                        minX = Math.min(minX, tx)
-                        maxX = Math.max(maxX, tx)
-                        minY = Math.min(minY, ty)
-                        maxY = Math.max(maxY, ty)
+                        minX = minOf(minX, tx)
+                        maxX = maxOf(maxX, tx)
+                        minY = minOf(minY, ty)
+                        maxY = maxOf(maxY, ty)
                         
-                        cluster.add(j)
                         used[j] = true
                         changed = true
                     }
                 }
             }
-            regions.add(Region(minX, minY, maxX, maxY))
+            regionsListResult.add(Region(minX, minY, maxX, maxY))
         }
-        return regions
+        return regionsListResult
     }
 
     private fun loadThemePreference() {
@@ -282,41 +288,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getThemeResId(): Int {
-        return when (currentTheme) {
-            THEME_LIGHT -> R.style.Theme_InputBlocker_Light
-            THEME_DARK -> R.style.Theme_InputBlocker_Dark
-            THEME_AMOLED -> R.style.Theme_InputBlocker_AMOLED
-            else -> R.style.Theme_InputBlocker
-        }
-    }
-
     private fun applyThemeToViews() {
         val bgColor = getBackgroundColor()
-        val surfaceColor = getSurfaceColor()
         val elevatedColor = getSurfaceElevatedColor()
         val textPrimary = getTextPrimaryColor()
         
         findViewById<android.view.View>(android.R.id.content)?.setBackgroundColor(bgColor)
         
-        tvStatus?.apply {
+        tvStatus.apply {
             setTextColor(
                 if (isEnabled) ContextCompat.getColor(this@MainActivity, R.color.accent_green)
                 else ContextCompat.getColor(this@MainActivity, R.color.accent_red)
             )
         }
         
-        btnTheme?.backgroundTintList = ColorStateList.valueOf(
+        btnTheme.backgroundTintList = ColorStateList.valueOf(
             ContextCompat.getColor(this, R.color.accent_blue)
         )
         
-        btnAddRegion?.apply {
+        btnAddRegion.apply {
             backgroundTintList = ColorStateList.valueOf(elevatedColor)
             setTextColor(textPrimary)
         }
     }
-
-
 
     private fun getBackgroundColor(): Int {
         return when (currentTheme) {
@@ -324,15 +318,6 @@ class MainActivity : AppCompatActivity() {
             THEME_DARK -> ContextCompat.getColor(this, R.color.dark_background)
             THEME_AMOLED -> ContextCompat.getColor(this, R.color.amoled_background)
             else -> ContextCompat.getColor(this, R.color.dark_background)
-        }
-    }
-
-    private fun getSurfaceColor(): Int {
-        return when (currentTheme) {
-            THEME_LIGHT -> ContextCompat.getColor(this, R.color.light_surface)
-            THEME_DARK -> ContextCompat.getColor(this, R.color.dark_surface)
-            THEME_AMOLED -> ContextCompat.getColor(this, R.color.amoled_surface)
-            else -> ContextCompat.getColor(this, R.color.dark_surface)
         }
     }
 
@@ -398,8 +383,8 @@ class MainActivity : AppCompatActivity() {
         btnTheme.setOnClickListener { showThemeDialog() }
         btnAutoDetect.setOnClickListener { startAutoDetection() }
         
-        // Profile Selection Trigger (Assumed ID: btn_profile)
-        findViewById<Button>(R.id.btn_profile)?.setOnClickListener { showProfileDialog() }
+        // Profile Selection Trigger (Added check for Button type if needed, but the ID was missing in layout)
+        // findViewById<Button>(R.id.btn_profile)?.setOnClickListener { showProfileDialog() }
     }
 
     private fun startAutoDetection() {
@@ -440,11 +425,6 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
-    }
-
-    private fun stopAutoDetection() {
-        val intent = Intent("com.inputblocker.STOP_DETECTION")
-        sendBroadcast(intent)
     }
 
     private fun showThemeDialog() {
@@ -552,39 +532,6 @@ class MainActivity : AppCompatActivity() {
             Log.e("MainActivity", "Error loading config", e)
         }
     }
-        
-        try {
-            BufferedReader(FileReader(configFile)).use { reader ->
-                reader.lineSequence().forEach { line ->
-                    val trimmed = line.trim()
-                    when {
-                        trimmed.isEmpty() || trimmed.startsWith("#") -> return@forEach
-                        trimmed.startsWith("enabled=") -> {
-                            isEnabled = trimmed.substring(8) == "1"
-                        }
-                        trimmed.startsWith("lsposed_mode=") -> {
-                            isLsposedMode = trimmed.substring(13) == "1"
-                        }
-                        else -> {
-                            val parts = trimmed.split(",")
-                            if (parts.size == 4) {
-                                try {
-                                    regions.add(Region(
-                                        parts[0].trim().toInt(),
-                                        parts[1].trim().toInt(),
-                                        parts[2].trim().toInt(),
-                                        parts[3].trim().toInt()
-                                    ))
-                                } catch (_: NumberFormatException) { }
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
 
 
     private fun saveConfig() {
@@ -645,17 +592,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateStatus() {
-        val isEnabled = switchEnabled.isChecked
-        val status = if (isEnabled) "SYSTEM ACTIVE" else "ENGINE DISABLED"
-        tvStatus.text = status
+        val isEnabledVal = switchEnabled.isChecked
+        val statusText = if (isEnabledVal) "SYSTEM ACTIVE" else "ENGINE DISABLED"
+        tvStatus.text = statusText
         tvStatus.setTextColor(
-            if (isEnabled) ContextCompat.getColor(this, R.color.accent_green)
+            if (isEnabledVal) ContextCompat.getColor(this, R.color.accent_green)
             else ContextCompat.getColor(this, R.color.accent_red)
         )
         
         // Update the status label color or something else if needed
         findViewById<TextView>(R.id.tv_status_label)?.setTextColor(
-            if (isEnabled) ContextCompat.getColor(this, R.color.amoled_text_secondary)
+            if (isEnabledVal) ContextCompat.getColor(this, R.color.amoled_text_secondary)
             else ContextCompat.getColor(this, R.color.accent_red)
         )
     }
@@ -733,10 +680,10 @@ class MainActivity : AppCompatActivity() {
             if (parts.size != 4) return null
 
             val region = Region(
-                parts[0].trim().toInt(),
-                parts[1].trim().toInt(),
-                parts[2].trim().toInt(),
-                parts[3].trim().toInt()
+                parts[0].trim().toFloat(),
+                parts[1].trim().toFloat(),
+                parts[2].trim().toFloat(),
+                parts[3].trim().toFloat()
             )
 
             if (region.x1 >= region.x2 || region.y1 >= region.y2) return null
@@ -768,12 +715,5 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    fun setRegions(newRegions: List<Region>) {
-        regions.clear()
-        regions.addAll(newRegions)
-        saveConfig()
-        runOnUiThread { updateUI() }
     }
 }
