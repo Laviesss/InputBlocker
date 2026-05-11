@@ -160,11 +160,11 @@ class DetectionReviewActivity : Activity() {
         enum class Handle { TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT }
 
         private val blockPaint = Paint().apply {
-            color = Color.parseColor(\"#4DB388FF\")
+            color = Color.parseColor("#4DB388FF")
             style = Paint.Style.FILL
         }
         private val borderPaint = Paint().apply {
-            color = Color.parseColor(\"#00FF00\")
+            color = Color.parseColor("#00FF00")
             style = Paint.Style.STROKE
             strokeWidth = 4f
         }
