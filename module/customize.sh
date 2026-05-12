@@ -53,11 +53,12 @@ enabled=1
 force_safe_mode=0
 
 # Add blocked regions below:
-# Format: x1,y1,x2,y2
-# Example: 0,0,100,200
+# Format: x1,y1,x2,y2 (Normalized 0.0 to 1.0)
+# Example: 0.1,0.1,0.2,0.3
 EOFCONFIG
     chmod 644 "$MODPATH/config/blocked_regions.conf"
 fi
 
-ui_print "- InputBlocker installed successfully!"
+ui_print "- Root module installed successfully!"
+ui_print "- Companion app will be verified/installed on first boot."
 ui_print "- Reboot to apply changes"
