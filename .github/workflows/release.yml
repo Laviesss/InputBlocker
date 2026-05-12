@@ -146,9 +146,10 @@ jobs:
           sed -i "s/\"version\": \".*\",/\"version\": \"$VERSION\",/" module/update.json
           sed -i "s/\"versionCode\": [0-9]*,/\"versionCode\": $VCODE,/" module/update.json
 
-          # Android app (Gradle uses `versionCode` without equals)
-          sed -i "s/versionName \".*\"/versionName \"$CLEAN_VERSION\"/" android-app/app/build.gradle
-          sed -i "s/versionCode [0-9]*/versionCode $VCODE/" android-app/app/build.gradle
+          # Android app – handle both `versionName = "..."` and `versionName "..."`
+          sed -i "s/versionName\s*=?\s*\".*\"/versionName \"$CLEAN_VERSION\"/" android-app/app/build.gradle
+          # Android app – handle both `versionCode = 1` and `versionCode 1`
+          sed -i "s/versionCode\s*=?\s*[0-9]\+/versionCode $VCODE/" android-app/app/build.gradle
 
           # C# project
           sed -i "s/<Version>.*<\/Version>/<Version>$CLEAN_VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
