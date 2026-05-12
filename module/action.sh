@@ -5,6 +5,7 @@
 PKG_NAME="com.inputblocker.app"
 CONFIG_FILE="/data/adb/modules/inputblocker/config/profiles/default.conf"
 UPDATE_URL="https://github.com/Laviesss/InputBlocker/releases/latest"
+APK_PATH="/data/adb/modules/inputblocker/common/InputBlocker.apk"
 
 log() {
     log -t InputBlocker-Action "$1"
@@ -12,19 +13,37 @@ log() {
 
 log "Action button pressed. Evaluating request..."
 
-# --- STRATEGY: SMART GATEWAY ---
-# Priority 1: Launch Companion App Quick Menu
-# Added -f 0x10000000 (FLAG_ACTIVITY_NEW_TASK) to ensure it launches from shell
-am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
-
-if [ $? -eq 0 ]; then
-    log "Successfully triggered Quick Action menu in app."
-    exit 0
+# Check if companion app is installed
+if pm list packages | grep -q "$PKG_NAME"; then
+    log "Companion app found. Attempting to launch Quick Menu..."
+    # Launch Companion App Quick Menu (FLAG_ACTIVITY_NEW_TASK)
+    am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
+    
+    if [ $? -eq 0 ]; then
+        log "Successfully triggered Quick Action menu in app."
+        exit 0
+    fi
+else
+    log "Companion app NOT found. Attempting auto-installation..."
+    if [ -f "$APK_PATH" ]; then
+        pm install -r "$APK_PATH" > /dev/null 2>&1
+        if [ $? -eq 0 ]; then
+            log "App installed successfully. Launching Quick Menu..."
+            am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
+            if [ $? -eq 0 ]; then
+                log "Launched app after installation."
+                exit 0
+            fi
+        else
+            log "Installation failed. APK may be incompatible or corrupted."
+        fi
+    else
+        log "Installation failed: APK not found at $APK_PATH"
+    fi
 fi
 
-# Priority 2: Fallback Update Check (For managers without native update UI)
-# If the app isn't there, we provide a direct link to the releases page.
-log "Companion app not found. Opening release page for updates..."
+# Priority 2: Fallback Update Check
+log "Unable to launch app. Opening release page for updates..."
 am start -a android.intent.action.VIEW -d "$UPDATE_URL" > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
@@ -33,15 +52,10 @@ if [ $? -eq 0 ]; then
 fi
 
 # Priority 3: Emergency Reset (Last Resort)
-# If everything fails, ensure the device is accessible.
 log "Fallback failed. Performing emergency reset to ensure device accessibility..."
 if [ -f "$CONFIG_FILE" ]; then
-    # Use sed to force enabled=0 in the config file
     sed -i 's/^enabled=.*/enabled=0/' "$CONFIG_FILE"
-    
-    # Notify the service to reload the config immediately
     am broadcast -a com.inputblocker.CHANGE_CONFIG
-    
     log "Emergency reset complete: Blocking disabled."
 else
     log "ERROR: Config file not found at $CONFIG_FILE. Cannot reset."
