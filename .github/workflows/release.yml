@@ -204,6 +204,33 @@ jobs:
           name: android-apk
           path: release/InputBlocker-*.apk
 
+  sign-android:
+    name: 🔑 Sign Android APK
+    needs: [setup, build-android]
+    if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'android' || needs.setup.outputs.build_type == 'module' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Download Unsigned APK
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: unsigned
+      - name: Sign APK
+        uses: r0adkll/sign-android-release@v1
+        with:
+          artifacts: unsigned/**/*.apk
+          keystore: ${{ secrets.SIGNING_KEY }}
+          alias: ${{ secrets.ALIAS }}
+          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
+          keyPassword: ${{ secrets.KEY_PASSWORD }}
+      - name: Upload Signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk-signed
+          path: signed/*.apk
+
   build-csharp:
     name: 💻 Build C# Tools
     needs: [setup, inject_version]
@@ -277,7 +304,7 @@ jobs:
 
   build-module:
     name: 📦 Package Root Module
-    needs: [setup, inject_version, build-android]
+    needs: [setup, inject_version, sign-android]
     if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'module' }}
     runs-on: ubuntu-latest
     steps:
@@ -288,10 +315,10 @@ jobs:
         with:
           name: versioned-files
           path: .
-      - name: Download APK
+      - name: Download Signed APK
         uses: actions/download-artifact@v4
         with:
-          name: android-apk
+          name: android-apk-signed
           path: module/common/
       - name: Build Root Module ZIP
         run: |
@@ -310,7 +337,7 @@ jobs:
 
   generate-checksums:
     name: 🛡️ Generate Checksums
-    needs: [setup, build-android, build-csharp, build-java, build-module]
+    needs: [setup, sign-android, build-csharp, build-java, build-module]
     if: ${{ needs.setup.result == 'success' && needs.setup.outputs.build_type == 'all' }}
     runs-on: ubuntu-latest
     steps:
@@ -332,7 +359,7 @@ jobs:
 
   create-release:
     name: 🚀 Create GitHub Release
-    needs: [setup, build-android, build-csharp, build-java, build-module, generate-checksums]
+    needs: [setup, sign-android, build-csharp, build-java, build-module, generate-checksums]
     if: ${{ needs.setup.result == 'success' && needs.setup.outputs.is_release == 'true' }}
     runs-on: ubuntu-latest
     steps:
@@ -367,7 +394,7 @@ jobs:
           VERSION='${{ needs.setup.outputs.version }}'
           VCODE='${{ needs.setup.outputs.version_code }}'
           ZIP_URL="https://github.com/${{ github.repository }}/releases/latest/download/InputBlocker-${VERSION}.zip"
-
+          
           cat <<EOF > update.json
           {
             "version": "$VERSION",
