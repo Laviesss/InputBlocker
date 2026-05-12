@@ -344,9 +344,9 @@ jobs:
           set -euo pipefail
           mkdir -p release
           find release_artifacts -type f -exec cp -v {} release/ \;
-          # Remove internal build files that are not release assets
-          rm -f release/module.prop release/build.gradle release/*.csproj
-          echo "Cleaned internal build files from release artifacts."
+          # Remove internal build files and debug symbols that are not release assets
+          rm -f release/module.prop release/build.gradle release/*.csproj release/*.pdb release/update.json
+          echo "Cleaned internal build files and debug symbols from release artifacts."
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         continue-on-error: true
