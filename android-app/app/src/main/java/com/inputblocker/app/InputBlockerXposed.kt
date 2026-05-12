@@ -34,21 +34,25 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                         val motionEvent = param.args.find { it is android.view.MotionEvent } as? android.view.MotionEvent ?: return
                         
                         // Get screen size for normalization
-                        val app = try {
-                            XposedHelpers.callStaticMethod(XposedHelpers.findClass("android.app.ActivityThread", null), "currentApplication") as? android.app.Application
-                        } catch (e: Exception) {
-                            null
-                        }
-                        val display = app?.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager
                         val metrics = android.util.DisplayMetrics()
-                        display?.defaultDisplay?.getMetrics(metrics)
+                        try {
+                            val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", null)
+                            val app = XposedHelpers.callStaticMethod(activityThreadClass, "currentApplication") as? android.app.Application
+                            val windowManager = app?.getSystemService(android.content.Context.WINDOW_SERVICE) as? android.view.WindowManager
+                            windowManager?.defaultDisplay?.getRealMetrics(metrics)
+                        } catch (e: Exception) {
+                            // Fallback if ActivityThread is not available (e.g. early zygote)
+                            return
+                        }
+
+                        if (metrics.widthPixels <= 0 || metrics.heightPixels <= 0) return
                         
                         val nx = motionEvent.x / metrics.widthPixels
                         val ny = motionEvent.y / metrics.heightPixels
 
                         for (region in cachedRegions) {
                             if (nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2) {
-                                XposedBridge.log("InputBlocker-Xposed: Blocking touch at normalized ($nx, $ny)")
+                                // XposedBridge.log("InputBlocker-Xposed: Blocking touch at normalized ($nx, $ny)")
                                 param.setResult(null) 
                                 return
                             }

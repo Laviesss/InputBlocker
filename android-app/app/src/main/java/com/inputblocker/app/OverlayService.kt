@@ -44,18 +44,20 @@ class OverlayService : Service() {
     private var isEnabled = true
     private var forceSafeMode = false
     private var isDetectionMode = false
-    private val touchHeatmap = mutableMapOf<Pair<Int, Int>, Int>()
+    private val touchHeatmap = mutableMapOf<Pair<Float, Float>, Int>()
     private var detectionStartTime = 0L
 
     private var currentProfile = "default"
     private var blockingExpirationTime = 0L
     private var configReceiver: BroadcastReceiver? = null
+    private var isRunning = true
 
     override fun onCreate() {
         super.onCreate()
         
         Log.i(TAG, "OverlayService starting...")
         
+        isRunning = true
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, createNotification())
         
@@ -71,7 +73,7 @@ class OverlayService : Service() {
 
     private fun startExpirationTimer() {
         Thread {
-            while (true) {
+            while (isRunning) {
                 try {
                     Thread.sleep(60000) // Check every minute
                     if (isEnabled && blockingExpirationTime > 0 && System.currentTimeMillis() > blockingExpirationTime) {
@@ -355,14 +357,14 @@ class OverlayService : Service() {
         if (touchHeatmap.isEmpty()) return emptyList()
         
         // DBSCAN-inspired Clustering Algorithm
-        val eps = 80.0 
+        val eps = 0.08f // 8% of screen distance
         val minPts = 3  
         
-        val hotspots = touchHeatmap.filter { it.value >= minPts }.keys.toList()
+        val hotspots = touchHeatmap.keys.toList()
         if (hotspots.isEmpty()) return emptyList()
         
-        val visited = mutableSetOf<Pair<Int, Int>>()
-        val clusters = mutableListOf<MutableList<Pair<Int, Int>>>()
+        val visited = mutableSetOf<Pair<Float, Float>>()
+        val clusters = mutableListOf<MutableList<Pair<Float, Float>>>()
         
         for (point in hotspots) {
             if (point in visited) continue
@@ -376,8 +378,8 @@ class OverlayService : Service() {
             
             if (neighbors.size >= minPts) {
                 // Start a new cluster
-                val cluster = mutableListOf<Pair<Int, Int>>()
-                val queue = mutableListOf<Pair<Int, Int>>()
+                val cluster = mutableListOf<Pair<Float, Float>>()
+                val queue = mutableListOf<Pair<Float, Float>>()
                 queue.add(point)
                 visited.add(point)
                 
@@ -405,16 +407,11 @@ class OverlayService : Service() {
             }
         }
         
-        // Convert clusters to Bounding Box Regions
-        val displayMetrics = resources.displayMetrics
-        val width = displayMetrics.widthPixels.toFloat()
-        val height = displayMetrics.heightPixels.toFloat()
-
         return clusters.map { cluster ->
-            var minX = Int.MAX_VALUE
-            var minY = Int.MAX_VALUE
-            var maxX = Int.MIN_VALUE
-            var maxY = Int.MIN_VALUE
+            var minX = Float.MAX_VALUE
+            var minY = Float.MAX_VALUE
+            var maxX = Float.MIN_VALUE
+            var maxY = Float.MIN_VALUE
             
             for (p in cluster) {
                 minX = minOf(minX, p.first)
@@ -423,16 +420,17 @@ class OverlayService : Service() {
                 maxY = maxOf(maxY, p.second)
             }
             
-            // Convert to normalized coordinates [0, 1]
+            // Add padding
+            val padding = 0.02f
             Region(
-                (minX - 40) / width, 
-                (minY - 40) / height, 
-                (maxX + 40) / width, 
-                (maxY + 40) / height
+                (minX - padding).coerceIn(0f, 1f),
+                (minY - padding).coerceIn(0f, 1f),
+                (maxX + padding).coerceIn(0f, 1f),
+                (maxY + padding).coerceIn(0f, 1f)
             )
         }.filter { region -> 
-            // Filter out regions that are too tiny (less than 2% of screen)
-            (region.x2 - region.x1) > 0.02f && (region.y2 - region.y1) > 0.02f 
+            // Filter out regions that are too tiny (less than 1% of screen)
+            (region.x2 - region.x1) > 0.01f && (region.y2 - region.y1) > 0.01f 
         }
     }
 
@@ -529,7 +527,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        
+        isRunning = false
         configReceiver?.let {
             try {
                 unregisterReceiver(it)
@@ -628,16 +626,20 @@ class OverlayService : Service() {
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val service = serviceRef.get()
             if (service?.isDetectionMode == true) {
-                val x = event.x.toInt()
-                val y = event.y.toInt()
+                val x = event.x
+                val y = event.y
                 
-                // Quantize coordinates to a 20x20 grid for clustering
-                val gridX = (x / 20) * 20
-                val gridY = (y / 20) * 20
-                val point = Pair(gridX, gridY)
+                // Use normalized coordinates for heatmap
+                val nx = (x / width).coerceIn(0f, 1f)
+                val ny = (y / height).coerceIn(0f, 1f)
+                
+                // Quantize to 0.01 grid
+                val qnx = (Math.round(nx * 100) / 100f)
+                val qny = (Math.round(ny * 100) / 100f)
+                val point = Pair(qnx, qny)
                 
                 service.touchHeatmap[point] = service.touchHeatmap.getOrDefault(point, 0) + 1
-                Log.d(TAG, "Detected touch at ($x,$y) -> Grid($gridX,$gridY)")
+                Log.d(TAG, "Detected touch at ($x,$y) -> Normalized($qnx,$qny)")
                 
                 return true // Block everything during detection
             }

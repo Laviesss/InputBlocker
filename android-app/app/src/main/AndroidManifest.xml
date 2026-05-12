@@ -42,6 +42,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <intent-filter>
+                <action android:name="com.inputblocker.ACTION_QUICK_MENU" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
 
         <!-- Setup Activity (Visual region drawing) -->
@@ -60,50 +64,50 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="touchBlocking" />
             <meta-data
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_DESCRIPTION"
-                android:value="Blocks ghost taps in user-defined regions to prevent accidental inputs" />
-        </service>
-        
-        <!-- Volume Button Listener Service (Kill switch) -->
-        <service
-            android:name=".VolumeButtonListenerService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="volumeButtonListener" />
-            <meta-data
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_DESCRIPTION"
-                android:value="Listens for volume button sequences to provide a hardware kill switch for touch blocking" />
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_DESC"
+                android:value="Touch blocking service" />
         </service>
 
-        <!-- Boot Receiver -->
+        <service
+            android:name=".VolumeButtonListenerService"
+            android:exported="false" />
+
         <receiver
             android:name=".BootReceiver"
-            android:exported="true"
-            android:priority="999">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 
-        <!-- LSPosed Module Metadata -->
-        <meta-data
-            android:name="xposedmodule"
-            android:value="true" />
-        <meta-data
-            android:name="xposedminversion"
-            android:value="170" />
-
-        <!-- Shutdown Receiver -->
         <receiver
             android:name=".ShutdownReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.intent.action.SHUTDOWN" />
+                <action android:name="android.intent.action.ACTION_SHUTDOWN" />
             </intent-filter>
         </receiver>
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+        <!-- Xposed Module Metadata -->
+        <meta-data
+            android:name="xposedmodule"
+            android:value="true" />
+        <meta-data
+            android:name="xposeddescription"
+            android:value="InputBlocker system-level touch blocking" />
+        <meta-data
+            android:name="xposedminversion"
+            android:value="82" />
     </application>
 </manifest>

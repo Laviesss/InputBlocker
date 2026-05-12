@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Canvas
@@ -8,6 +9,7 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.os.Build
 import android.os.Bundle
+import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
@@ -18,6 +20,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.io.Serializable
+import java.lang.ref.WeakReference
 import java.util.ArrayList
 
 class SetupActivity : AppCompatActivity() {
@@ -55,8 +58,9 @@ class SetupActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btn_save)
         btnCancel = findViewById(R.id.btn_cancel)
 
-        screenWidth = resources.displayMetrics.widthPixels
-        screenHeight = resources.displayMetrics.heightPixels
+        val metrics = resources.displayMetrics
+        screenWidth = metrics.widthPixels
+        screenHeight = metrics.heightPixels
 
         applyThemeColors()
         loadRegions()
@@ -160,13 +164,16 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
-    @Suppress("UNCHECKED_CAST")
+    @Suppress("UNCHECKED_CAST", "DEPRECATION")
     private fun loadRegions() {
-        val regionsList = intent.getSerializableExtra("regions") as? ArrayList<*>
-        regionsList?.forEach { obj ->
-            if (obj is Region) {
-                regions.add(obj)
-            }
+        val regionsList = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            intent.getSerializableExtra("regions", ArrayList::class.java) as? ArrayList<Region>
+        } else {
+            intent.getSerializableExtra("regions") as? ArrayList<Region>
+        }
+        
+        regionsList?.forEach { region ->
+            regions.add(region)
         }
         setupView.setRegions(regions)
     }
@@ -217,7 +224,8 @@ class SetupActivity : AppCompatActivity() {
         fun onRegionCountChanged(count: Int)
     }
 
-    inner class SetupView(context: android.content.Context, attrs: android.util.AttributeSet? = null) : View(context, attrs) {
+    // Static nested class to avoid XML inflation issues
+    class SetupView(context: Context, attrs: AttributeSet? = null) : View(context, attrs) {
 
         private var accentColor = Color.parseColor("#2196F3")
         private var backgroundColorVal = Color.parseColor("#88000000")
@@ -274,6 +282,9 @@ class SetupActivity : AppCompatActivity() {
             super.onDraw(canvas)
             
             canvas.drawColor(backgroundColorVal)
+            
+            val screenWidth = width.toFloat()
+            val screenHeight = height.toFloat()
             
             for (i in regionsList.indices) {
                 val region = regionsList[i]
@@ -346,6 +357,8 @@ class SetupActivity : AppCompatActivity() {
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val x = event.x
             val y = event.y
+            val screenWidth = width.toFloat()
+            val screenHeight = height.toFloat()
             
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -411,7 +424,7 @@ class SetupActivity : AppCompatActivity() {
                         return true
                     }
                     
-                    if (selectedRegion != null && !isResizing) {
+                    if (selectedRegion != null) {
                         val r = selectedRegion!!
                         val w = r.x2 - r.x1
                         val h = r.y2 - r.y1
@@ -475,6 +488,10 @@ class SetupActivity : AppCompatActivity() {
             }
             
             return super.onTouchEvent(event)
+        }
+        
+        override fun performClick(): Boolean {
+            return super.performClick()
         }
     }
 }

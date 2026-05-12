@@ -13,6 +13,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Menu
 import android.view.MenuItem
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -49,6 +50,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTheme: Button
     private lateinit var btnAutoDetect: Button
 
+    // Quick Actions views
+    private lateinit var fabQuickActions: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var layoutQuickActions: LinearLayout
+    private lateinit var btnActionSafe: Button
+    private lateinit var btnActionSync: Button
+    private lateinit var btnActionExport: Button
+    private lateinit var btnActionTest: Button
+
     private var isEnabled = true
     private var isLsposedMode = false
     private val regions = mutableListOf<Region>()
@@ -80,12 +89,18 @@ class MainActivity : AppCompatActivity() {
         
         initViews()
         setupListeners()
+        setupQuickActions()
         setupDetectionReceiver()
         loadConfig()
         updateUI()
         applyThemeToViews()
         
         checkForUpdates()
+
+        // Handle Quick Action trigger from action.sh
+        if (intent?.action == "com.inputblocker.ACTION_QUICK_MENU") {
+            layoutQuickActions.visibility = View.VISIBLE
+        }
     }
 
     
@@ -355,6 +370,14 @@ class MainActivity : AppCompatActivity() {
         btnClearAll = findViewById(R.id.btn_clear_all)
         btnTheme = findViewById(R.id.btn_theme)
         btnAutoDetect = findViewById(R.id.btn_auto_detect)
+        
+        // Quick Actions
+        fabQuickActions = findViewById(R.id.fab_quick_actions)
+        layoutQuickActions = findViewById(R.id.layout_quick_actions)
+        btnActionSafe = findViewById(R.id.btn_action_safe)
+        btnActionSync = findViewById(R.id.btn_action_sync)
+        btnActionExport = findViewById(R.id.btn_action_export)
+        btnActionTest = findViewById(R.id.btn_action_test)
     }
 
     private fun setupListeners() {
@@ -383,6 +406,72 @@ class MainActivity : AppCompatActivity() {
         
         // Profile Selection Trigger (Optional)
         // findViewById<Button>(R.id.btn_profile)?.setOnClickListener { showProfileDialog() }
+    }
+
+    private fun setupQuickActions() {
+        fabQuickActions.setOnClickListener {
+            val isVisible = layoutQuickActions.visibility == View.VISIBLE
+            layoutQuickActions.visibility = if (isVisible) View.GONE else View.VISIBLE
+        }
+
+        btnActionSafe.setOnClickListener {
+            isEnabled = false
+            saveEnabledState(false)
+            regions.clear()
+            saveConfig()
+            updateUI()
+            updateStatus()
+            layoutQuickActions.visibility = View.GONE
+            Toast.makeText(this, "Safe Mode: Blocking disabled and regions cleared", Toast.LENGTH_LONG).show()
+        }
+
+        btnActionSync.setOnClickListener {
+            loadConfig()
+            updateUI()
+            layoutQuickActions.visibility = View.GONE
+            Toast.makeText(this, "Configuration synced with root module", Toast.LENGTH_SHORT).show()
+        }
+
+        btnActionExport.setOnClickListener {
+            exportConfig()
+            layoutQuickActions.visibility = View.GONE
+        }
+
+        btnActionTest.setOnClickListener {
+            // Simulate a trigger to check if blocking logic is active
+            if (isEnabled) {
+                Toast.makeText(this, "Hook Test: Blocking is currently ACTIVE", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Hook Test: Blocking is currently INACTIVE", Toast.LENGTH_SHORT).show()
+            }
+            layoutQuickActions.visibility = View.GONE
+        }
+    }
+
+    private fun exportConfig() {
+        try {
+            val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+            if (!configFile.exists()) {
+                Toast.makeText(this, "No config file found to export", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            val contentUri = androidx.core.content.FileProvider.getUriForFile(
+                this,
+                "${applicationContext.packageName}.fileprovider",
+                configFile
+            )
+
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(intent, "Export Config"))
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Export failed", e)
+            Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun startAutoDetection() {
@@ -647,10 +736,10 @@ class MainActivity : AppCompatActivity() {
     private fun showAddRegionDialog() {
         val builder = AlertDialog.Builder(this)
         builder.setTitle("Add Region Manually")
-        builder.setMessage("Enter coordinates in format: x1,y1,x2,y2\n\nExample: 0,0,100,200")
+        builder.setMessage("Enter coordinates in normalized format (0.0 to 1.0): x1,y1,x2,y2\n\nExample: 0.1,0.1,0.2,0.3")
 
         val input = EditText(this).apply {
-            hint = "0,0,100,200"
+            hint = "0.1,0.1,0.2,0.3"
             setPadding(48, 32, 48, 32)
         }
         builder.setView(input)
@@ -664,7 +753,7 @@ class MainActivity : AppCompatActivity() {
                 updateUI()
                 Toast.makeText(this, "Region added", Toast.LENGTH_SHORT).show()
             } else {
-                Toast.makeText(this, "Invalid coordinates", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Invalid coordinates (must be 0.0-1.0 and x1<x2, y1<y2)", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -678,10 +767,10 @@ class MainActivity : AppCompatActivity() {
             if (parts.size != 4) return null
 
             val region = Region(
-                parts[0].trim().toFloat(),
-                parts[1].trim().toFloat(),
-                parts[2].trim().toFloat(),
-                parts[3].trim().toFloat()
+                parts[0].trim().toFloat().coerceIn(0f, 1f),
+                parts[1].trim().toFloat().coerceIn(0f, 1f),
+                parts[2].trim().toFloat().coerceIn(0f, 1f),
+                parts[3].trim().toFloat().coerceIn(0f, 1f)
             )
 
             if (region.x1 >= region.x2 || region.y1 >= region.y2) return null

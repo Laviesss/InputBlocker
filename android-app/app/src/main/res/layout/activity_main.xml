@@ -12,6 +12,66 @@
         android:layout_height="wrap_content"
         android:padding="24dp">
 
+        <!-- FAB Quick Actions -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fab_quick_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:layout_marginBottom="16dp"
+            app:srcCompat="@android:drawable/ic_input_add"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:contentDescription="Quick Actions" />
+
+        <!-- Quick Actions Menu (Hidden by default) -->
+        <LinearLayout
+            android:id="@+id/layout_quick_actions"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:background="@color/app_surface"
+            android:elevation="8dp"
+            android:padding="8dp"
+            android:layout_marginEnd="24dp"
+            android:layout_marginBottom="80dp"
+            app:layout_constraintBottom_toBottomOf="@+id/fab_quick_actions"
+            app:layout_constraintEnd_toEndOf="@+id/fab_quick_actions">
+
+            <Button
+                android:id="@+id/btn_action_safe"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🛡️ Safe Mode"
+                android:gravity="start" />
+
+            <Button
+                android:id="@+id/btn_action_sync"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🔄 Sync Config"
+                android:gravity="start" />
+
+            <Button
+                android:id="@+id/btn_action_export"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📤 Export Config"
+                android:gravity="start" />
+
+            <Button
+                android:id="@+id/btn_action_test"
+                style="@style/Widget.MaterialComponents.Button.TextButton"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="🧪 Test Hook"
+                android:gravity="start" />
+        </LinearLayout>
+
         <!-- Header -->
         <TextView
             android:id="@+id/tv_app_name"
