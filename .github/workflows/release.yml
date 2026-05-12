@@ -9,12 +9,13 @@ on:
   push:
     tags:
       - 'v*'
+
   workflow_dispatch:
     inputs:
       build_type:
-        description: '🎯 Components to build'
+        description: Components to build
         required: true
-        default: 'all'
+        default: all
         type: choice
         options:
           - all
@@ -22,143 +23,138 @@ on:
           - csharp
           - java
           - module
+
       version:
-        description: '🏷️ Custom version (e.g., v1.1.0). Leave blank to use tag'
+        description: Custom version
         required: false
         default: ''
+
       version_code:
-        description: '🔢 Manual Version Code (Override commit count)'
+        description: Manual version code
         required: false
         default: ''
+
       release_notes:
-        description: '📝 Custom release notes (Markdown)'
+        description: Release notes
         required: false
         default: ''
+
       draft:
-        description: '📦 Create as draft'
+        description: Draft release
         required: false
-        default: 'false'
-        type: boolean
-      prerelease:
-        description: '⚠️ Mark as pre-release'
-        required: false
-        default: 'false'
+        default: false
         type: boolean
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  PROJECT_NAME: "InputBlocker"
+      prerelease:
+        description: Pre-release
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PROJECT_NAME: InputBlocker
+
 jobs:
   setup:
-    name: ⚙️ Setup & Versioning
+    name: Setup & Versioning
     runs-on: ubuntu-latest
+
     outputs:
-      version: ${{ steps.version.outputs.version }}
-      clean_version: ${{ steps.version.outputs.clean_version }}
-      version_code: ${{ steps.version.outputs.version_code }}
-      is_release: ${{ steps.version.outputs.is_release }}
-      is_test: ${{ steps.version.outputs.is_test }}
-      build_type: ${{ steps.version.outputs.build_type }}
-      draft: ${{ steps.version.outputs.draft }}
-      prerelease: ${{ steps.version.outputs.prerelease }}
+      version: ${{ steps.vars.outputs.version }}
+      clean_version: ${{ steps.vars.outputs.clean_version }}
+      version_code: ${{ steps.vars.outputs.version_code }}
+      build_type: ${{ steps.vars.outputs.build_type }}
+      draft: ${{ steps.vars.outputs.draft }}
+      prerelease: ${{ steps.vars.outputs.prerelease }}
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Determine version and version code
-        id: version
+
+      - name: Generate variables
+        id: vars
+        shell: bash
         run: |
           set -euo pipefail
 
-          # 1. Determine Version
           if [[ "${{ github.event_name }}" == "push" ]]; then
             VERSION="${GITHUB_REF_NAME}"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-            [[ -z "$VERSION" ]] && VERSION="v0.0.0-dev"
-          fi
-
-          # SANITIZE VERSION: Remove carriage returns, trailing whitespace, and hidden chars
-          VERSION=$(echo "$VERSION" | tr -d '\r' | xargs)
-
-          # 2. Determine Clean Version (strip leading 'v' for .NET/Gradle)
-          CLEAN_VERSION="${VERSION#v}"
-          CLEAN_VERSION=$(echo "$CLEAN_VERSION" | tr -d '\r' | xargs)
-
-          # 3. Determine Version Code
-          if [[ -n "${{ github.event.inputs.version_code }}" ]]; then
-            VCODE="${{ github.event.inputs.version_code }}"
-          else
-            # Use commit count as version code
-            VCODE=$(git rev-list --count HEAD)
-          fi
-          # FORCE VCODE TO BE AN INTEGER: Remove decimals and non-numeric chars
-          VCODE=$(echo "$VCODE" | sed 's/\.[0-9]*//g' | tr -dc '0-9')
-          VCODE=$(echo "$VCODE" | tr -d '\r' | xargs)
-
-          # 4. Determine Release Type
-          if [[ "$VERSION" == vtest* ]]; then
-            echo "is_release=false" >> $GITHUB_OUTPUT
-            echo "is_test=true" >> $GITHUB_OUTPUT
-          else
-            echo "is_release=true" >> $GITHUB_OUTPUT
-            echo "is_test=false" >> $GITHUB_OUTPUT
-          fi
-
-          # 5. Determine Build Type
-          if [[ "${{ github.event_name }}" == "push" ]]; then
             BUILD_TYPE="all"
           else
+            VERSION="${{ github.event.inputs.version }}"
             BUILD_TYPE="${{ github.event.inputs.build_type }}"
           fi
 
-          # Output all values
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          echo "version_code=$VCODE" >> $GITHUB_OUTPUT
-          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
-          echo "draft=${{ github.event.inputs.draft || 'false' }}" >> $GITHUB_OUTPUT
-          echo "prerelease=${{ github.event.inputs.prerelease || 'false' }}" >> $GITHUB_OUTPUT
+          [[ -z "$VERSION" ]] && VERSION="v0.0.0-dev"
+
+          VERSION=$(echo "$VERSION" | tr -d '\r' | xargs)
+
+          if ! [[ "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)?$ ]]; then
+            echo "Invalid version format: $VERSION"
+            exit 1
+          fi
+
+          CLEAN_VERSION="${VERSION#v}"
+
+          if [[ -n "${{ github.event.inputs.version_code }}" ]]; then
+            VCODE="${{ github.event.inputs.version_code }}"
+          else
+            VCODE=$(git rev-list --count HEAD)
+          fi
+
+          VCODE=$(echo "$VCODE" | tr -dc '0-9')
+
+          if [[ -z "$VCODE" ]]; then
+            echo "Invalid version code"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "clean_version=$CLEAN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_code=$VCODE" >> "$GITHUB_OUTPUT"
+          echo "build_type=$BUILD_TYPE" >> "$GITHUB_OUTPUT"
+          echo "draft=${{ github.event.inputs.draft || 'false' }}" >> "$GITHUB_OUTPUT"
+          echo "prerelease=${{ github.event.inputs.prerelease || 'false' }}" >> "$GITHUB_OUTPUT"
 
           echo "🚀 Finalized Version: $VERSION (Clean: $CLEAN_VERSION, Code: $VCODE) | Build: $BUILD_TYPE"
 
-  inject_version:
-    name: 💉 Version Injection
+  inject-version:
+    name: Inject Versions
     needs: setup
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Inject Version into Files
+      - uses: actions/checkout@v4
+
+      - name: Inject versions
+        shell: bash
         run: |
           set -euo pipefail
-          VERSION='${{ needs.setup.outputs.version }}'
-          CLEAN_VERSION='${{ needs.setup.outputs.clean_version }}'
-          VCODE='${{ needs.setup.outputs.version_code }}'
 
-          echo "Injecting $VERSION (Clean: $CLEAN_VERSION, Code: $VCODE) into components..."
+          VERSION="${{ needs.setup.outputs.version }}"
+          CLEAN_VERSION="${{ needs.setup.outputs.clean_version }}"
+          VCODE="${{ needs.setup.outputs.version_code }}"
 
-          # Module files
           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$VCODE/" module/module.prop
-          sed -i "s/\"version\": \".*\",/\"version\": \"$VERSION\",/" module/update.json
-          sed -i "s/\"versionCode\": [0-9]*,/\"versionCode\": $VCODE,/" module/update.json
 
-          # Android app – handle both `versionName = "..."` and `versionName "..."`
-          sed -i "s/versionName\s*=?\s*\".*\"/versionName \"$CLEAN_VERSION\"/" android-app/app/build.gradle
-          # Android app – handle both `versionCode = 1` and `versionCode 1`
-          sed -i "s/versionCode\s*=?\s*[0-9]\+/versionCode $VCODE/" android-app/app/build.gradle
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" module/update.json
+          sed -i "s/\"versionCode\": [0-9]*/\"versionCode\": $VCODE/" module/update.json
 
-          # C# project
+          sed -i "s/versionName \".*\"/versionName \"$CLEAN_VERSION\"/" android-app/app/build.gradle
+          sed -i "s/versionCode [0-9]*/versionCode $VCODE/" android-app/app/build.gradle
+
           sed -i "s/<Version>.*<\/Version>/<Version>$CLEAN_VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
 
-      - name: Upload Versioned Source
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
           name: versioned-files
           path: |
@@ -168,60 +164,65 @@ jobs:
             pc-tool-csharp/InputBlockerSetup.csproj
 
   build-android:
-    name: 🤖 Build Android APK
-    needs: [setup, inject_version]
-    if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'android' || needs.setup.outputs.build_type == 'module' }}
+    name: Build Android
+    needs: [setup, inject-version]
+
+    if: |
+      needs.setup.outputs.build_type == 'all' ||
+      needs.setup.outputs.build_type == 'android' ||
+      needs.setup.outputs.build_type == 'module'
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download Modified Files
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
           name: versioned-files
           path: .
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+
+      - uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-      - name: Build APK
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Build release APK
+        shell: bash
         run: |
           set -euo pipefail
+
           cd android-app
           chmod +x gradlew
-          ./gradlew assembleDebug
-      - name: Stage APK for release
-        run: |
-          set -euo pipefail
-          VERSION='${{ needs.setup.outputs.version }}'
-          mkdir -p release
-          cp android-app/app/build/outputs/apk/debug/app-debug.apk "release/InputBlocker-${VERSION}.apk"
-      - name: Upload APK
+          ./gradlew assembleRelease
+
+      - name: Upload unsigned APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
-          path: release/InputBlocker-*.apk
+          name: unsigned-apk
+          path: android-app/app/build/outputs/apk/release/*.apk
 
   sign-android:
-    name: 🔑 Sign Android APK
+    name: Sign Android APK
     needs: [setup, build-android]
-    if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'android' || needs.setup.outputs.build_type == 'module' }}
+
+    if: |
+      always() &&
+      (
+        needs.setup.outputs.build_type == 'all' ||
+        needs.setup.outputs.build_type == 'android' ||
+        needs.setup.outputs.build_type == 'module'
+      )
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download Unsigned APK
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          name: android-apk
+          name: unsigned-apk
           path: unsigned
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
+
       - name: Sign APK
         uses: r0adkll/sign-android-release@v1
         with:
@@ -230,192 +231,265 @@ jobs:
           alias: ${{ secrets.ALIAS }}
           keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
           keyPassword: ${{ secrets.KEY_PASSWORD }}
-      - name: Upload Signed APK
+
+      - name: Prepare signed APK
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ needs.setup.outputs.version }}"
+
+          mkdir -p release
+
+          APK=$(find signed -name "*.apk" | head -n 1)
+
+          if [[ -z "$APK" ]]; then
+            echo "Signed APK not found"
+            exit 1
+          fi
+
+          mv "$APK" "release/InputBlocker-${VERSION}.apk"
+
+      - name: Upload signed APK
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk-signed
-          path: signed/*.apk
+          name: signed-apk
+          path: release/*.apk
 
   build-csharp:
-    name: 💻 Build C# Tools
-    needs: [setup, inject_version]
-    if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'csharp' }}
+    name: Build C#
+    needs: [setup, inject-version]
+
+    if: |
+      needs.setup.outputs.build_type == 'all' ||
+      needs.setup.outputs.build_type == 'csharp'
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download Modified Files
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
           name: versioned-files
           path: .
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
-      - name: Build C# Tools
+          dotnet-version: 8.0.x
+
+      - name: Publish binaries
+        shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p release/csharp
+
           cd pc-tool-csharp
+
           for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
-            dotnet publish -c Release -r "$rid" -o "../release/csharp/$rid" --self-contained true -p:PublishSingleFile=true
-            # Prefix every file with the RID to avoid collisions when all artifacts are flattened
-            cd "../release/csharp/$rid"
-            for file in *; do
-              mv "$file" "${rid}_${file}"
-            done
-            cd -
+            dotnet publish \
+              -c Release \
+              -r "$rid" \
+              --self-contained true \
+              -p:PublishSingleFile=true \
+              -o "../release/csharp/$rid"
           done
-      - name: Upload C# Binaries
-        uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: csharp-binaries
+          name: csharp
           path: release/csharp/
 
   build-java:
-    name: ☕ Build Java Tool
-    needs: [setup, inject_version]
-    if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'java' }}
+    name: Build Java
+    needs: [setup, inject-version]
+
+    if: |
+      needs.setup.outputs.build_type == 'all' ||
+      needs.setup.outputs.build_type == 'java'
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download Modified Files
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
           name: versioned-files
           path: .
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+
+      - uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-      - name: Build Java Tool
+          distribution: temurin
+          java-version: 17
+          cache: gradle
+
+      - name: Build Java tool
+        shell: bash
         run: |
           set -euo pipefail
-          VERSION='${{ needs.setup.outputs.version }}'
+
+          VERSION="${{ needs.setup.outputs.version }}"
+
           cd pc-tool-java
           chmod +x gradlew
           ./gradlew assemble
+
           mkdir -p ../release/java
+
           cp build/libs/*.jar "../release/java/InputBlockerSetup-${VERSION}.jar"
-      - name: Upload Java Binaries
-        uses: actions/upload-artifact@v4
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: java-binaries
+          name: java
           path: release/java/
 
   build-module:
-    name: 📦 Package Root Module
-    needs: [setup, inject_version, sign-android]
-    if: ${{ needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'module' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download Modified Files
-        uses: actions/download-artifact@v4
-        with:
-          name: versioned-files
-          path: .
-      - name: Download Signed APK
-        uses: actions/download-artifact@v4
-        with:
-          name: android-apk-signed
-          path: module/common/
-      - name: Build Root Module ZIP
-        run: |
-          set -euo pipefail
-          VERSION='${{ needs.setup.outputs.version }}'
-          mkdir -p release
-          APK_FILE=$(find module/common -name "*.apk" | head -n 1)
-          if [ -z "$APK_FILE" ]; then echo "APK not found!" && exit 1; fi
-          cp "$APK_FILE" module/common/InputBlocker.apk
-          (cd module && zip -r "../release/InputBlocker-${VERSION}.zip" .)
-      - name: Upload Module
-        uses: actions/upload-artifact@v4
-        with:
-          name: root-module
-          path: release/InputBlocker-*.zip
+    name: Build Root Module
+    needs: [setup, sign-android]
 
-  generate-checksums:
-    name: 🛡️ Generate Checksums
-    needs: [setup, sign-android, build-csharp, build-java, build-module]
-    if: ${{ needs.setup.result == 'success' && needs.setup.outputs.build_type == 'all' }}
+    if: |
+      always() &&
+      (
+        needs.setup.outputs.build_type == 'all' ||
+        needs.setup.outputs.build_type == 'module'
+      )
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
         with:
-          path: release
-      - name: Compute SHA-256
+          name: signed-apk
+          path: signed-apk
+
+      - name: Package module
+        shell: bash
         run: |
           set -euo pipefail
-          echo "SHA-256 Checksums" > release/checksums.txt
-          echo "=================" >> release/checksums.txt
-          find release -type f ! -name "checksums.txt" -exec sha256sum {} + >> release/checksums.txt
-      - name: Upload Checksums
-        uses: actions/upload-artifact@v4
+
+          VERSION="${{ needs.setup.outputs.version }}"
+
+          APK=$(find signed-apk -name "*.apk" | head -n 1)
+
+          if [[ -z "$APK" ]]; then
+            echo "No signed APK found"
+            exit 1
+          fi
+
+          cp "$APK" module/common/InputBlocker.apk
+
+          mkdir -p release
+
+          cd module
+          zip -r "../release/InputBlocker-${VERSION}.zip" .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: module
+          path: release/*.zip
+
+  checksums:
+    name: Generate Checksums
+    needs:
+      - setup
+      - sign-android
+      - build-csharp
+      - build-java
+      - build-module
+
+    if: |
+      always() &&
+      needs.setup.outputs.build_type == 'all'
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p release
+
+          find artifacts -type f -exec sha256sum {} \; > release/checksums.txt
+
+      - uses: actions/upload-artifact@v4
         with:
           name: checksums
           path: release/checksums.txt
 
-  create-release:
-    name: 🚀 Create GitHub Release
-    needs: [setup, sign-android, build-csharp, build-java, build-module, generate-checksums]
-    if: ${{ needs.setup.result == 'success' && needs.setup.outputs.is_release == 'true' }}
+  release:
+    name: GitHub Release
+
+    needs:
+      - setup
+      - sign-android
+      - build-csharp
+      - build-java
+      - build-module
+      - checksums
+
+    if: always()
+
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
-          path: release_artifacts
-      - name: Flatten Artifacts
+          path: artifacts
+
+      - name: Flatten release assets
+        shell: bash
         run: |
           set -euo pipefail
+
           mkdir -p release
-          find release_artifacts -type f -exec cp -v {} release/ \;
-          # Remove internal build files and debug symbols that are not release assets
-          rm -f release/module.prop release/build.gradle release/*.csproj release/*.pdb release/update.json
-          echo "Cleaned internal build files and debug symbols from release artifacts."
-      - name: Create GitHub Release
+
+          find artifacts -type f -exec cp {} release/ \;
+
+      - name: Create Release
         uses: softprops/action-gh-release@v2
-        continue-on-error: true
         with:
           tag_name: ${{ needs.setup.outputs.version }}
           name: Release ${{ needs.setup.outputs.version }}
-          body: ${{ github.event.inputs.release_notes || 'Automated release generated by CI/CD pipeline.' }}
+          body: ${{ github.event.inputs.release_notes || 'Automated release.' }}
           draft: ${{ needs.setup.outputs.draft }}
           prerelease: ${{ needs.setup.outputs.prerelease }}
           generate_release_notes: true
           files: release/*
-      - name: Update Version JSON for Root Managers
+
+      - name: Generate update.json
+        shell: bash
         run: |
           set -euo pipefail
-          VERSION='${{ needs.setup.outputs.version }}'
-          VCODE='${{ needs.setup.outputs.version_code }}'
-          ZIP_URL="https://github.com/${{ github.repository }}/releases/latest/download/InputBlocker-${VERSION}.zip"
-          
-          cat <<EOF > update.json
+
+          VERSION="${{ needs.setup.outputs.version }}"
+          VCODE="${{ needs.setup.outputs.version_code }}"
+
+          mkdir -p gh-pages
+
+          cat > gh-pages/update.json <<EOF
           {
             "version": "$VERSION",
             "versionCode": $VCODE,
-            "zipUrl": "$ZIP_URL",
-            "changelog": "https://github.com/${{ github.repository }}/releases",
+            "zipUrl": "https://github.com/${{ github.repository }}/releases/download/${VERSION}/InputBlocker-${VERSION}.zip",
+            "changelog": "https://github.com/${{ github.repository }}/releases/tag/${VERSION}",
             "support": ["Magisk", "KernelSU", "APatch"],
             "minApi": 23
           }
           EOF
-          echo "Generated update.json for $VERSION"
-      - name: Deploy to GitHub Pages
+
+      - name: Deploy update.json
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: .
-          target-folder: .
           branch: gh-pages
-          only_deploy_files: |
-            update.json
+          folder: gh-pages
+          clean: true
