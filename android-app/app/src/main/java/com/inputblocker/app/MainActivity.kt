@@ -96,8 +96,17 @@ class MainActivity : AppCompatActivity() {
         applyThemeToViews()
         
         checkForUpdates()
+        
+        handleQuickActionIntent(intent)
+    }
 
-        // Handle Quick Action trigger from action.sh
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleQuickActionIntent(intent)
+    }
+
+    private fun handleQuickActionIntent(intent: Intent?) {
         if (intent?.action == "com.inputblocker.ACTION_QUICK_MENU") {
             layoutQuickActions.visibility = View.VISIBLE
         }

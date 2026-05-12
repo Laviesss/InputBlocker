@@ -14,8 +14,8 @@ log "Action button pressed. Evaluating request..."
 
 # --- STRATEGY: SMART GATEWAY ---
 # Priority 1: Launch Companion App Quick Menu
-# This is the most professional UX, delegating the logic to the app.
-am start -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
+# Added -f 0x10000000 (FLAG_ACTIVITY_NEW_TASK) to ensure it launches from shell
+am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
     log "Successfully triggered Quick Action menu in app."

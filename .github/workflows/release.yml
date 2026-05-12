@@ -94,8 +94,11 @@ jobs:
           if [[ -n "${{ github.event.inputs.version_code }}" ]]; then
             VCODE="${{ github.event.inputs.version_code }}"
           else
+            # Use commit count as version code
             VCODE=$(git rev-list --count HEAD)
           fi
+          # FORCE VCODE TO BE AN INTEGER: Remove decimals and non-numeric chars
+          VCODE=$(echo "$VCODE" | sed 's/\.[0-9]*//g' | tr -dc '0-9')
           VCODE=$(echo "$VCODE" | tr -d '\r' | xargs)
 
           # 4. Determine Release Type
