@@ -58,6 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      clean_version: ${{ steps.version.outputs.clean_version }}
       version_code: ${{ steps.version.outputs.version_code }}
       is_release: ${{ steps.version.outputs.is_release }}
       is_test: ${{ steps.version.outputs.is_test }}
@@ -81,10 +82,48 @@ jobs:
             [[ -z "$VERSION" ]] && VERSION="v0.0.0-dev"
           fi
           
-          # 2. Determine Version Code
+          # SANITIZE VERSION: Remove carriage returns, trailing whitespace, and hidden chars
+          VERSION=$(echo "$VERSION" | tr -d '\r' | xargs)
+          
+          # 2. Determine Clean Version (strip leading 'v' for .NET/Gradle)
+          CLEAN_VERSION="${VERSION#v}"
+          # SANITIZE CLEAN_VERSION
+          CLEAN_VERSION=$(echo "$CLEAN_VERSION" | tr -d '\r' | xargs)
+          
+          # 3. Determine Version Code
           if [[ -n "${{ github.event.inputs.version_code }}" ]]; then
             VCODE="${{ github.event.inputs.version_code }}"
           else
+            # Use commit count as version code
+            VCODE=$(git rev-list --count HEAD)
+          fi
+          # SANITIZE VCODE
+          VCODE=$(echo "$VCODE" | tr -d '\r' | xargs)
+          
+          # 4. Determine Release Type
+          if [[ "$VERSION" == vtest* ]]; then
+            echo "is_release=false" >> $GITHUB_OUTPUT
+            echo "is_test=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_release=true" >> $GITHUB_OUTPUT
+            echo "is_test=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # 5. Determine Build Type
+          if [[ "${{ github.event_name }}" == "push" ]]; then
+            BUILD_TYPE="all"
+          else
+            BUILD_TYPE="${{ github.event.inputs.build_type }}"
+          fi
+          
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          echo "version_code=$VCODE" >> $GITHUB_OUTPUT
+          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
+          echo "draft=${{ github.event.inputs.draft || 'false' }}" >> $GITHUB_OUTPUT
+          echo "prerelease=${{ github.event.inputs.prerelease || 'false' }}" >> $GITHUB_OUTPUT
+          
+          echo "🚀 Finalized Version: $VERSION (Clean: $CLEAN_VERSION, Code: $VCODE) | Build: $BUILD_TYPE"lse
             VCODE=$(git rev-list --count HEAD)
           fi
           
@@ -123,17 +162,18 @@ jobs:
         run: |
           set -euo pipefail
           VERSION='${{ needs.setup.outputs.version }}'
+          CLEAN_VERSION='${{ needs.setup.outputs.clean_version }}'
           VCODE='${{ needs.setup.outputs.version_code }}'
           
-          echo "Injecting $VERSION ($VCODE) into components..."
+          echo "Injecting $VERSION (Clean: $CLEAN_VERSION, Code: $VCODE) into components..."
           
           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$VCODE/" module/module.prop
           sed -i "s/\"version\": \".*\",/\"version\": \"$VERSION\",/" module/update.json
           sed -i "s/\"versionCode\": [0-9]*,/\"versionCode\": $VCODE,/" module/update.json
-          sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" android-app/app/build.gradle
+          sed -i "s/versionName = \".*\"/versionName = \"$CLEAN_VERSION\"/" android-app/app/build.gradle
           sed -i "s/versionCode = [0-9]*/versionCode $VCODE/" android-app/app/build.gradle
-          sed -i "s/<Version>.*<\/Version>/<Version>$VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
+          sed -i "s/<Version>.*<\/Version>/<Version>$CLEAN_VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
           
       - name: Upload Versioned Source
         uses: actions/upload-artifact@v4
@@ -207,9 +247,22 @@ jobs:
           cd pc-tool-csharp
           for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
             dotnet publish -c Release -r "$rid" -o "../release/csharp/$rid" --self-contained true -p:PublishSingleFile=true
-            # Robust renaming: find the binary and rename it
-            BINARY_NAME=$(ls ../release/csharp/$rid/InputBlockerSetup* | head -n 1)
-            mv "$BINARY_NAME" "../release/csharp/$rid/InputBlockerSetup-$VERSION"
+            # Rename all files in the RID folder to include the RID to prevent collisions in GitHub Release
+            # This ensures files like .pdb or .json are unique across platforms
+            cd "../release/csharp/$rid"
+            for file in *; do
+              mv "$file" "${rid}_${file}"
+            done
+            cd -
+          done
+          # Final rename for the main binary to keep it clean but unique
+          # Since we already prefixed everything with RID, the binary is already unique (e.g., win-x64_InputBlockerSetup)
+          # We just need to ensure the VERSION is appended to the main binary for each RID
+          for rid in win-x64 win-arm64 linux-x64 linux-arm64 osx-x64 osx-arm64; do
+            MAIN_BIN=$(ls ../release/csharp/$rid/${rid}_InputBlockerSetup* | head -n 1 || true)
+            if [[ -n "$MAIN_BIN" ]]; then
+              mv "$MAIN_BIN" "../release/csharp/$rid/${rid}_InputBlockerSetup-$VERSION"
+            fi
           done
       - name: Upload C# Binaries
         uses: actions/upload-artifact@v4
@@ -318,9 +371,17 @@ jobs:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: release
+          path: release_artifacts
+      - name: Flatten Artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          # Recursively find all files in artifacts and copy them to a flat release folder
+          # This prevents the 'softprops' action from trying to upload directory structures
+          find release_artifacts -type f -exec cp -v {} release/ \;
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
+        continue-on-error: true
         with:
           tag_name: ${{ needs.setup.outputs.version }}
           name: Release ${{ needs.setup.outputs.version }}
@@ -328,4 +389,31 @@ jobs:
           draft: ${{ needs.setup.outputs.draft }}
           prerelease: ${{ needs.setup.outputs.prerelease }}
           generate_release_notes: true
-          files: release/**
+          files: release/*
+      - name: Update Version JSON for Root Managers
+        run: |
+          set -euo pipefail
+          VERSION='${{ needs.setup.outputs.version }}'
+          VCODE='${{ needs.setup.outputs.version_code }}'
+          # Use the latest release assets URL pattern
+          ZIP_URL="https://github.com/${{ github.repository }}/releases/latest/download/InputBlocker-${VERSION}.zip"
+          
+          cat <<EOF > update.json
+          {
+            "version": "$VERSION",
+            "versionCode": $VCODE,
+            "zipUrl": "$ZIP_URL",
+            "changelog": "https://github.com/${{ github.repository }}/releases",
+            "support": ["Magisk", "KernelSU", "APatch"],
+            "minApi": 23
+          }
+          EOF
+          echo "Generated update.json for $VERSION"
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .
+          target-folder: .
+          branch: gh-pages
+          only_deploy_files: |
+            update.json
