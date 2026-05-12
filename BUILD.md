@@ -1,210 +1,88 @@
-# Building InputBlocker - Complete Guide
+# Building InputBlocker
 
-## Build Scripts Overview
+This guide provides detailed instructions for building all components of the InputBlocker ecosystem from source.
+
+## 🛠️ Environment Requirements
+
+### Core Dependencies
+- **Java Development Kit (JDK) 17+**: Required for the Android APK and Java PC tool.
+- **.NET 8.0 SDK**: Required for the C# cross-platform PC tools.
+- **Android SDK & Platform Tools**: Required for building the APK and packaging the root module.
+- **Git**: For version control and dependency management.
+
+### OS Specifics
+- **Windows**: PowerShell 5.1+ recommended.
+- **Linux/macOS**: Bash shell.
+
+---
+
+## 🚀 Build Orchestration (Easy Way)
+
+The project includes a suite of wrapper scripts that handle the complex build chain automatically.
 
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `build-module.bat/.sh` | Module with APK | `releases/InputBlocker.zip` |
-| `build-apk.bat/.sh` | Android APK only | `releases/InputBlocker.apk` |
-| `build-pctools.bat/.sh` | PC tools only | `releases/csharp/`, `releases/java/` |
-| `build-all.bat/.sh` | Everything | All of the above |
+| `build-all.bat/.sh` | Builds every single component | All binaries in `releases/` |
+| `build-module.bat/.sh` | Builds the Root Module (with APK) | `releases/InputBlocker.zip` |
+| `build-apk.bat/.sh` | Builds the Companion App only | `releases/InputBlocker.apk` |
+| `build-pctools.bat/.sh` | Builds all PC setup tools | `releases/csharp/` and `releases/java/` |
 
----
-
-## Building Module
-
-Two versions available:
-- **Full** - Includes APK, auto-installs companion app on boot
-- **Lite** - Without APK, smaller file size
-
-### Windows
-```bash
-build-module.bat full    # With APK (recommended)
-build-module.bat lite    # Without APK
+### Example Usage
+**Windows:**
+```powershell
+.\build-all.bat
 ```
 
-### Linux/Mac
+**Linux/macOS:**
 ```bash
-./build-module.sh full   # With APK (recommended)
-./build-module.sh lite   # Without APK
-```
-
-**Outputs:**
-- `releases/InputBlocker.zip` - Full module with APK
-- `releases/InputBlocker-lite.zip` - Lite module without APK
-
----
-
-## Building APK Only
-
-Build just the Android companion app.
-
-### Windows
-```bash
-build-apk.bat           # Debug APK
-build-apk.bat release   # Release APK
-```
-
-### Linux/Mac
-```bash
-./build-apk.sh           # Debug APK
-./build-apk.sh release   # Release APK
-```
-
-**Output:** `releases/InputBlocker.apk`
-
----
-
-## Building PC Tools Only
-
-```bash
-# Windows
-build-pctools.bat
-
-# Linux/Mac
-./build-pctools.sh
-```
-
-**Output:**
-- `releases/csharp/` - All 6 platforms
-- `releases/java/` - Java JAR
-
----
-
-## Building Everything
-
-```bash
-# Windows
-build-all.bat
-
-# Linux/Mac
+chmod +x *.sh
 ./build-all.sh
 ```
 
-**Output:**
-- `releases/csharp/` - PC tool (6 platforms)
-- `releases/InputBlocker.zip` - Module with APK
-- `releases/InputBlocker.apk` - Standalone APK
+---
+
+## 🔍 Component-Specific Build Guides
+
+### 1. Android Companion App
+The app is built using Gradle.
+- **Debug Build**: `./gradlew :app:assembleDebug`
+- **Release Build**: `./gradlew :app:assembleRelease`
+- **Output**: `android-app/app/build/outputs/apk/`
+
+### 2. Root Module (ZIP)
+The root module is a specialized ZIP package.
+- **Process**: The build script collects the compiled APK, the `service.sh` logic, `module.prop`, and default configuration files.
+- **Structure**: 
+    - `system/bin/inputblocker` (Binary)
+    - `common/InputBlocker.apk` (Companion App)
+    - `module.prop` (Module metadata)
+    - `service.sh` (Boot-time logic)
+
+### 3. C# Setup Tool (.NET 8)
+Built using Avalonia UI for cross-platform support.
+- **Command**: `dotnet publish -c Release -r [RID] -o [Output] --self-contained true`
+- **Supported RIDs**: 
+    - `win-x64`, `win-arm64`
+    - `linux-x64`, `linux-arm64`
+    - `osx-x64`, `osx-arm64`
+
+### 4. Java Setup Tool
+A lightweight alternative built with Java Swing.
+- **Build**: Compiled via `javac` and packaged into a runnable JAR.
 
 ---
 
-## Building PC Tool Only
+## ☁️ CI/CD Pipeline (GitHub Actions)
 
-### C# Version (Recommended)
+The project uses a sophisticated GitHub Actions pipeline for automated releases.
 
-**Requirements:** [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+**Workflow: `release.yml`**
+1. **Trigger**: Pushing a tag matching `v*` (e.g., `v1.0.0`).
+2. **Parallel Build**:
+   - 6 separate jobs build the C# tool for every supported architecture.
+   - 1 job builds the Android APK.
+   - 1 job packages the Root Module.
+3. **Aggregation**: The `Create GitHub Release` job collects all artifacts from the previous jobs.
+4. **Release**: Generates checksums and creates a formal GitHub Release with all binaries attached.
 
-```bash
-cd pc-tool-csharp
-
-# Build for all platforms
-dotnet publish -c Release -r win-x64 -o ../release/csharp/win-x64 --self-contained true -p:PublishSingleFile=true
-dotnet publish -c Release -r win-arm64 -o ../release/csharp/win-arm64 --self-contained true -p:PublishSingleFile=true
-dotnet publish -c Release -r linux-x64 -o ../release/csharp/linux-x64 --self-contained true -p:PublishSingleFile=true
-dotnet publish -c Release -r linux-arm64 -o ../release/csharp/linux-arm64 --self-contained true -p:PublishSingleFile=true
-dotnet publish -c Release -r osx-x64 -o ../release/csharp/osx-x64 --self-contained true -p:PublishSingleFile=true
-dotnet publish -c Release -r osx-arm64 -o ../release/csharp/osx-arm64 --self-contained true -p:PublishSingleFile=true
-```
-
-Or use the script:
-```bash
-./build-all.sh csharp
-```
-
-### Java Version
-
-**Requirements:** [Java 17+ JDK](https://adoptium.net/)
-
-```bash
-cd pc-tool-java
-./gradlew jar
-```
-
-**Output:** `build/libs/InputBlockerSetup-1.0.0.jar`
-
----
-
-## Building with GitHub Actions
-
-Push a tag to trigger automatic builds:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-**Automated builds:**
-- C# PC tool (6 platforms)
-- Java JAR
-- Android APK
-- Module zip (APK + module)
-
----
-
-## Manual Android Build
-
-### Requirements
-- Android SDK
-- Java 17+ JDK
-
-### Commands
-```bash
-cd android-app
-./gradlew assembleRelease
-```
-
-**Output:** `app/build/outputs/apk/release/app-release.apk`
-
----
-
-## Platform Support
-
-| Platform | Architecture | C# | Java |
-|----------|-------------|-----|------|
-| Windows | x64 | ✅ | ✅ |
-| Windows | ARM64 | ✅ | ✅ |
-| Linux | x64 | ✅ | ✅ |
-| Linux | ARM64 | ✅ | ✅ |
-| macOS | Intel | ✅ | ✅ |
-| macOS | Apple Silicon | ✅ | ✅ |
-
----
-
-## Which Version to Use?
-
-| Use Case | Recommended |
-|----------|-------------|
-| Most users | Module zip |
-| Want standalone APK | APK only |
-| PC visual setup | C# version |
-| Already have JDK | Java version |
-
----
-
-## Troubleshooting
-
-### Gradle errors
-- Update Gradle wrapper: `./gradlew wrapper --gradle-version=8.5`
-- Clean: `./gradlew clean`
-
-### jpackage not found
-- Install JDK 14+ with jpackage
-- Or use `JAVA_HOME` pointing to correct JDK
-
-### .NET errors
-- Update .NET SDK to 8.0+
-- Check valid RIDs: https://docs.microsoft.com/en-us/dotnet/core/rid-catalog
-
-### Access denied (Windows)
-- Run terminal as Administrator
-- Or disable antivirus temporarily
-
-### macOS "App cannot be opened"
-- `chmod +x InputBlockerSetup`
-- System Settings → Privacy & Security → Allow
-
----
-
-## Author
-
-Laviesss
+**Permissions Note**: The workflow requires `contents: write` permissions to create the release.

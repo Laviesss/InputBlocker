@@ -1,73 +1,59 @@
 # InputBlocker Build Scripts
 
-## Structure
+This directory contains the automation scripts used to compile and package the various components of the InputBlocker ecosystem.
+
+## 📁 Directory Structure
 
 ```
 build-scripts/
-├── build.bat           # Build all (calls sub-scripts)
+├── build.bat           # Main entry point: builds all components
 ├── csharp/
-│   └── build.bat       # Build C# Avalonia app (all platforms)
+│   └── build.bat       # Builds cross-platform C# Avalonia tools
 ├── java/
-│   └── build.bat       # Build Java Swing app
+│   └── build.bat       # Builds the Java Swing tool
 ├── apk/
-│   └── build.bat       # Build Android APK
+│   └── build.bat       # Compiles the Android companion app
 └── module/
-    └── build.bat       # Build Magisk module zip
+    └── build.bat       # Packages the root module ZIP (Full & Lite)
 ```
 
-## Usage
+## 🚀 Usage Guide
 
-### Build Everything
+### 1. Full System Build
+To build every component in the repository (Android APK, all C# binaries, Java JAR, and the Root Module), run the main wrapper:
+
+**Windows:**
 ```batch
 build-scripts\build.bat
 ```
 
-### Build Individual Components
-```batch
-build-scripts\build.bat csharp    # C# only (Windows, Linux, macOS*)
-build-scripts\build.bat java      # Java only
-build-scripts\build.bat apk       # APK only
-build-scripts\build.bat module    # Module only (full + lite)
-```
+### 2. Targeted Builds
+You can build specific components by passing an argument to the main script:
 
-### Build Specific Tool
-```batch
-build-scripts\csharp\build.bat    # C# Avalonia
-build-scripts\java\build.bat      # Java Swing
-build-scripts\apk\build.bat       # Android APK
-build-scripts\module\build.bat    # Magisk module
-```
+| Command | Description |
+|----------|-------------|
+| `build-scripts\build.bat csharp` | Build C# tools for all 6 platforms |
+| `build-scripts\build.bat java` | Build the Java JAR tool |
+| `build-scripts\build.bat apk` | Compile the Android APK |
+| `build-scripts\build.bat module` | Package the root module ZIP |
 
-## Requirements
+### 3. Direct Component Builds
+Alternatively, you can run the sub-scripts directly:
+- `build-scripts\csharp\build.bat`
+- `build-scripts\java\build.bat`
+- `build-scripts\apk\build.bat`
+- `build-scripts\module\build.bat`
 
-| Component | Required | Optional |
-|-----------|----------|----------|
-| C#        | .NET 8.0 SDK | |
-| Java      | Java 17+ JDK | |
-| APK       | Android SDK | |
-| Module    | | APK (for full build) |
+## 🛠️ Requirements
+- **C# Tools**: .NET 8.0 SDK
+- **Java Tool**: Java 17+ JDK
+- **Android APK**: Android SDK & Platform Tools
+- **Root Module**: Requires a previously built APK for the "Full" version.
 
-## Output
-
-All builds go to `releases/`:
-```
-releases/
-├── csharp/
-│   ├── windows-x64/
-│   ├── windows-arm64/
-│   ├── linux-x64/
-│   ├── linux-arm64/
-│   ├── macos-intel/     # Run on macOS to build
-│   └── macos-apple-silicon/
-├── java/
-│   └── InputBlockerSetup-1.0.0.jar
-├── InputBlocker.apk
-├── InputBlocker.zip       # Full module (with APK)
-└── InputBlocker-lite.zip  # Lite module (no APK)
-```
-
-## Notes
-
-- macOS builds must be done on macOS (cross-compilation not supported)
-- Module builds will create both full (with APK) and lite (without APK) versions
-- Use `build.bat module lite` to skip APK and just build the module structure
+## 📦 Output Destination
+All finalized binaries are placed in the project root `releases/` folder:
+- `releases/csharp/` $\rightarrow$ C# binaries for 6 platforms
+- `releases/java/` $\rightarrow$ Java JAR
+- `releases/InputBlocker.apk` $\rightarrow$ Android APK
+- `releases/InputBlocker.zip` $\rightarrow$ Full Root Module
+- `releases/InputBlocker-lite.zip` $\rightarrow$ Lite Root Module
