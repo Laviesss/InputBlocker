@@ -132,6 +132,9 @@ jobs:
           sed -i "s/versionName = \".*\"/versionName = \"$VERSION\"/" android-app/app/build.gradle
           sed -i "s/versionCode = [0-9]*/versionCode $VCODE/" android-app/app/build.gradle
           
+          # C# PC Tool (Update <Version> tag in .csproj)
+          sed -i "s/<Version>.*<\/Version>/<Version>$VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
+          
       - name: Upload Versioned Source
         uses: actions/upload-artifact@v4
         with:
@@ -140,6 +143,7 @@ jobs:
             module/module.prop
             module/update.json
             android-app/app/build.gradle
+            pc-tool-csharp/InputBlockerSetup.csproj
 
   build-android:
     name: 🤖 Build Android APK
