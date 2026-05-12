@@ -377,8 +377,14 @@ jobs:
           set -euo pipefail
           mkdir -p release
           # Recursively find all files in artifacts and copy them to a flat release folder
-          # This prevents the 'softprops' action from trying to upload directory structures
           find release_artifacts -type f -exec cp -v {} release/ \;
+          
+          # REMOVE INTERNAL BUILD FILES from the release assets
+          # We only want the final binaries (APK, ZIP, JAR, Binaries) and checksums
+          rm -f release/module.prop
+          rm -f release/build.gradle
+          rm -f release/*.csproj
+          echo "Cleaned internal build files from release artifacts."
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         continue-on-error: true
