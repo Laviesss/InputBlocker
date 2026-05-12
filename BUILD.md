@@ -1,88 +1,69 @@
-# Building InputBlocker
+# Build Guide
 
-This guide provides detailed instructions for building all components of the InputBlocker ecosystem from source.
+This document provides instructions for building InputBlocker components from source.
 
-## 🛠️ Environment Requirements
+## Prerequisites
 
-### Core Dependencies
-- **Java Development Kit (JDK) 17+**: Required for the Android APK and Java PC tool.
-- **.NET 8.0 SDK**: Required for the C# cross-platform PC tools.
-- **Android SDK & Platform Tools**: Required for building the APK and packaging the root module.
-- **Git**: For version control and dependency management.
+### Toolchain
+- **JDK 17+**: Required for the Android app and Java PC tool.
+- **.NET 8.0 SDK**: Required for the C# PC tool.
+- **Android SDK & Platform Tools**: Required for APK compilation and module packaging.
+- **Git**: For version control.
 
-### OS Specifics
+### OS-Specifics
 - **Windows**: PowerShell 5.1+ recommended.
 - **Linux/macOS**: Bash shell.
 
----
+## Build Orchestration
 
-## 🚀 Build Orchestration (Easy Way)
+The project includes automation scripts to simplify the build process. These are located in the `build-scripts/` directory.
 
-The project includes a suite of wrapper scripts that handle the complex build chain automatically.
-
+### Available Scripts
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `build-all.bat/.sh` | Builds every single component | All binaries in `releases/` |
-| `build-module.bat/.sh` | Builds the Root Module (with APK) | `releases/InputBlocker.zip` |
-| `build-apk.bat/.sh` | Builds the Companion App only | `releases/InputBlocker.apk` |
-| `build-pctools.bat/.sh` | Builds all PC setup tools | `releases/csharp/` and `releases/java/` |
+| `build_all.sh` / `build_all.bat` | Builds all components | All binaries in `releases/` |
+| `build_android.sh` | Builds the Companion App only | `releases/InputBlocker.apk` |
+| `build_module.sh` | Packages the Root Module (includes APK) | `releases/InputBlocker.zip` |
+| `build_pc_tools.sh` | Builds both C# and Java tools | `releases/csharp/` and `releases/java/` |
 
-### Example Usage
+### Usage Examples
 **Windows:**
 ```powershell
-.\build-all.bat
+cd build-scripts
+.\build_all.bat
 ```
 
 **Linux/macOS:**
 ```bash
+cd build-scripts
 chmod +x *.sh
-./build-all.sh
+./build_all.sh
 ```
 
----
+## Component Details
 
-## 🔍 Component-Specific Build Guides
-
-### 1. Android Companion App
-The app is built using Gradle.
+### Android App
+Built using Gradle.
 - **Debug Build**: `./gradlew :app:assembleDebug`
 - **Release Build**: `./gradlew :app:assembleRelease`
-- **Output**: `android-app/app/build/outputs/apk/`
 
-### 2. Root Module (ZIP)
-The root module is a specialized ZIP package.
-- **Process**: The build script collects the compiled APK, the `service.sh` logic, `module.prop`, and default configuration files.
-- **Structure**: 
-    - `system/bin/inputblocker` (Binary)
-    - `common/InputBlocker.apk` (Companion App)
-    - `module.prop` (Module metadata)
-    - `service.sh` (Boot-time logic)
+### Root Module
+The module is a ZIP package containing:
+- `module.prop`: Module metadata.
+- `service.sh`: Installation and boot-time logic.
+- `common/InputBlocker.apk`: The companion management app.
 
-### 3. C# Setup Tool (.NET 8)
-Built using Avalonia UI for cross-platform support.
-- **Command**: `dotnet publish -c Release -r [RID] -o [Output] --self-contained true`
-- **Supported RIDs**: 
-    - `win-x64`, `win-arm64`
-    - `linux-x64`, `linux-arm64`
-    - `osx-x64`, `osx-arm64`
+### C# Setup Tool
+Built with Avalonia UI.
+- **Build Command**: `dotnet publish -c Release -r [RID] --self-contained true`
+- **Supported Platforms**: Windows (x64, ARM64), Linux (x64, ARM64), macOS (x64, ARM64).
 
-### 4. Java Setup Tool
-A lightweight alternative built with Java Swing.
-- **Build**: Compiled via `javac` and packaged into a runnable JAR.
+### Java Setup Tool
+A lightweight Swing-based alternative.
+- **Build**: Compiled via Gradle/javac and packaged as a runnable JAR.
 
----
+## CI/CD Pipeline
 
-## ☁️ CI/CD Pipeline (GitHub Actions)
-
-The project uses a sophisticated GitHub Actions pipeline for automated releases.
-
-**Workflow: `release.yml`**
-1. **Trigger**: Pushing a tag matching `v*` (e.g., `v1.0.0`).
-2. **Parallel Build**:
-   - 6 separate jobs build the C# tool for every supported architecture.
-   - 1 job builds the Android APK.
-   - 1 job packages the Root Module.
-3. **Aggregation**: The `Create GitHub Release` job collects all artifacts from the previous jobs.
-4. **Release**: Generates checksums and creates a formal GitHub Release with all binaries attached.
-
-**Permissions Note**: The workflow requires `contents: write` permissions to create the release.
+Automated releases are handled via GitHub Actions (`.github/workflows/release.yml`).
+- **Trigger**: Push a tag matching `v*` (e.g., `git tag v1.0.0 && git push --tags`).
+- **Process**: The pipeline injects versions, builds all components in parallel, generates SHA-256 checksums, and publishes a GitHub Release.
