@@ -6,8 +6,9 @@ PKG_NAME="com.inputblocker.app"
 CONFIG_FILE="/data/adb/modules/inputblocker/config/profiles/default.conf"
 UPDATE_URL="https://github.com/Laviesss/InputBlocker/releases/latest"
 
-log() {
-    log -t InputBlocker-Action "$1"
+# Fix: Rename function to avoid infinite recursion
+sys_log() {
+    /system/bin/log -t InputBlocker-Action "$1"
 }
 
 # Helper to find the APK in multiple common locations
@@ -28,66 +29,68 @@ find_apk() {
     return 1
 }
 
-log "Action button pressed. Evaluating request..."
+# Use echo for user-facing output in root manager action panels
+# Use sys_log for system logs
+echo "Action button pressed. Evaluating request..."
 
 # --- Root Module Hardening: Health Check ---
 HEALTH_SCRIPT="/data/adb/modules/inputblocker/health-check.sh"
 if [ -f "$HEALTH_SCRIPT" ]; then
     if "$HEALTH_SCRIPT"; then
-        log "System is healthy. Proceeding to launch app..."
+        echo "System is healthy. Proceeding to launch app..."
     else
-        log "System health check failed! Triggering self-repair..."
+        echo "System health check failed! Triggering self-repair..."
     fi
 fi
 
 # Check if companion app is installed
 if pm list packages | grep -q "$PKG_NAME"; then
-    log "Companion app found. Attempting to launch Quick Menu..."
+    echo "Companion app found. Attempting to launch Quick Menu..."
     # Launch Companion App Quick Menu (FLAG_ACTIVITY_NEW_TASK)
     am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
     
     if [ $? -eq 0 ]; then
-        log "Successfully triggered Quick Action menu in app."
+        echo "Successfully triggered Quick Action menu in app."
         exit 0
     fi
 else
-    log "Companion app NOT found. Attempting auto-installation..."
+    echo "Companion app NOT found. Attempting auto-installation..."
     APK_PATH=$(find_apk)
     if [ -n "$APK_PATH" ]; then
-        log "Found APK at $APK_PATH. Installing..."
+        echo "Found APK at $APK_PATH. Installing..."
         INSTALL_LOG="/data/local/tmp/inputblocker/action_install.log"
         pm install -r "$APK_PATH" > "$INSTALL_LOG" 2>&1
         
         if [ $? -eq 0 ]; then
-            log "App installed successfully. Launching Quick Menu..."
+            echo "App installed successfully. Launching Quick Menu..."
             am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
             if [ $? -eq 0 ]; then
-                log "Launched app after installation."
+                echo "Launched app after installation."
                 exit 0
             fi
         else
-            log "Installation failed. Check $INSTALL_LOG for details."
+            echo "Installation failed. Check $INSTALL_LOG for details."
         fi
     else
-        log "Installation failed: APK not found in any common path."
+        echo "Installation failed: APK not found in any common path."
     fi
 fi
 
 # Priority 2: Fallback Update Check
-log "Unable to launch app. Opening release page for updates..."
+echo "Unable to launch app. Opening release page for updates..."
 am start -a android.intent.action.VIEW -d "$UPDATE_URL" > /dev/null 2>&1
 
 if [ $? -eq 0 ]; then
-    log "Redirected user to release page."
+    echo "Redirected user to release page."
     exit 0
 fi
 
 # Priority 3: Emergency Reset (Last Resort)
-log "Fallback failed. Performing emergency reset to ensure device accessibility..."
+echo "Fallback failed. Performing emergency reset to ensure device accessibility..."
 if [ -f "$CONFIG_FILE" ]; then
-    sed -i 's/^enabled=.*/enabled=0/' "$CONFIG_FILE"
+    sed -i "s/^enabled=.*/enabled=0/" "$CONFIG_FILE"
     am broadcast -a com.inputblocker.CHANGE_CONFIG
-    log "Emergency reset complete: Blocking disabled."
+    echo "Emergency reset complete: Blocking disabled."
 else
-    log "ERROR: Config file not found at $CONFIG_FILE. Cannot reset."
+    echo "ERROR: Config file not found at $CONFIG_FILE. Cannot reset."
 fi
