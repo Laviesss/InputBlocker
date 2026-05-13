@@ -13,6 +13,9 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import java.util.ArrayList
 
 class SensingActivity : Activity() {
@@ -25,6 +28,7 @@ class SensingActivity : Activity() {
 
     private lateinit var rootLayout: FrameLayout
     private lateinit var timerText: TextView
+    private lateinit var heatmapView: HeatmapView
     private var startTime = 0L
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,6 +43,8 @@ class SensingActivity : Activity() {
             )
         }
 
+        heatmapView = HeatmapView(this)
+
         timerText = TextView(this).apply {
             setTextColor(Color.WHITE)
             textSize = 24f
@@ -46,6 +52,7 @@ class SensingActivity : Activity() {
             gravity = android.view.Gravity.CENTER
         }
 
+        rootLayout.addView(heatmapView)
         rootLayout.addView(timerText, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
@@ -65,25 +72,59 @@ class SensingActivity : Activity() {
             val nx = event.x / resources.displayMetrics.widthPixels
             val ny = event.y / resources.displayMetrics.heightPixels
             capturedTouches.add(Pair(nx, ny))
+            heatmapView.addPoint(nx, ny)
             Log.d(TAG, "Captured touch at normalized ($nx, $ny)")
         }
         return true // Consume all touches
     }
+
 
     private fun startCountdown() {
         val handler = Handler(Looper.getMainLooper())
         handler.post(object : Runnable {
             override fun run() {
                 val elapsed = System.currentTimeMillis() - startTime
-                val remaining = (detectionDurationMs - elapsed) / 1000
+                val remaining = (detectionDurationMs - elapsed).coerceAtLeast(0)
                 
-                if (remaining <= 0) {
-                    timerText.text = "Sensing Complete!"
-                    finishDetection()
-                } else {
-                    timerText.text = "Sensing Ghost Taps... ${remaining}s remaining"
+                timerText.text = "Sensing Ghost Taps... ${remaining / 1000}s remaining"
+                
+                if (remaining > 0) {
                     handler.postDelayed(this, 1000)
+                } else {
+                    timerText.text = "Sensing Complete!"
+                    val intent = Intent(this@SensingActivity, DetectionReviewActivity::class.java)
+                    startActivity(intent)
+                    finish()
                 }
+            }
+        })
+    }
+
+    class HeatmapView(context: android.content.Context) : View(context) {
+        private val points = mutableListOf<Pair<Float, Float>>()
+        private val paint = Paint().apply {
+            color = Color.RED
+            alpha = 60
+            style = Paint.Style.FILL
+            isAntiAlias = true
+        }
+
+        fun addPoint(nx: Float, ny: Float) {
+            points.add(Pair(nx, ny))
+            invalidate()
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            val w = width.toFloat()
+            val h = height.toFloat()
+
+            for (p in points) {
+                canvas.drawCircle(p.first * w, p.second * h, 20f, paint)
+            }
+        }
+    }
+}
             }
         })
     }

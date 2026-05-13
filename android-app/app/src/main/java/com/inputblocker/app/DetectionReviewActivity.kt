@@ -14,8 +14,9 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
-import android.widget.FrameLayout
+import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
@@ -32,6 +33,7 @@ class DetectionReviewActivity : Activity() {
     private lateinit var reviewCanvas: ReviewCanvas
     private lateinit var btnSave: Button
     private lateinit var btnCancel: Button
+    private lateinit var btnFineTune: Button
     private lateinit var tvCount: TextView
     private var isEditing = false
 
@@ -46,7 +48,11 @@ class DetectionReviewActivity : Activity() {
             return
         }
 
-        regions.addAll(DetectionUtils.detectRegions(points))
+        val prefs = getSharedPreferences("InputBlockerPrefs", Context.MODE_PRIVATE)
+        val eps = prefs.getFloat("dbscan_eps", 0.03f)
+        val minPts = prefs.getInt("dbscan_minpts", 3)
+
+        regions.addAll(DetectionUtils.detectRegions(points, eps, minPts))
         
         if (regions.isEmpty()) {
             Toast.makeText(this, "No clear clusters found", Toast.LENGTH_SHORT).show()
@@ -92,12 +98,18 @@ class DetectionReviewActivity : Activity() {
             setOnClickListener { saveAndApply() }
         }
 
+        btnFineTune = Button(this).apply {
+            text = "Fine-tune Clustering"
+            setOnClickListener { showTuningDialog() }
+        }
+
         btnCancel = Button(this).apply {
             text = "Discard"
             setOnClickListener { finish() }
         }
 
         controls.addView(tvCount)
+        controls.addView(btnFineTune)
         controls.addView(btnSave)
         controls.addView(btnCancel)
 
@@ -130,6 +142,82 @@ class DetectionReviewActivity : Activity() {
         controls.visibility = View.VISIBLE
         Toast.makeText(this, "Editing mode: Drag to move, corner to resize, tap to remove", Toast.LENGTH_SHORT).show()
     }
+
+    private fun showTuningDialog() {
+        val prefs = getSharedPreferences("InputBlockerPrefs", Context.MODE_PRIVATE)
+        var currentEps = prefs.getFloat("dbscan_eps", 0.03f)
+        var currentMinPts = prefs.getInt("dbscan_minpts", 3)
+
+        val layout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(50, 40, 50, 40)
+        }
+
+        // EPS Slider
+        val epsLabel = TextView(this).apply {
+            text = "Eps (Radius): ${String.format("%.3f", currentEps)}"
+            setTextColor(Color.BLACK)
+        }
+        val epsSeekBar = SeekBar(this).apply {
+            max = 100
+            progress = (currentEps * 1000).toInt()
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                    currentEps = progress / 1000f
+                    epsLabel.text = "Eps (Radius): ${String.format("%.3f", currentEps)}"
+                    updateClustering(currentEps, currentMinPts)
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {
+                    prefs.edit().putFloat("dbscan_eps", currentEps).apply()
+                }
+            })
+        }
+
+        // MinPts Slider
+        val minPtsLabel = TextView(this).apply {
+            text = "Min Points: $currentMinPts"
+            setTextColor(Color.BLACK)
+        }
+        val minPtsSeekBar = SeekBar(this).apply {
+            max = 10
+            progress = currentMinPts
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                    currentMinPts = if (progress < 2) 2 else progress
+                    minPtsLabel.text = "Min Points: $currentMinPts"
+                    updateClustering(currentEps, currentMinPts)
+                }
+                override fun onStartTrackingTouch(sb: SeekBar?) {}
+                override fun onStopTrackingTouch(sb: SeekBar?) {
+                    prefs.edit().putInt("dbscan_minpts", currentMinPts).apply()
+                }
+            })
+        }
+
+        layout.addView(epsLabel)
+        layout.addView(epsSeekBar)
+        layout.addView(minPtsLabel)
+        layout.addView(minPtsSeekBar)
+
+        AlertDialog.Builder(this)
+            .setTitle("Fine-tune Clustering")
+            .setMessage("Adjust the DBSCAN parameters to better fit your ghost tap patterns. The preview updates in real-time.")
+            .setView(layout)
+            .setPositiveButton("Done", null)
+            .show()
+    }
+
+    private fun updateClustering(eps: Float, minPts: Int) {
+        val points = SensingActivity.capturedTouches
+        if (points.isEmpty()) return
+        
+        regions.clear()
+        regions.addAll(DetectionUtils.detectRegions(points, eps, minPts))
+        reviewCanvas.setRegions(regions)
+        tvCount.text = "Proposed Regions: ${regions.size}"
+    }
+
 
     private fun saveAndApply() {
         try {

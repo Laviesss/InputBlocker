@@ -24,6 +24,18 @@ while [ "$(getprop sys.boot_completed)" != "1" ]; do
 done
 sleep 10  # Increased wait for package manager and system services to settle
 
+# --- Root Module Hardening: Health Check ---
+if [ -f "$MODDIR/health-check.sh" ]; then
+    log "Performing system health check..."
+    if "$MODDIR/health-check.sh"; then
+        log "Health check passed. Skipping self-repair."
+        exit 0
+    else
+        log "Health check failed! Initiating self-repair sequence..."
+    fi
+fi
+# ------------------------------------------
+
 log "Boot completed, checking for APK..."
 
 # Find APK - try multiple possible locations

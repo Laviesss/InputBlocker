@@ -13,6 +13,18 @@ log() {
 
 log "Action button pressed. Evaluating request..."
 
+# --- Root Module Hardening: Health Check ---
+HEALTH_SCRIPT="/data/adb/modules/inputblocker/health-check.sh"
+if [ -f "$HEALTH_SCRIPT" ]; then
+    if "$HEALTH_SCRIPT"; then
+        log "System is healthy. Proceeding to launch app..."
+    else
+        log "System health check failed! Triggering self-repair..."
+        # The subsequent logic already handles APK installation
+    fi
+fi
+# ------------------------------------------
+
 # Check if companion app is installed
 if pm list packages | grep -q "$PKG_NAME"; then
     log "Companion app found. Attempting to launch Quick Menu..."

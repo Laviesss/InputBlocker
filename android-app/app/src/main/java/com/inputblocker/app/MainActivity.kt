@@ -35,6 +35,8 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val PREFS_NAME = "InputBlockerPrefs"
         private const val PREF_THEME = "theme"
+        private const val PREF_DBSCAN_EPS = "dbscan_eps"
+        private const val PREF_DBSCAN_MINPTS = "dbscan_minpts"
         private const val THEME_SYSTEM = 0
         private const val THEME_LIGHT = 1
         private const val THEME_DARK = 2
@@ -447,11 +449,24 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnActionTest.setOnClickListener {
-            // Simulate a trigger to check if blocking logic is active
-            if (isEnabled) {
-                Toast.makeText(this, "Hook Test: Blocking is currently ACTIVE", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Hook Test: Blocking is currently INACTIVE", Toast.LENGTH_SHORT).show()
+            try {
+                val testFile = File("/data/adb/modules/inputblocker/config/test_mode")
+                testFile.createNewFile()
+                
+                AlertDialog.Builder(this)
+                    .setTitle("Hook Test Active")
+                    .setMessage("Test mode is now ACTIVE for 5 seconds.\n\nTry tapping anywhere on your screen. If touches are blocked, the hook is working correctly!")
+                    .setPositiveButton("OK", null)
+                    .show()
+
+                // Remove test mode after 5 seconds
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    if (testFile.exists()) {
+                        testFile.delete()
+                    }
+                }, 5000)
+            } catch (e: Exception) {
+                Toast.makeText(this, "Test failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
             layoutQuickActions.visibility = View.GONE
         }

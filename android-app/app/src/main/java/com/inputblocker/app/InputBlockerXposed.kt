@@ -50,12 +50,18 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                         val nx = motionEvent.x / metrics.widthPixels
                         val ny = motionEvent.y / metrics.heightPixels
 
+                        // Root Module Hardening: Test Mode
+                        if (File("/data/adb/modules/inputblocker/config/test_mode").exists()) {
+                            param.setResult(null)
+                            return
+                        }
+
                         for (region in cachedRegions) {
                             if (nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2) {
-                                // XposedBridge.log("InputBlocker-Xposed: Blocking touch at normalized ($nx, $ny)")
                                 param.setResult(null) 
                                 return
                             }
+                        }
                         }
                     }
                 }
