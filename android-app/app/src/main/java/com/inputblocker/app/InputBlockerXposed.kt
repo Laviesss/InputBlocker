@@ -62,7 +62,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                                 return
                             }
                         }
-                        }
                     }
                 }
             )

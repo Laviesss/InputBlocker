@@ -13,6 +13,7 @@ import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
@@ -116,7 +117,7 @@ class DetectionReviewActivity : Activity() {
         rootLayout.addView(reviewCanvas)
         rootLayout.addView(controls)
 
-        setContentView(rootLayout)
+        setContentView(rootLayout as View)
     }
 
     private fun showConfirmationDialog() {

@@ -14,7 +14,6 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
 import android.graphics.Canvas
-import android.graphics.Color
 import android.graphics.Paint
 import java.util.ArrayList
 
@@ -123,20 +122,5 @@ class SensingActivity : Activity() {
                 canvas.drawCircle(p.first * w, p.second * h, 20f, paint)
             }
         }
-    }
-}
-            }
-        })
-    }
-
-    private fun finishDetection() {
-        val intent = Intent(this, DetectionReviewActivity::class.java)
-        // We've already captured touches in the companion object, 
-        // but we pass a flag or the size to trigger processing.
-        intent.putExtra("points_captured", true)
-        startActivity(intent)
-        
-        Toast.makeText(this, "Sensing complete. Reviewing results...", Toast.LENGTH_LONG).show()
-        finish()
     }
 }
