@@ -13,6 +13,17 @@ else
     ui_print "- Magisk detected"
 fi
 
+# 🚨 CRITICAL CHECK: Ensure APK is present before continuing
+# If the APK is missing, the module is broken. Fail the install immediately.
+if [ ! -f "$MODDIR/common/InputBlocker.apk" ]; then
+    ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    ui_print "FATAL ERROR: Companion APK not found!"
+    ui_print "The installation cannot proceed without the app."
+    ui_print "Please redownload the module ZIP."
+    ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+    exit 1
+fi
+
 # Copy module.prop (required by all managers)
 if [ -f "$MODDIR/module.prop" ]; then
     cp -f "$MODDIR/module.prop" "$MODPATH/"
@@ -27,10 +38,9 @@ if [ -d "$MODDIR/system/bin" ]; then
 fi
 
 # Copy common files (APK)
-if [ -f "$MODDIR/common/InputBlocker.apk" ]; then
-    mkdir -p "$MODPATH/common"
-    cp -f "$MODDIR/common/InputBlocker.apk" "$MODPATH/common/"
-fi
+mkdir -p "$MODPATH/common"
+cp -f "$MODDIR/common/InputBlocker.apk" "$MODPATH/common/"
+ui_print "- Staging companion app for boot-install..."
 
 # Copy service.sh
 if [ -f "$MODDIR/service.sh" ]; then
@@ -62,3 +72,4 @@ fi
 ui_print "- Root module installed successfully!"
 ui_print "- Companion app will be verified/installed on first boot."
 ui_print "- Reboot to apply changes"
+

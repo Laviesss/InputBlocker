@@ -91,22 +91,42 @@ fi
 
 # Install APK
 log "Installing APK from: $APK_PATH"
-LOG_FILE="/data/local/tmp/inputblocker/pm_install.log"
+INSTALL_LOG="/data/local/tmp/inputblocker/pm_install.log"
 
-# Attempt installation
-pm install -r "$APK_PATH" > "$LOG_FILE" 2>&1
-INSTALL_EXIT=$?
+# Attempt installation with retries (PM can be flaky at boot)
+MAX_RETRIES=3
+RETRY_COUNT=0
+SUCCESS=false
 
-if [ $INSTALL_EXIT -ne 0 ]; then
-    log "Initial pm install failed, trying /sdcard/Download/ fallback..."
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+    log "Installation attempt $((RETRY_COUNT+1))/$MAX_RETRIES..."
+    pm install -r "$APK_PATH" > "$INSTALL_LOG" 2>&1
+    if [ $? -eq 0 ]; then
+        log "APK installed successfully."
+        SUCCESS=true
+        break
+    fi
+    RETRY_COUNT=$((RETRY_COUNT+1))
+    log "Installation failed. Retrying in 10s..."
+    sleep 10
+done
+
+if [ "$SUCCESS" = false ]; then
+    log "FATAL: APK installation failed after $MAX_RETRIES attempts. See $INSTALL_LOG for details."
+    # Try one last fallback: copy to /sdcard/Download and try again
+    log "Trying last-resort fallback to /sdcard/Download..."
     cp "$APK_PATH" /sdcard/Download/InputBlocker.apk 2>/dev/null
-    pm install -r /sdcard/Download/InputBlocker.apk > "$LOG_FILE" 2>&1
-    INSTALL_EXIT=$?
+    pm install -r /sdcard/Download/InputBlocker.apk >> "$INSTALL_LOG" 2>&1
+    if [ $? -eq 0 ]; then
+        log "Fallback installation successful!"
+        SUCCESS=true
+    fi
 fi
 
 # Final verification check
 if verify_installation; then
     log "VERIFIED: $PKG_NAME is now registered in the system"
+
     
     # FORCE VISIBILITY:
     # 1. Try am start to launch the app (this forces the launcher to index it)
