@@ -46,6 +46,7 @@ concurrency:
 
 env:
   PROJECT_NAME: InputBlocker
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   setup:
@@ -107,15 +108,15 @@ jobs:
           VERSION="${{ needs.setup.outputs.version }}"
           CLEAN_VERSION="${{ needs.setup.outputs.clean_version }}"
           VCODE="${{ needs.setup.outputs.version_code }}"
-          
+
           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
           sed -i "s/^versionCode=.*/versionCode=$VCODE/" module/module.prop
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" module/update.json
           sed -i "s/\"versionCode\": [0-9]*/\"versionCode\": $VCODE/" module/update.json
-          
+
           sed -i "s/versionName = \".*\"/versionName = \"$CLEAN_VERSION\"/" android-app/app/build.gradle
           sed -i "s/versionCode = [0-9]*/versionCode = $VCODE/" android-app/app/build.gradle
-          
+
           sed -i "s/version = '.*/version = '$CLEAN_VERSION'/" pc-tool-java/build.gradle
           sed -i "s/<Version>.*<\/Version>/<Version>$CLEAN_VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
       - uses: actions/upload-artifact@v4
@@ -145,10 +146,16 @@ jobs:
           java-version: 17
           cache: gradle
       - name: "🔨 Assemble Release APK"
+        env:
+          ANDROID_HOME: ${{ env.ANDROID_HOME || '/usr/local/lib/android/sdk' }}
+          ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT || '/usr/local/lib/android/sdk' }}
         run: |
           cd android-app
           chmod +x gradlew
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease \
+            -Dorg.gradle.java.home="$JAVA_HOME" \
+            --no-daemon \
+            --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: unsigned-apk
@@ -164,20 +171,36 @@ jobs:
         with:
           name: unsigned-apk
           path: unsigned
-      - name: "🔏 Signing with Secret Key"
-        uses: r0adkll/sign-android-release@v1
-        with:
-          releaseDirectory: unsigned
-          signingKeyBase64: ${{ secrets.SIGNING_KEY }}
-          alias: ${{ secrets.ALIAS }}
-          keyStorePassword: ${{ secrets.KEY_STORE_PASSWORD }}
-          keyPassword: ${{ secrets.KEY_PASSWORD }}
+      - name: "🔏 Sign with apksigner"
+        env:
+          SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
+          KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ALIAS: ${{ secrets.ALIAS }}
+        run: |
+          set -euo pipefail
+          echo "$SIGNING_KEY" | base64 -d > keystore.jks
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" \
+            -name "apksigner" -type f | sort -V | tail -1)
+          if [[ -z "$APKSIGNER" ]]; then
+            echo "::error::apksigner not found."
+            exit 1
+          fi
+          APK=$(find unsigned -name "*.apk" | head -n 1)
+          mkdir -p signed
+          "$APKSIGNER" sign \
+            --ks keystore.jks \
+            --ks-pass "pass:${KEY_STORE_PASSWORD}" \
+            --ks-key-alias "${ALIAS}" \
+            --key-pass "pass:${KEY_PASSWORD}" \
+            --out "signed/app-release-signed.apk" \
+            "$APK"
+          "$APKSIGNER" verify --verbose "signed/app-release-signed.apk"
       - name: "📦 Finalizing APK"
         run: |
           VERSION="${{ needs.setup.outputs.version }}"
           mkdir -p release
-          APK=$(find signed -name "*.apk" | head -n 1)
-          mv "$APK" "release/InputBlocker-${VERSION}.apk"
+          mv signed/app-release-signed.apk "release/InputBlocker-${VERSION}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: signed-apk
@@ -201,24 +224,28 @@ jobs:
         run: |
           mkdir -p release/csharp
           cd pc-tool-csharp
-          
           publish_platform() {
             local rid=$1
-            dotnet publish -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true -o "../release/csharp/$rid"
+            local out_dir="../release/csharp/$rid"
+            mkdir -p "$out_dir"
+            dotnet publish InputBlockerSetup.csproj \
+              -c Release \
+              -r "$rid" \
+              --self-contained true \
+              -p:PublishSingleFile=true \
+              -o "$out_dir"
             if [[ "$rid" == win* ]]; then
-               mv "../release/csharp/$rid/InputBlockerSetup.exe" "../release/csharp/$rid/InputBlockerSetup-$rid.exe"
+              mv "$out_dir/InputBlockerSetup.exe" "$out_dir/InputBlockerSetup-$rid.exe"
             else
-               mv "../release/csharp/$rid/InputBlockerSetup" "../release/csharp/$rid/InputBlockerSetup-$rid"
+              mv "$out_dir/InputBlockerSetup" "$out_dir/InputBlockerSetup-$rid"
             fi
           }
-
           publish_platform "win-x64"
           publish_platform "win-arm64"
           publish_platform "linux-x64"
           publish_platform "linux-arm64"
           publish_platform "osx-x64"
           publish_platform "osx-arm64"
-          
       - uses: actions/upload-artifact@v4
         with:
           name: csharp
@@ -342,4 +369,7 @@ jobs:
           branch: gh-pages
           folder: gh-pages
           clean: true
+          single-commit: true
+          git-config-name: github-actions[bot]
+          git-config-email: github-actions[bot]@users.noreply.github.com
           token: ${{ secrets.GITHUB_TOKEN }}
