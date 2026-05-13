@@ -31,7 +31,7 @@ fi
 
 # 3. Check App installation
 if ! pm list packages | grep -q "$PKG_NAME"; then
-    sys_//log "ERROR: Companion app not installed"
+    sys_log "ERROR: Companion app not installed"
     exit 1
 fi
 

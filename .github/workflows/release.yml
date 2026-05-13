@@ -311,6 +311,8 @@ jobs:
           VERSION="${{ needs.setup.outputs.version }}"
           APK=$(find signed-apk -name "*.apk" | head -n 1)
           cp "$APK" module/common/InputBlocker.apk
+          mkdir -p module/system/app/InputBlocker
+          cp "$APK" module/system/app/InputBlocker/InputBlocker.apk
           mkdir -p release
           cd module
           zip -r "../release/InputBlocker-${VERSION}.zip" .

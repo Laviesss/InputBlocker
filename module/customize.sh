@@ -13,8 +13,8 @@ else
     ui_print "- Magisk detected"
 fi
 
-# 🚨 CRITICAL CHECK: Ensure APK is present before continuing
-if [ ! -f "$MODDIR/common/InputBlocker.apk" ]; then
+# 🚨 CRITICAL CHECK: Ensure APK is present
+if [ ! -f "$MODPATH/common/InputBlocker.apk" ]; then
     ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     ui_print "FATAL ERROR: Companion APK not found!"
     ui_print "The installation cannot proceed without the app."
@@ -23,44 +23,20 @@ if [ ! -f "$MODDIR/common/InputBlocker.apk" ]; then
     exit 1
 fi
 
-# Copy module.prop
-if [ -f "$MODDIR/module.prop" ]; then
-    cp -f "$MODDIR/module.prop" "$MODPATH/"
-    chmod 644 "$MODPATH/module.prop"
+# Set permissions for scripts
+chmod 755 "$MODPATH/service.sh"
+chmod 755 "$MODPATH/action.sh"
+chmod 755 "$MODPATH/health-check.sh"
+chmod 755 "$MODPATH/post-fs-data.sh"
+
+# Set permissions for system binaries
+if [ -d "$MODPATH/system/bin" ]; then
+    chmod -R 755 "$MODPATH/system/bin/"
 fi
 
-# Copy system binaries
-if [ -d "$MODDIR/system/bin" ]; then
-    mkdir -p "$MODPATH/system/bin"
-    cp -rf "$MODDIR/system/bin/"* "$MODPATH/system/bin/" 2>/dev/null || true
-    chmod -R 755 "$MODPATH/system/bin/" 2>/dev/null || true
-fi
-
-# Copy common files (APK)
-mkdir -p "$MODPATH/common"
-cp -f "$MODDIR/common/InputBlocker.apk" "$MODPATH/common/"
-
-# Attempt immediate installation during flashing
-# Note: This may fail on some managers as the package manager isn't fully ready
-# but it's a critical first attempt.
-ui_print "- Attempting immediate APK installation..."
-pm install -r "$MODPATH/common/InputBlocker.apk" > /dev/null 2>&1
-if [ $? -eq 0 ]; then
-    ui_print "- Immediate installation successful!"
-else
-    ui_print "- Immediate install failed (normal). Will retry on boot."
-fi
-
-# Copy service.sh
-if [ -f "$MODDIR/service.sh" ]; then
-    cp -f "$MODDIR/service.sh" "$MODPATH/"
-    chmod 755 "$MODPATH/service.sh"
-fi
-
-# Copy custom installation script if exists
-if [ -f "$MODDIR/install.sh" ]; then
-    cp -f "$MODDIR/install.sh" "$MODPATH/"
-    chmod 755 "$MODPATH/install.sh"
+# Set permissions for system app APK (Overlay)
+if [ -f "$MODPATH/system/app/InputBlocker/InputBlocker.apk" ]; then
+    chmod 644 "$MODPATH/system/app/InputBlocker/InputBlocker.apk"
 fi
 
 # Create default config if not exists
@@ -79,7 +55,4 @@ EOFCONFIG
 fi
 
 ui_print "- Root module installed successfully!"
-ui_print "- Companion app will be verified/installed on first boot."
-ui_print "- Reboot to apply changes"
-
-
+ui_print "- Reboot to activate. Companion app installs automatically on first boot."
