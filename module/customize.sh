@@ -13,17 +13,19 @@ else
     ui_print "- Magisk detected"
 fi
 
-# 🚨 CRITICAL CHECK: Ensure APK is present
-if [ ! -f "$MODPATH/common/InputBlocker.apk" ]; then
+# 🚨 CRITICAL CHECK: Ensure APK is present in the ZIP source
+# Note: In customize.sh, $MODDIR is the temporary installation folder (ZIP root)
+if [ ! -f "$MODDIR/common/InputBlocker.apk" ]; then
     ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-    ui_print "FATAL ERROR: Companion APK not found!"
+    ui_print "FATAL ERROR: Companion APK not found in ZIP!"
     ui_print "The installation cannot proceed without the app."
     ui_print "Please redownload the module ZIP."
     ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     exit 1
 fi
 
-# Set permissions for scripts
+# Set permissions for scripts in the final destination ($MODPATH)
+# These files are automatically copied from $MODDIR to $MODPATH by the manager
 chmod 755 "$MODPATH/service.sh"
 chmod 755 "$MODPATH/action.sh"
 chmod 755 "$MODPATH/health-check.sh"
