@@ -18,7 +18,7 @@ if pm list packages | grep -q "$PKG_NAME"; then
     
     # pm uninstall for system apps removes the app for the current user
     # which is sufficient as the actual APK is removed when the module is deleted.
-    pm uninstall "$PKG_NAME"
+    pm uninstall -k --user 0 "$PKG_NAME"
     
     if [ $? -eq 0 ]; then
         sys_log "Companion app successfully uninstalled from user 0."

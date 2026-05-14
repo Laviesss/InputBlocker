@@ -15,7 +15,7 @@ fi
 
 # 🚨 CRITICAL CHECK: Ensure APK is present in the ZIP source
 # Note: In customize.sh, $MODDIR is the temporary installation folder (ZIP root)
-if [ ! -f "$MODDIR/common/InputBlocker.apk" ]; then
+if [ ! -f "$MODPATH/common/InputBlocker.apk" ]; then
     ui_print "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
     ui_print "FATAL ERROR: Companion APK not found in ZIP!"
     ui_print "The installation cannot proceed without the app."
