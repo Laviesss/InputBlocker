@@ -302,21 +302,25 @@ jobs:
     if: contains(fromJSON('["all", "module"]'), needs.setup.outputs.build_type)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: signed-apk
-          path: signed-apk
-      - name: "🎁 Packaging ZIP"
-        run: |
-          VERSION="${{ needs.setup.outputs.version }}"
-          APK=$(find signed-apk -name "*.apk" | head -n 1)
-          cp "$APK" common/InputBlocker.apk
-          mkdir -p system/app/InputBlocker
-          cp "$APK" system/app/InputBlocker/InputBlocker.apk
-          mkdir -p release
-          cd module
-          zip -r "../release/InputBlocker-${VERSION}.zip" .
+       - uses: actions/checkout@v4
+       - uses: actions/download-artifact@v4
+         with:
+           name: versioned-files
+           path: .
+       - uses: actions/download-artifact@v4
+         with:
+           name: signed-apk
+           path: signed-apk
+       - name: "🎁 Packaging ZIP"
+         run: |
+           VERSION="${{ needs.setup.outputs.version }}"
+           APK=$(find signed-apk -name "*.apk" | head -n 1)
+           cp "$APK" module/common/InputBlocker.apk
+           mkdir -p module/system/app/InputBlocker
+           cp "$APK" module/system/app/InputBlocker/InputBlocker.apk
+           mkdir -p release
+           cd module
+           zip -r "../release/InputBlocker-${VERSION}.zip" .
       - uses: actions/upload-artifact@v4
         with:
           name: module
