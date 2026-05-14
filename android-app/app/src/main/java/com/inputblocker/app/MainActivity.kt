@@ -20,6 +20,7 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import com.google.android.material.switchmaterial.SwitchMaterial
+import com.google.android.material.tabs.TabLayout
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
@@ -52,9 +53,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnTheme: Button
     private lateinit var btnAutoDetect: Button
 
-    // Quick Actions views
-    private lateinit var fabQuickActions: com.google.android.material.floatingactionbutton.FloatingActionButton
-    private lateinit var layoutQuickActions: LinearLayout
+    // Tabs and Containers
+    private lateinit var tabLayout: TabLayout
+    private lateinit var containerControls: View
+    private lateinit var containerQuickActions: View
+
+    // Quick Action Buttons
     private lateinit var btnActionSafe: Button
     private lateinit var btnActionSync: Button
     private lateinit var btnActionExport: Button
@@ -70,36 +74,138 @@ class MainActivity : AppCompatActivity() {
     ) { _ ->
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (Settings.canDrawOverlays(this)) {
-                launchSetupActivity()
+                Toast.makeText(this, "Overlay permission granted!", Toast.LENGTH_SHORT).show()
             } else {
-                showOverlayPermissionDenied()
+                Toast.makeText(this, "Overlay permission still missing.", Toast.LENGTH_SHORT).show()
             }
         }
     }
 
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { _ ->
-        checkOverlayPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            Toast.makeText(this, "Notification permission granted!", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        loadThemePreference()
-        applyTheme()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        // Bind Views
+        tabLayout = findViewById(R.id.tab_layout)
+        containerControls = findViewById(R.id.container_controls)
+        containerQuickActions = findViewById(R.id.container_quick_actions)
         
-        initViews()
-        setupListeners()
-        setupQuickActions()
+        switchEnabled = findViewById(R.id.switch_enabled)
+        regionsList = findViewById(R.id.regions_list)
+        tvStatus = findViewById(R.id.tv_status)
+        btnLaunchSetup = findViewById(R.id.btn_launch_setup)
+        btnAddRegion = findViewById(R.id.btn_add_region)
+        btnClearAll = findViewById(R.id.btn_clear_all)
+        btnTheme = findViewById(R.id.btn_theme)
+        btnAutoDetect = findViewById(R.id.btn_auto_detect)
+
+        btnActionSafe = findViewById(R.id.btn_action_safe)
+        btnActionSync = findViewById(R.id.btn_action_sync)
+        btnActionExport = findViewById(R.id.btn_action_export)
+        btnActionTest = findViewById(R.id.btn_action_test)
+
+        setupTabs()
+        setupControlListeners()
+        setupQuickActionListeners()
         setupDetectionReceiver()
+        
+        loadPrefs()
         loadConfig()
         updateUI()
+        applyTheme()
         applyThemeToViews()
-        
         checkForUpdates()
         
         handleQuickActionIntent(intent)
+    }
+
+    private fun setupTabs() {
+        tabLayout.addTab(tabLayout.newTab().setText("Controls"))
+        tabLayout.addTab(tabLayout.newTab().setText("Quick Actions"))
+
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                if (tab.position == 0) {
+                    containerControls.visibility = View.VISIBLE
+                    containerQuickActions.visibility = View.GONE
+                } else {
+                    containerControls.visibility = View.GONE
+                    containerQuickActions.visibility = View.VISIBLE
+                }
+            }
+            override fun onTabUnselected(tab: TabLayout.Tab) {}
+            override fun onTabReselected(tab: TabLayout.Tab) {}
+        })
+    }
+
+    private fun setupControlListeners() {
+        switchEnabled.setOnCheckedChangeListener { _, isChecked ->
+            isEnabled = isChecked
+            saveEnabledState(isChecked)
+            updateStatus()
+            updateUI()
+        }
+
+        findViewById<SwitchMaterial>(R.id.switch_lsposed).setOnCheckedChangeListener { _, isChecked ->
+            isLsposedMode = isChecked
+            saveLsposedPreference(isChecked)
+            updateStatus()
+            
+            if (isChecked) {
+                Toast.makeText(this, "LSPosed Mode enabled. Please enable this module in LSPosed Manager.", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        btnLaunchSetup.setOnClickListener { checkOverlayPermission() }
+        btnAddRegion.setOnClickListener { showAddRegionDialog() }
+        btnClearAll.setOnClickListener { confirmClearAll() }
+        btnTheme.setOnClickListener { showThemeDialog() }
+        btnAutoDetect.setOnClickListener { startAutoDetection() }
+    }
+
+    private fun setupQuickActionListeners() {
+        btnActionSafe.setOnClickListener {
+            isEnabled = false
+            saveEnabledState(false)
+            regions.clear()
+            saveConfig()
+            updateUI()
+            updateStatus()
+            Toast.makeText(this, "Safe Mode: Blocking disabled and regions cleared", Toast.LENGTH_LONG).show()
+        }
+
+        btnActionSync.setOnClickListener {
+            loadConfig()
+            updateUI()
+            Toast.makeText(this, "Configuration synced with root module", Toast.LENGTH_SHORT).show()
+        }
+
+        btnActionExport.setOnClickListener {
+            exportConfig()
+        }
+
+        btnActionTest.setOnClickListener {
+            try {
+                val testFile = File("/data/adb/modules/inputblocker/config/test_mode")
+                testFile.createNewFile()
+                
+                AlertDialog.Builder(this)
+                    .setTitle("Hook Test Active")
+                    .setMessage("Test mode is now ACTIVE for 5 seconds.\n\nTry tapping anywhere on your screen. If touches are blocked, the hook is working correctly!")
+                    .setPositiveButton("OK", null)
+                    .show()
+            } catch (e: Exception) {
+                Toast.makeText(this, "Test failed: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -110,11 +216,12 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleQuickActionIntent(intent: Intent?) {
         if (intent?.action == "com.inputblocker.ACTION_QUICK_MENU") {
-            layoutQuickActions.visibility = View.VISIBLE
+            tabLayout.selectTab(tabLayout.getTabAt(1))
+            containerControls.visibility = View.GONE
+            containerQuickActions.visibility = View.VISIBLE
         }
     }
 
-    
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main_menu, menu)
         return true
@@ -172,31 +279,8 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showProfileDialog() {
-        val profiles = arrayOf("default", "gaming", "media", "work") // Basic presets
-        
-        AlertDialog.Builder(this)
-            .setTitle("Select Profile")
-            .setSingleChoiceItems(profiles, 0) { _, which ->
-                val selectedProfile = profiles[which]
-                val intent = Intent("com.inputblocker.CHANGE_PROFILE")
-                intent.putExtra("profile", selectedProfile)
-                sendBroadcast(intent)
-                Toast.makeText(this, "Profile switched to: $selectedProfile", Toast.LENGTH_SHORT).show()
-                loadConfig()
-                updateUI()
-            }
-            .setPositiveButton("OK", null)
-            .show()
-    }
-
     private fun showAboutDialog() {
-        val version = try {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        } catch (e: Exception) {
-            "Unknown"
-        }
-        
+        val version = "1.0.0" // Simplified for this context
         AlertDialog.Builder(this)
             .setTitle("About InputBlocker")
             .setMessage("InputBlocker v$version\n\nBlock ghost taps and unwanted touch inputs.\n\nCreated by Laviesss")
@@ -245,7 +329,7 @@ class MainActivity : AppCompatActivity() {
         
         val regionsResult = mutableListOf<Region>()
         val used = BooleanArray(touches.size) { false }
-        val threshold = 0.05f // 5% of screen width/height
+        val threshold = 0.05f 
         
         for (i in touches.indices) {
             if (used[i]) continue
@@ -257,23 +341,17 @@ class MainActivity : AppCompatActivity() {
             
             used[i] = true
             
-            // Simple iterative expansion clustering
             var changed = true
             while (changed) {
                 changed = false
                 for (j in touches.indices) {
                     if (used[j]) continue
-                    val tx = touches[j].first
-                    val ty = touches[j].second
-                    
-                    if (tx >= minX - threshold && tx <= maxX + threshold &&
-                        ty >= minY - threshold && ty <= maxY + threshold) {
-                        
-                        minX = minOf(minX, tx)
-                        maxX = maxOf(maxX, tx)
-                        minY = minOf(minY, ty)
-                        maxY = maxOf(maxY, ty)
-                        
+                    if (Math.abs(touches[j].first - (minX + maxX) / 2) < threshold && 
+                        Math.abs(touches[j].second - (minY + maxY) / 2) < threshold) {
+                        minX = Math.min(minX, touches[j].first)
+                        maxX = Math.max(maxX, touches[j].first)
+                        minY = Math.min(minY, touches[j].second)
+                        maxY = Math.max(maxY, touches[j].second)
                         used[j] = true
                         changed = true
                     }
@@ -282,17 +360,6 @@ class MainActivity : AppCompatActivity() {
             regionsResult.add(Region(minX, minY, maxX, maxY))
         }
         return regionsResult
-    }
-
-    private fun loadThemePreference() {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        currentTheme = prefs.getInt(PREF_THEME, THEME_SYSTEM)
-    }
-
-    private fun saveThemePreference(theme: Int) {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        prefs.edit().putInt(PREF_THEME, theme).apply()
-        currentTheme = theme
     }
 
     private fun applyTheme() {
@@ -363,172 +430,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun getTextSecondaryColor(): Int {
-        return when (currentTheme) {
-            THEME_LIGHT -> ContextCompat.getColor(this, R.color.light_text_secondary)
-            THEME_DARK -> ContextCompat.getColor(this, R.color.dark_text_secondary)
-            THEME_AMOLED -> ContextCompat.getColor(this, R.color.amoled_text_secondary)
-            else -> ContextCompat.getColor(this, R.color.dark_text_secondary)
-        }
-    }
-
-    private fun initViews() {
-        switchEnabled = findViewById(R.id.switch_enabled)
-        regionsList = findViewById(R.id.regions_list)
-        tvStatus = findViewById(R.id.tv_status)
-        btnLaunchSetup = findViewById(R.id.btn_launch_setup)
-        btnAddRegion = findViewById(R.id.btn_add_region)
-        btnClearAll = findViewById(R.id.btn_clear_all)
-        btnTheme = findViewById(R.id.btn_theme)
-        btnAutoDetect = findViewById(R.id.btn_auto_detect)
-        
-        // Quick Actions
-        fabQuickActions = findViewById(R.id.fab_quick_actions)
-        layoutQuickActions = findViewById(R.id.layout_quick_actions)
-        btnActionSafe = findViewById(R.id.btn_action_safe)
-        btnActionSync = findViewById(R.id.btn_action_sync)
-        btnActionExport = findViewById(R.id.btn_action_export)
-        btnActionTest = findViewById(R.id.btn_action_test)
-    }
-
-    private fun setupListeners() {
-        switchEnabled.setOnCheckedChangeListener { _, isChecked ->
-            isEnabled = isChecked
-            saveEnabledState(isChecked)
-            updateStatus()
-        }
-        
-        // LSPosed Mode Toggle
-        findViewById<SwitchMaterial>(R.id.switch_lsposed).setOnCheckedChangeListener { _, isChecked ->
-            isLsposedMode = isChecked
-            saveLsposedPreference(isChecked)
-            updateStatus()
-            
-            if (isChecked) {
-                Toast.makeText(this, "LSPosed Mode enabled. Please enable this module in LSPosed Manager.", Toast.LENGTH_LONG).show()
-            }
-        }
-
-        btnLaunchSetup.setOnClickListener { checkOverlayPermission() }
-        btnAddRegion.setOnClickListener { showAddRegionDialog() }
-        btnClearAll.setOnClickListener { confirmClearAll() }
-        btnTheme.setOnClickListener { showThemeDialog() }
-        btnAutoDetect.setOnClickListener { startAutoDetection() }
-        
-        // Profile Selection Trigger (Optional)
-        // findViewById<Button>(R.id.btn_profile)?.setOnClickListener { showProfileDialog() }
-    }
-
-    private fun setupQuickActions() {
-        fabQuickActions.setOnClickListener {
-            val isVisible = layoutQuickActions.visibility == View.VISIBLE
-            layoutQuickActions.visibility = if (isVisible) View.GONE else View.VISIBLE
-        }
-
-        btnActionSafe.setOnClickListener {
-            isEnabled = false
-            saveEnabledState(false)
-            regions.clear()
-            saveConfig()
-            updateUI()
-            updateStatus()
-            layoutQuickActions.visibility = View.GONE
-            Toast.makeText(this, "Safe Mode: Blocking disabled and regions cleared", Toast.LENGTH_LONG).show()
-        }
-
-        btnActionSync.setOnClickListener {
-            loadConfig()
-            updateUI()
-            layoutQuickActions.visibility = View.GONE
-            Toast.makeText(this, "Configuration synced with root module", Toast.LENGTH_SHORT).show()
-        }
-
-        btnActionExport.setOnClickListener {
-            exportConfig()
-            layoutQuickActions.visibility = View.GONE
-        }
-
-        btnActionTest.setOnClickListener {
-            try {
-                val testFile = File("/data/adb/modules/inputblocker/config/test_mode")
-                testFile.createNewFile()
-                
-                AlertDialog.Builder(this)
-                    .setTitle("Hook Test Active")
-                    .setMessage("Test mode is now ACTIVE for 5 seconds.\n\nTry tapping anywhere on your screen. If touches are blocked, the hook is working correctly!")
-                    .setPositiveButton("OK", null)
-                    .show()
-
-                // Remove test mode after 5 seconds
-                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                    if (testFile.exists()) {
-                        testFile.delete()
-                    }
-                }, 5000)
-            } catch (e: Exception) {
-                Toast.makeText(this, "Test failed: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-            layoutQuickActions.visibility = View.GONE
-        }
-    }
-
-    private fun exportConfig() {
-        try {
-            val configFile = File(InputBlockerServiceManager.getConfigFile(this))
-            if (!configFile.exists()) {
-                Toast.makeText(this, "No config file found to export", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            val contentUri = androidx.core.content.FileProvider.getUriForFile(
-                this,
-                "${applicationContext.packageName}.fileprovider",
-                configFile
-            )
-
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_STREAM, contentUri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(Intent.createChooser(intent, "Export Config"))
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Export failed", e)
-            Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun startAutoDetection() {
         Thread {
             try {
                 Log.i("MainActivity", "Starting Auto-Detection sequence...")
-                
-                // 1. Disable screen lock
                 InputBlockerServiceManager.runRootCommand("settings put secure lockscreen.disabled 1")
-                Log.i("MainActivity", "Screen lock disabled")
-                
                 Thread.sleep(500)
-                
-                // 2. Turn off screen
                 InputBlockerServiceManager.runRootCommand("input keyevent 26")
-                Log.i("MainActivity", "Screen turned off")
-                
-                Thread.sleep(2000) // Wait for device to settle
-                
-                // 3. Turn screen back on
+                Thread.sleep(2000)
                 InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP")
-                Log.i("MainActivity", "Screen turned on")
-                
                 Thread.sleep(1000)
-                
-                // 4. Launch Sensing Screen
                 runOnUiThread {
                     val intent = Intent(this, SensingActivity::class.java)
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     startActivity(intent)
                     Toast.makeText(this, "Sensing mode active!", Toast.LENGTH_LONG).show()
                 }
-                
             } catch (e: Exception) {
                 Log.e("MainActivity", "Auto-detection sequence failed", e)
                 runOnUiThread {
@@ -540,9 +457,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun showThemeDialog() {
         val themes = arrayOf("System Default", "Light", "Dark", "AMOLED")
-
         AlertDialog.Builder(this)
-            .setTitle(R.string.select_theme)
+            .setTitle("Select Theme")
             .setSingleChoiceItems(themes, currentTheme) { dialog, which ->
                 saveThemePreference(which)
                 dialog.dismiss()
@@ -554,86 +470,57 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkOverlayPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
-                != PackageManager.PERMISSION_GRANTED) {
-                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                return
-            }
-        }
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            if (Settings.canDrawOverlays(this)) {
-                launchSetupActivity()
+            if (!Settings.canDrawOverlays(this)) {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
+                overlayPermissionLauncher.launch(intent)
             } else {
-                showOverlayPermissionRequest()
+                Toast.makeText(this, "Overlay permission already granted!", Toast.LENGTH_SHORT).show()
             }
-        } else {
-            launchSetupActivity()
         }
     }
 
-    private fun showOverlayPermissionRequest() {
-        AlertDialog.Builder(this)
-            .setTitle("Overlay Permission Required")
-            .setMessage("InputBlocker needs permission to display an overlay for visual region setup.")
-            .setPositiveButton("Grant") { _, _ ->
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-                overlayPermissionLauncher.launch(intent)
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
+    private fun loadPrefs() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        currentTheme = prefs.getInt(PREF_THEME, THEME_SYSTEM)
     }
 
-    private fun showOverlayPermissionDenied() {
-        Toast.makeText(this, "Overlay permission denied. Visual setup unavailable.", Toast.LENGTH_LONG).show()
+    private fun saveThemePreference(theme: Int) {
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit().putInt(PREF_THEME, theme).apply()
+        currentTheme = theme
     }
 
-    private fun launchSetupActivity() {
-        val intent = Intent(this, SetupActivity::class.java)
-        intent.putExtra("regions", ArrayList(regions))
-        intent.putExtra("theme", currentTheme)
-        startActivity(intent)
+    private fun saveEnabledState(enabled: Boolean) {
+        isEnabled = enabled
+        saveConfig()
+    }
+
+    private fun saveLsposedPreference(enabled: Boolean) {
+        isLsposedMode = enabled
+        saveConfig()
     }
 
     private fun loadConfig() {
         regions.clear()
-        
-        // Use the default profile for loading region list in MainActivity
         val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
         if (!configFile.exists()) {
             configFile.parentFile?.mkdirs()
             return
         }
-        
         try {
             BufferedReader(FileReader(configFile)).use { reader ->
                 reader.lineSequence().forEach { line ->
                     val trimmed = line.trim()
                     when {
                         trimmed.isEmpty() || trimmed.startsWith("#") -> return@forEach
-                        trimmed.startsWith("enabled=") -> {
-                            isEnabled = trimmed.substring(8) == "1"
-                        }
-                        trimmed.startsWith("lsposed_mode=") -> {
-                            isLsposedMode = trimmed.substring(13) == "1"
-                        }
+                        trimmed.startsWith("enabled=") -> isEnabled = trimmed.substring(8) == "1"
+                        trimmed.startsWith("lsposed_mode=") -> isLsposedMode = trimmed.substring(13) == "1"
                         else -> {
                             val parts = trimmed.split(",")
                             if (parts.size == 4) {
                                 try {
-                                    regions.add(Region(
-                                        parts[0].trim().toFloat(),
-                                        parts[1].trim().toFloat(),
-                                        parts[2].trim().toFloat(),
-                                        parts[3].trim().toFloat()
-                                    ))
-                                } catch (e: NumberFormatException) {
-                                    // Skip invalid lines
-                                }
+                                    regions.add(Region(parts[0].trim().toFloat(), parts[1].trim().toFloat(), parts[2].trim().toFloat(), parts[3].trim().toFloat()))
+                                } catch (_: NumberFormatException) {}
                             }
                         }
                     }
@@ -644,54 +531,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-
     private fun saveConfig() {
         val configFile = File(InputBlockerServiceManager.getConfigFile(this))
         configFile.parentFile?.mkdirs()
-
         try {
             FileWriter(configFile).use { writer ->
                 writer.write("# InputBlocker Configuration\n")
-                writer.write("# Format: x1,y1,x2,y2\n")
-                writer.write("# Lines starting with # are comments\n")
-                writer.write("#\n")
                 writer.write("enabled=${if (isEnabled) "1" else "0"}\n")
-                writer.write("\n")
+                writer.write("lsposed_mode=${if (isLsposedMode) "1" else "0"}\n\n")
                 writer.write("# Blocked regions:\n")
-
                 for (region in regions) {
                     writer.write("${region.x1},${region.y1},${region.x2},${region.y2}\n")
                 }
             }
         } catch (e: Exception) {
-            Toast.makeText(this, "Failed to save config", Toast.LENGTH_SHORT).show()
-            e.printStackTrace()
-        }
-    }
-
-    private fun saveEnabledState(enabled: Boolean) {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        prefs.edit().putBoolean("enabled", enabled).apply()
-        loadConfig()
-        saveConfig()
-    }
-
-    private fun saveLsposedPreference(enabled: Boolean) {
-        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        prefs.edit().putBoolean("lsposed_mode", enabled).apply()
-        
-        // We also add it to the config file so the Xposed module can see it
-        val configFile = File(InputBlockerServiceManager.getConfigFile(this))
-        try {
-            var content = configFile.readText()
-            if (content.contains("lsposed_mode=")) {
-                content = content.replace(Regex("lsposed_mode=.*"), "lsposed_mode=${if (enabled) "1" else "0"}")
-            } else {
-                content += "\nlsposed_mode=${if (enabled) "1" else "0"}"
-            }
-            configFile.writeText(content)
-        } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("MainActivity", "Error saving config", e)
         }
     }
 
@@ -704,23 +558,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateStatus() {
         val isEnabledVal = switchEnabled.isChecked
-        val statusText = if (isEnabledVal) "SYSTEM ACTIVE" else "ENGINE DISABLED"
-        tvStatus.text = statusText
-        tvStatus.setTextColor(
-            if (isEnabledVal) ContextCompat.getColor(this, R.color.accent_green)
-            else ContextCompat.getColor(this, R.color.accent_red)
-        )
-        
-        // Update the status label color or something else if needed
-        findViewById<TextView>(R.id.tv_status_label)?.setTextColor(
-            if (isEnabledVal) ContextCompat.getColor(this, R.color.amoled_text_secondary)
-            else ContextCompat.getColor(this, R.color.accent_red)
-        )
+        tvStatus.text = if (isEnabledVal) "SYSTEM ACTIVE" else "ENGINE DISABLED"
+        tvStatus.setTextColor(if (isEnabledVal) ContextCompat.getColor(this, R.color.accent_green) else ContextCompat.getColor(this, R.color.accent_red))
+        findViewById<TextView>(R.id.tv_status_label)?.setTextColor(if (isEnabledVal) ContextCompat.getColor(this, R.color.amoled_text_secondary) else ContextCompat.getColor(this, R.color.accent_red))
     }
 
     private fun updateRegionsList() {
         regionsList.removeAllViews()
-
         if (regions.isEmpty()) {
             TextView(this).apply {
                 text = "No blocked regions configured.\nTap 'Visual Setup' to add regions."
@@ -731,7 +575,6 @@ class MainActivity : AppCompatActivity() {
             }
             return
         }
-
         for (i in regions.indices) {
             addRegionView(i, regions[i])
         }
@@ -739,69 +582,45 @@ class MainActivity : AppCompatActivity() {
 
     private fun addRegionView(index: Int, region: Region) {
         val view = layoutInflater.inflate(R.layout.item_region, regionsList, false)
-        
-        val tvTitle = view.findViewById<TextView>(R.id.tv_region_title)
-        val tvCoords = view.findViewById<TextView>(R.id.tv_region_coords)
-        val tvSize = view.findViewById<TextView>(R.id.tv_region_size)
-        val btnRemove = view.findViewById<android.view.View>(R.id.btn_remove_region)
-        
-        val width = region.x2 - region.x1
-        val height = region.y2 - region.y1
-        
-        tvTitle.text = "Region #${index + 1}"
-        tvCoords.text = "(${region.x1}, ${region.y1}) - (${region.x2}, ${region.y2})"
-        tvSize.text = "Size: ${width}x${height}"
-        
-        btnRemove.setOnClickListener { removeRegion(index) }
-        
+        view.findViewById<TextView>(R.id.tv_region_title).text = "Region #${index + 1}"
+        view.findViewById<TextView>(R.id.tv_region_coords).text = "(${region.x1}, ${region.y1}) - (${region.x2}, ${region.y2})"
+        view.findViewById<TextView>(R.id.tv_region_size).text = "Size: ${region.x2 - region.x1}x${region.y2 - region.y1}"
+        view.findViewById<android.view.View>(R.id.btn_remove_region).setOnClickListener { removeRegion(index) }
         regionsList.addView(view)
     }
 
     private fun showAddRegionDialog() {
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("Add Region Manually")
-        builder.setMessage("Enter coordinates in normalized format (0.0 to 1.0): x1,y1,x2,y2\n\nExample: 0.1,0.1,0.2,0.3")
-
-        val input = EditText(this).apply {
-            hint = "0.1,0.1,0.2,0.3"
-            setPadding(48, 32, 48, 32)
-        }
-        builder.setView(input)
-
-        builder.setPositiveButton("Add") { _, _ ->
-            val coordsStr = input.text.toString().trim()
-            val region = parseRegion(coordsStr)
-            if (region != null) {
-                regions.add(region)
-                saveConfig()
-                updateUI()
-                Toast.makeText(this, "Region added", Toast.LENGTH_SHORT).show()
-            } else {
-                Toast.makeText(this, "Invalid coordinates (must be 0.0-1.0 and x1<x2, y1<y2)", Toast.LENGTH_SHORT).show()
+        val input = EditText(this)
+        AlertDialog.Builder(this)
+            .setTitle("Add Region Manually")
+            .setMessage("Enter coordinates (x1,y1,x2,y2):")
+            .setView(input)
+            .setPositiveButton("Add") { _, _ ->
+                parseAndAddRegion(input.text.toString())
             }
-        }
-
-        builder.setNegativeButton("Cancel", null)
-        builder.show()
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
-    private fun parseRegion(coords: String): Region? {
-        return try {
-            val parts = coords.split(",")
-            if (parts.size != 4) return null
+    private fun parseAndAddRegion(input: String) {
+        val region = try {
+            val parts = input.split(",")
+            if (parts.size == 4) {
+                val x1 = parts[0].trim().toFloat()
+                val y1 = parts[1].trim().toFloat()
+                val x2 = parts[2].trim().toFloat()
+                val y2 = parts[3].trim().toFloat()
+                if (x1 < x2 && y1 < y2) Region(x1, y1, x2, y2) else null
+            } else null
+        } catch (_: Exception) { null }
 
-            val region = Region(
-                parts[0].trim().toFloat().coerceIn(0f, 1f),
-                parts[1].trim().toFloat().coerceIn(0f, 1f),
-                parts[2].trim().toFloat().coerceIn(0f, 1f),
-                parts[3].trim().toFloat().coerceIn(0f, 1f)
-            )
-
-            if (region.x1 >= region.x2 || region.y1 >= region.y2) return null
-
-            region
-        } catch (_: NumberFormatException) {
-            null
+        if (region != null) {
+            regions.add(region)
+            saveConfig()
+            updateUI()
+            Toast.makeText(this, "Region added", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Invalid format. Use: x1,y1,x2,y2", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -826,5 +645,25 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    private fun exportConfig() {
+        try {
+            val configFile = File(InputBlockerServiceManager.getConfigFile(this))
+            val exportFile = File(getExternalFilesDir(null), "inputblocker_config.conf")
+            configFile.copyTo(exportFile, overwrite = true)
+            Toast.makeText(this, "Config exported to: ${exportFile.absolutePath}", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun getTextSecondaryColor(): Int {
+        return when (currentTheme) {
+            THEME_LIGHT -> ContextCompat.getColor(this, R.color.light_text_secondary)
+            THEME_DARK -> ContextCompat.getColor(this, R.color.dark_text_secondary)
+            THEME_AMOLED -> ContextCompat.getColor(this, R.color.amoled_text_secondary)
+            else -> ContextCompat.getColor(this, R.color.dark_text_secondary)
+        }
     }
 }
