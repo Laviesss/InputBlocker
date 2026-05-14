@@ -1,4 +1,4 @@
-name: "🚀 Release Pipeline"
+name: "?? Release Pipeline"
 
 on:
   push:
@@ -7,30 +7,30 @@ on:
   workflow_dispatch:
     inputs:
       build_type:
-        description: '🏗️ Components to build (Tip: "all" is recommended for full releases)'
+        description: '??? Components to build (Tip: "all" is recommended for full releases)'
         required: true
         default: all
         type: choice
         options: [all, android, csharp, java, module]
       version:
-        description: '🏷️ Custom version (e.g., v1.0.1)'
+        description: '??? Custom version (e.g., v1.0.1)'
         required: false
         default: ''
       version_code:
-        description: '🔢 Manual version code (Tip: Leave empty to auto-generate from git history)'
+        description: '?? Manual version code (Tip: Leave empty to auto-generate from git history)'
         required: false
         default: ''
       release_notes:
-        description: '📝 Release notes (Markdown supported)'
+        description: '?? Release notes (Markdown supported)'
         required: false
         default: ''
       draft:
-        description: '🧪 Create as a Draft?'
+        description: '?? Create as a Draft?'
         required: false
         default: false
         type: boolean
       prerelease:
-        description: '⚠️ Mark as Pre-release?'
+        description: '?? Mark as Pre-release?'
         required: false
         default: false
         type: boolean
@@ -50,7 +50,7 @@ env:
 
 jobs:
   setup:
-    name: "⚙️ Setup & Versioning"
+    name: "?? Setup & Versioning"
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.vars.outputs.version }}
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: "🔧 Generate variables"
+      - name: "?? Generate variables"
         id: vars
         shell: bash
         run: |
@@ -101,12 +101,12 @@ jobs:
           echo "prerelease=${{ github.event.inputs.prerelease || 'false' }}" >> "$GITHUB_OUTPUT"
 
   inject-version:
-    name: "💉 Inject Versions"
+    name: "?? Inject Versions"
     needs: setup
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: "🖊️ Patching source files"
+      - name: "??? Patching source files"
         shell: bash
         run: |
           set -euo pipefail
@@ -114,15 +114,12 @@ jobs:
           CLEAN_VERSION="${{ needs.setup.outputs.clean_version }}"
           VCODE="${{ needs.setup.outputs.version_code }}"
 
-           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
-           sed -i "s/^versionCode=.*/versionCode=$VCODE/" module/module.prop
-           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" module/update.json
-           sed -i "s/\"versionCode\": [0-9]*/\"versionCode\": $VCODE/" module/update.json
-
-
+          sed -i "s/^version=.*/version=$VERSION/" module/module.prop
+          sed -i "s/^versionCode=.*/versionCode=$VCODE/" module/module.prop
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" module/update.json
+          sed -i "s/\"versionCode\": [0-9]*/\"versionCode\": $VCODE/" module/update.json
           sed -i "s/versionName = \".*\"/versionName = \"$CLEAN_VERSION\"/" android-app/app/build.gradle
           sed -i "s/versionCode = [0-9]*/versionCode = $VCODE/" android-app/app/build.gradle
-
           sed -i "s/version = '.*/version = '$CLEAN_VERSION'/" pc-tool-java/build.gradle
           sed -i "s/<Version>.*<\/Version>/<Version>$CLEAN_VERSION<\/Version>/" pc-tool-csharp/InputBlockerSetup.csproj
       - uses: actions/upload-artifact@v4
@@ -136,7 +133,7 @@ jobs:
             pc-tool-csharp/InputBlockerSetup.csproj
 
   build-android:
-    name: "🤖 Build Android"
+    name: "?? Build Android"
     needs: [setup, inject-version]
     if: contains(fromJSON('["all", "android", "module"]'), needs.setup.outputs.build_type)
     runs-on: ubuntu-latest
@@ -151,7 +148,7 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
-      - name: "🔨 Assemble Release APK"
+      - name: "?? Assemble Release APK"
         env:
           ANDROID_HOME: ${{ env.ANDROID_HOME || '/usr/local/lib/android/sdk' }}
           ANDROID_SDK_ROOT: ${{ env.ANDROID_SDK_ROOT || '/usr/local/lib/android/sdk' }}
@@ -168,7 +165,7 @@ jobs:
           path: android-app/app/build/outputs/apk/release/*.apk
 
   sign-android:
-    name: "✍️ Sign Android APK"
+    name: "?? Sign Android APK"
     needs: [setup, build-android]
     if: contains(fromJSON('["all", "android", "module"]'), needs.setup.outputs.build_type)
     runs-on: ubuntu-latest
@@ -177,7 +174,7 @@ jobs:
         with:
           name: unsigned-apk
           path: unsigned
-      - name: "🔏 Sign with apksigner"
+      - name: "?? Sign with apksigner"
         env:
           SIGNING_KEY: ${{ secrets.SIGNING_KEY }}
           KEY_STORE_PASSWORD: ${{ secrets.KEY_STORE_PASSWORD }}
@@ -185,31 +182,17 @@ jobs:
           ALIAS: ${{ secrets.ALIAS }}
         run: |
           set -euo pipefail
-
           echo "$SIGNING_KEY" | base64 -d > keystore.jks
-
-          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" \
-            -name "apksigner" -type f | sort -V | tail -1)
+          APKSIGNER=$(find "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools" -name "apksigner" -type f | sort -V | tail -1)
           if [[ -z "$APKSIGNER" ]]; then
-            echo "::error::apksigner not found. Available build-tools:"
-            ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}/build-tools/" || true
+            echo "::error::apksigner not found."
             exit 1
           fi
-          echo "Using apksigner: $APKSIGNER"
-
           APK=$(find unsigned -name "*.apk" | head -n 1)
           mkdir -p signed
-
-          "$APKSIGNER" sign \
-            --ks keystore.jks \
-            --ks-pass "pass:${KEY_STORE_PASSWORD}" \
-            --ks-key-alias "${ALIAS}" \
-            --key-pass "pass:${KEY_PASSWORD}" \
-            --out "signed/app-release-signed.apk" \
-            "$APK"
-
+          "$APKSIGNER" sign --ks keystore.jks --ks-pass "pass:${KEY_STORE_PASSWORD}" --ks-key-alias "${ALIAS}" --key-pass "pass:${KEY_PASSWORD}" --out "signed/app-release-signed.apk" "$APK"
           "$APKSIGNER" verify --verbose "signed/app-release-signed.apk"
-      - name: "📦 Finalizing APK"
+      - name: "?? Finalizing APK"
         run: |
           VERSION="${{ needs.setup.outputs.version }}"
           mkdir -p release
@@ -220,7 +203,7 @@ jobs:
           path: release/*.apk
 
   build-csharp:
-    name: "🖥️ Build C# (Desktop)"
+    name: "??? Build C# (Desktop)"
     needs: [setup, inject-version]
     if: contains(fromJSON('["all", "csharp"]'), needs.setup.outputs.build_type)
     runs-on: ubuntu-latest
@@ -233,42 +216,34 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-      - name: "🚀 Multi-Platform Publish"
+      - name: "?? Multi-Platform Publish"
         run: |
           mkdir -p release/csharp
           cd pc-tool-csharp
-
           publish_platform() {
             local rid=$1
             local out_dir="../release/csharp/$rid"
             mkdir -p "$out_dir"
-            dotnet publish InputBlockerSetup.csproj \
-              -c Release \
-              -r "$rid" \
-              --self-contained true \
-              -p:PublishSingleFile=true \
-              -o "$out_dir"
+            dotnet publish InputBlockerSetup.csproj -c Release -r "$rid" --self-contained true -p:PublishSingleFile=true -o "$out_dir"
             if [[ "$rid" == win* ]]; then
               mv "$out_dir/InputBlockerSetup.exe" "$out_dir/InputBlockerSetup-$rid.exe"
             else
               mv "$out_dir/InputBlockerSetup" "$out_dir/InputBlockerSetup-$rid"
             fi
           }
-
           publish_platform "win-x64"
           publish_platform "win-arm64"
           publish_platform "linux-x64"
           publish_platform "linux-arm64"
           publish_platform "osx-x64"
           publish_platform "osx-arm64"
-
       - uses: actions/upload-artifact@v4
         with:
           name: csharp
           path: release/csharp/
 
   build-java:
-    name: "☕ Build Java (Legacy)"
+    name: "? Build Java (Legacy)"
     needs: [setup, inject-version]
     if: contains(fromJSON('["all", "java"]'), needs.setup.outputs.build_type)
     runs-on: ubuntu-latest
@@ -283,7 +258,7 @@ jobs:
           distribution: temurin
           java-version: 17
           cache: gradle
-      - name: "🔨 Build JAR"
+      - name: "?? Build JAR"
         run: |
           VERSION="${{ needs.setup.outputs.version }}"
           cd pc-tool-java
@@ -297,37 +272,37 @@ jobs:
           path: release/java/
 
   build-module:
-    name: "📦 Build Root Module"
+    name: "?? Build Root Module"
     needs: [setup, sign-android]
     if: contains(fromJSON('["all", "module"]'), needs.setup.outputs.build_type)
     runs-on: ubuntu-latest
     steps:
-       - uses: actions/checkout@v4
-       - uses: actions/download-artifact@v4
-         with:
-           name: versioned-files
-           path: .
-       - uses: actions/download-artifact@v4
-         with:
-           name: signed-apk
-           path: signed-apk
-       - name: "🎁 Packaging ZIP"
-         run: |
-           VERSION="${{ needs.setup.outputs.version }}"
-           APK=$(find signed-apk -name "*.apk" | head -n 1)
-           cp "$APK" module/common/InputBlocker.apk
-           mkdir -p module/system/app/InputBlocker
-           cp "$APK" module/system/app/InputBlocker/InputBlocker.apk
-           mkdir -p release
-           cd module
-           zip -r "../release/InputBlocker-${VERSION}.zip" .
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: versioned-files
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-apk
+          path: signed-apk
+      - name: "?? Packaging ZIP"
+        run: |
+          VERSION="${{ needs.setup.outputs.version }}"
+          APK=$(find signed-apk -name "*.apk" | head -n 1)
+          cp "$APK" module/common/InputBlocker.apk
+          mkdir -p module/system/app/InputBlocker
+          cp "$APK" module/system/app/InputBlocker/InputBlocker.apk
+          mkdir -p release
+          cd module
+          zip -r "../release/InputBlocker-${VERSION}.zip" .
       - uses: actions/upload-artifact@v4
         with:
           name: module
           path: release/*.zip
 
   checksums:
-    name: "🔢 Generate Checksums"
+    name: "?? Generate Checksums"
     needs: [setup, sign-android, build-csharp, build-java, build-module]
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
@@ -335,7 +310,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: "🧮 Calculating SHA256"
+      - name: "?? Calculating SHA256"
         run: |
           mkdir -p release
           cd artifacts
@@ -346,7 +321,7 @@ jobs:
           path: release/checksums.txt
 
   release:
-    name: "🚀 GitHub Release"
+    name: "?? GitHub Release"
     needs: [setup, sign-android, build-csharp, build-java, build-module, checksums]
     if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
@@ -354,23 +329,23 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: "📂 Flattening Assets"
+      - name: "?? Flattening Assets"
         run: |
           mkdir -p release
           find artifacts -type f \( -name "*.apk" -o -name "*.zip" -o -name "*.jar" -o -name "InputBlockerSetup-*" -o -name "checksums.txt" \) -exec cp {} release/ \;
-      - name: "🎉 Publishing Release"
+      - name: "?? Publishing Release"
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.setup.outputs.version }}
-          name: "✨ InputBlocker ${{ needs.setup.outputs.version }}"
-          body: ${{ github.event.inputs.release_notes || '🚀 Automated production release.' }}
+          name: "? InputBlocker ${{ needs.setup.outputs.version }}"
+          body: ${{ github.event.inputs.release_notes || '?? Automated production release.' }}
           draft: ${{ github.event.inputs.draft }}
           prerelease: ${{ github.event.inputs.prerelease }}
           generate_release_notes: true
           files: release/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: "📄 Update Manifest"
+      - name: "?? Update Manifest"
         run: |
           VERSION="${{ needs.setup.outputs.version }}"
           VCODE="${{ needs.setup.outputs.version_code }}"
@@ -385,7 +360,7 @@ jobs:
             "minApi": 23
           }
           EOF
-      - name: "🌐 Deploy to GitHub Pages"
+      - name: "?? Deploy to GitHub Pages"
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
