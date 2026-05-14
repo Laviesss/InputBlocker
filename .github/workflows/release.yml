@@ -114,10 +114,10 @@ jobs:
           CLEAN_VERSION="${{ needs.setup.outputs.clean_version }}"
           VCODE="${{ needs.setup.outputs.version_code }}"
 
-          sed -i "s/^version=.*/version=$VERSION/" module.prop
-          sed -i "s/^versionCode=.*/versionCode=$VCODE/" module.prop
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" update.json
-          sed -i "s/\"versionCode\": [0-9]*/\"versionCode\": $VCODE/" update.json
+           sed -i "s/^version=.*/version=$VERSION/" module/module.prop
+           sed -i "s/^versionCode=.*/versionCode=$VCODE/" module/module.prop
+           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" module/update.json
+           sed -i "s/\"versionCode\": [0-9]*/\"versionCode\": $VCODE/" module/update.json
 
 
           sed -i "s/versionName = \".*\"/versionName = \"$CLEAN_VERSION\"/" android-app/app/build.gradle
