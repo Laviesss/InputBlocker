@@ -123,6 +123,31 @@ class OverlayService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
 
+        // Quick Action Intents
+        val toggleIntent = Intent(this, NotificationReceiver::class.java).apply {
+            action = NotificationReceiver.ACTION_TOGGLE_BLOCKING
+        }
+        val togglePendingIntent = PendingIntent.getBroadcast(
+            this, 1, toggleIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val safeIntent = Intent(this, NotificationReceiver::class.java).apply {
+            action = NotificationReceiver.ACTION_SAFE_MODE
+        }
+        val safePendingIntent = PendingIntent.getBroadcast(
+            this, 2, safeIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val syncIntent = Intent(this, NotificationReceiver::class.java).apply {
+            action = NotificationReceiver.ACTION_SYNC
+        }
+        val syncPendingIntent = PendingIntent.getBroadcast(
+            this, 3, syncIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
         val statusText = when {
             forceSafeMode -> "Safe Mode (Disabled) - Reset to enable"
             isEnabled -> "Blocking ${regions.size} region(s)"
@@ -136,8 +161,12 @@ class OverlayService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .addAction(R.drawable.ic_power_off, "Toggle", togglePendingIntent)
+            .addAction(R.drawable.ic_shield, "Safe Mode", safePendingIntent)
+            .addAction(R.drawable.ic_sync, "Sync", syncPendingIntent)
             .build()
     }
+
 
     private fun loadConfig() {
         regions.clear()
