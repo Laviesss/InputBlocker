@@ -68,8 +68,10 @@ class OverlayService : Service() {
     private val blockLog = ConcurrentLinkedQueue<BlockLogActivity.BlockEntry>()
 
     private var currentProfile = "default"
-
+    private var lastForegroundApp: String? = null
+    
     private var blockingExpirationTime = 0L
+
     private var configReceiver: BroadcastReceiver? = null
     private var isRunning = true
 
@@ -96,7 +98,28 @@ class OverlayService : Service() {
         Thread {
             while (isRunning) {
                 try {
-                    Thread.sleep(60000) // Check every minute
+                    Thread.sleep(2000) // Check every 2 seconds for app changes
+                    
+                    // 1. Detect foreground app
+                    val fgApp = getForegroundPackage()
+                    if (fgApp != null && fgApp != lastForegroundApp) {
+                        lastForegroundApp = fgApp
+                        Log.i(TAG, "Foreground app changed to: $fgApp")
+                        
+                        // Check if a profile exists for this app
+                        val profileFile = File(InputBlockerServiceManager.getConfigFile(this, fgApp))
+                        if (profileFile.exists()) {
+                            Log.i(TAG, "Loading specific profile for $fgApp")
+                            currentProfile = fgApp
+                            reloadConfig()
+                        } else {
+                            Log.i(TAG, "No specific profile for $fgApp, using default")
+                            currentProfile = "default"
+                            reloadConfig()
+                        }
+                    }
+                    
+                    // 2. Handle expiration
                     if (isEnabled && blockingExpirationTime > 0 && System.currentTimeMillis() > blockingExpirationTime) {
                         Log.i(TAG, "Blocking session expired")
                         disableBlocking()
@@ -105,11 +128,12 @@ class OverlayService : Service() {
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Expiration timer error", e)
+                    Log.e(TAG, "Timer error", e)
                 }
             }
         }.start()
     }
+
 
     private fun isLsposedModeFromConfig(): Boolean {
         val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
@@ -121,7 +145,22 @@ class OverlayService : Service() {
         }
     }
 
+    private fun getForegroundPackage(): String? {
+        return try {
+            val output = runRootCommand("dumpsys activity activities | grep mResumedActivity")
+            if (output.isBlank()) return null
+            
+            // Typical output: mResumedActivity: ActivityRecord{... u0 com.android.settings/.Settings}
+            val match = Regex(" ([a-zA-Z0-9._]+)/").find(output)
+            match?.groupValues?.get(1)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to detect foreground app", e)
+            null
+        }
+    }
+
     private fun createNotificationChannel() {
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -195,8 +234,14 @@ class OverlayService : Service() {
         val configFile = File(InputBlockerServiceManager.getConfigFile(this, currentProfile))
         if (!configFile.exists()) {
             Log.w(TAG, "Config file not found for profile: $currentProfile")
+            // If currentProfile isn't default, try falling back to default
+            if (currentProfile != "default") {
+                currentProfile = "default"
+                loadConfig()
+            }
             return
         }
+
 
 
         try {
