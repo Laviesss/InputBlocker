@@ -216,7 +216,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun handleQuickActionIntent(intent: Intent?) {
         if (intent?.action == "com.inputblocker.ACTION_QUICK_MENU") {
-            tabLayout.selectTab(tabLayout.getTabAt(1))
+            val tab = tabLayout.getTabAt(1)
+            if (tab != null) {
+                tabLayout.selectTab(tab)
+            }
             containerControls.visibility = View.GONE
             containerQuickActions.visibility = View.VISIBLE
         }
