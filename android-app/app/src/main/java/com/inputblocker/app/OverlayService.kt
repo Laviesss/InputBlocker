@@ -220,7 +220,27 @@ class OverlayService : Service() {
         Log.i(TAG, "Loaded ${regions.size} regions")
     }
 
+    private fun emergencyReset() {
+        Log.i(TAG, "Emergency Reset Triggered!")
+        try {
+            // 1. Force disable and set safe mode in the config file
+            InputBlockerServiceManager.runRootCommand("sed -i 's/^enabled=.*/enabled=0/' /data/adb/modules/inputblocker/config/blocked_regions.conf")
+            InputBlockerServiceManager.runRootCommand("sed -i 's/^force_safe_mode=.*/force_safe_mode=1/' /data/adb/modules/inputblocker/config/blocked_regions.conf")
+            
+            // 2. Trigger immediate reload
+            val intent = Intent("com.inputblocker.RELOAD")
+            sendBroadcast(intent)
+            
+            runOnUiThread {
+                Toast.makeText(this, "EMERGENCY RESET: Blocking disabled", Toast.LENGTH_LONG).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Emergency reset failed", e)
+        }
+    }
+
     private fun createOverlayView() {
+
         if (windowManager == null) {
             Log.e(TAG, "WindowManager is null")
             return
@@ -608,6 +628,8 @@ class OverlayService : Service() {
         }
         private val regionsList = mutableListOf<Region>()
         private var enabled = true
+        private var gestureStartTime = 0L
+        private var isGestureActive = false
 
         fun setRegions(list: List<Region>) {
             regionsList.clear()
@@ -654,6 +676,37 @@ class OverlayService : Service() {
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val service = serviceRef.get()
+            
+            // --- EMERGENCY RESET GESTURE DETECTION ---
+            val pointerCount = event.pointerCount
+            if (pointerCount >= 3) {
+                var allInTopLeft = true
+                for (i in 0 until pointerCount) {
+                    val x = event.getX(i)
+                    val y = event.getY(i)
+                    if (x > width * 0.1f || y > height * 0.1f) {
+                        allInTopLeft = false
+                        break
+                    }
+                }
+                
+                if (allInTopLeft) {
+                    if (!isGestureActive) {
+                        gestureStartTime = System.currentTimeMillis()
+                        isGestureActive = true
+                    } else if (System.currentTimeMillis() - gestureStartTime >= 3000) {
+                        service?.emergencyReset()
+                        isGestureActive = false
+                        return true
+                    }
+                } else {
+                    isGestureActive = false
+                }
+            } else {
+                isGestureActive = false
+            }
+            // -----------------------------------------
+
             if (service?.isDetectionMode == true) {
                 val x = event.x
                 val y = event.y
