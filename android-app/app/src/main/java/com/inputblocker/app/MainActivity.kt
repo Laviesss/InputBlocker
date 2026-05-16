@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnActionSync: Button
     private lateinit var btnActionExport: Button
     private lateinit var btnActionTest: Button
+    private lateinit var btnViewLog: Button
 
     private var isEnabled = true
     private var isLsposedMode = false
@@ -111,6 +112,8 @@ class MainActivity : AppCompatActivity() {
         btnActionSync = findViewById(R.id.btn_action_sync)
         btnActionExport = findViewById(R.id.btn_action_export)
         btnActionTest = findViewById(R.id.btn_action_test)
+        btnViewLog = findViewById(R.id.btn_view_log)
+
 
         setupTabs()
         setupControlListeners()
@@ -205,6 +208,10 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Toast.makeText(this, "Test failed: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        btnViewLog.setOnClickListener {
+            startActivity(Intent(this, BlockLogActivity::class.java))
         }
     }
 

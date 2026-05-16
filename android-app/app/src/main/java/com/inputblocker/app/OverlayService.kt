@@ -29,6 +29,9 @@ import java.io.File
 import java.io.FileReader
 import java.io.Serializable
 import java.util.ArrayList
+import java.util.concurrent.ConcurrentLinkedQueue
+
+class OverlayService : Service() {
 
 class OverlayService : Service() {
 
@@ -36,7 +39,21 @@ class OverlayService : Service() {
         private const val TAG = "InputBlocker-Overlay"
         private const val CHANNEL_ID = "InputBlockerOverlay"
         private const val NOTIFICATION_ID = 1001
+        
+        private var globalBlockLog = ConcurrentLinkedQueue<BlockLogActivity.BlockEntry>()
+        
+        fun getRecentBlocks(): List<BlockLogActivity.BlockEntry> {
+            return globalBlockLog.toList().reversed()
+        }
+        
+        fun addBlockEntry(entry: BlockLogActivity.BlockEntry) {
+            globalBlockLog.add(entry)
+            if (globalBlockLog.size > 50) {
+                globalBlockLog.poll()
+            }
+        }
     }
+
 
     private var windowManager: WindowManager? = null
     private var touchBlockView: TouchBlockView? = null
@@ -46,8 +63,12 @@ class OverlayService : Service() {
     private var isDetectionMode = false
     private val touchHeatmap = mutableMapOf<Pair<Float, Float>, Int>()
     private var detectionStartTime = 0L
+    
+    // Real-time Block Log
+    private val blockLog = ConcurrentLinkedQueue<BlockLogActivity.BlockEntry>()
 
     private var currentProfile = "default"
+
     private var blockingExpirationTime = 0L
     private var configReceiver: BroadcastReceiver? = null
     private var isRunning = true
@@ -736,9 +757,15 @@ class OverlayService : Service() {
                     val nx = x / width
                     val ny = y / height
                     if (nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2) {
+                        val timestamp = java.text.DateFormat.//S...
+                        val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                        val logMsg = "Blocked touch at (${String.format("%.2f", nx)}, ${String.format("%.2f", ny)}) - Region #${regionsList.indexOf(region) + 1}"
+                        
+                        BlockLogActivity.addBlockEntry(BlockLogActivity.BlockEntry(timeStr, logMsg))
                         Log.d(TAG, "Blocked touch at ($x,$y) -> Normalized($nx,$ny)")
                         return true
                     }
+
                 }
             }
             return false

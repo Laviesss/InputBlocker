@@ -21,7 +21,14 @@
         android:theme="@style/Theme.InputBlocker"
         tools:targetApi="34">
 
+        <!-- Block Log Activity -->
+        <activity
+            android:name=".BlockLogActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker" />
+
         <!-- Detection Review Activity -->
+
         <activity
             android:name=".DetectionReviewActivity"
             android:exported="false"
