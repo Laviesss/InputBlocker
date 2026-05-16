@@ -473,12 +473,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun checkOverlayPermission() {
+        if (isLsposedMode) {
+            // In LSPosed mode, we bypass the system settings check
+            // and launch setup directly, as root permissions are assumed.
+            val intent = Intent(this, SensingActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+            return
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             if (!Settings.canDrawOverlays(this)) {
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 overlayPermissionLauncher.launch(intent)
             } else {
-                Toast.makeText(this, "Overlay permission already granted!", Toast.LENGTH_SHORT).show()
+                val intent = Intent(this, SensingActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                startActivity(intent)
             }
         }
     }

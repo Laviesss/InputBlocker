@@ -14,6 +14,11 @@ sys_log() {
 
 sys_log "========== INPUTBLOCKER SERVICE STARTED =========="
 
+# Force grant overlay permission via appops for Android Go compatibility
+# This bypasses the restricted "Display over other apps" settings page
+appops set com.inputblocker.app SYSTEM_ALERT_WINDOW allow
+sys_log "Forced SYSTEM_ALERT_WINDOW permission via appops."
+
 # Create directory for flag file
 mkdir -p /data/local/tmp/inputblocker
 
