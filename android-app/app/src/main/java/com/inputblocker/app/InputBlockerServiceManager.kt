@@ -41,7 +41,8 @@ object InputBlockerServiceManager {
         )
         
         for (path in paths) {
-            if (File(path).exists()) {
+            // Check existence via root to be sure
+            if (runRootCommand("ls -d $path").contains(path)) {
                 cachedModulePath = path
                 Log.i(TAG, "Detected module path: $path")
                 return path
@@ -54,6 +55,24 @@ object InputBlockerServiceManager {
     
     fun getConfigFile(context: Context, profile: String = "default"): String {
         return getModulePath(context) + "/config/profiles/$profile.conf"
+    }
+
+    fun saveConfig(context: Context, profile: String, content: String) {
+        try {
+            val path = getConfigFile(context, profile)
+            val dir = path.substringBeforeLast("/")
+            runRootCommand("mkdir -p $dir")
+            
+            // Write to a temporary file in app storage first, then move with root
+            val tempFile = File(context.cacheDir, "temp_config.conf")
+            tempFile.writeText(content)
+            
+            runRootCommand("cp ${tempFile.absolutePath} $path")
+            runRootCommand("chmod 644 $path")
+            tempFile.delete()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save config for profile $profile", e)
+        }
     }
     
     fun startServices(context: Context) {
@@ -68,27 +87,22 @@ object InputBlockerServiceManager {
         
         val volumeIntent = Intent(context, VolumeButtonListenerService::class.java)
         context.startService(volumeIntent)
-        
-        Log.i(TAG, "Services started")
     }
     
     private fun shouldStartInSafeMode(context: Context): Boolean {
-        val configPath = getConfigFile(context)
-        val configFile = File(configPath)
         val crashFlag = File(CRASH_FLAG)
         val shutdownFile = File(NORMAL_SHUTDOWN_FLAG)
         
         val wasCleanShutdown = shutdownFile.exists()
-        shutdownFile.delete()
+        if (wasCleanShutdown) shutdownFile.delete()
         
         if (crashFlag.exists()) {
             crashFlag.delete()
-            Log.i(TAG, "Crash flag detected - enabling safe mode")
+            enableSafeMode(context)
             return true
         }
         
-        if (!wasCleanShutdown) {
-            Log.i(TAG, "Unexpected shutdown detected - enabling safe mode")
+        if (!wasCleanShutdown && !File("/data/local/tmp/inputblocker/booting").exists()) {
             enableSafeMode(context)
             return true
         }
@@ -98,54 +112,49 @@ object InputBlockerServiceManager {
     
     fun enableSafeMode(context: Context) {
         try {
-            val configPath = getConfigFile(context)
-            val configFile = File(configPath)
-            if (configFile.exists()) {
-                val lines = configFile.readLines().toMutableList()
-                val content = StringBuilder()
-                var foundEnabled = false
-                var foundSafeMode = false
-                
-                for (line in lines) {
-                    when {
-                        line.startsWith("enabled=") -> {
-                            content.append("enabled=0\n")
-                            foundEnabled = true
-                        }
-                        line.startsWith("force_safe_mode=") -> {
-                            content.append("force_safe_mode=1\n")
-                            foundSafeMode = true
-                        }
-                        else -> content.append(line).append("\n")
-                    }
-                }
-                
-                if (!foundEnabled) {
-                    content.insert(0, "enabled=0\nforce_safe_mode=1\n\n")
-                }
-                
-                val tempFile = File(configPath + ".tmp")
-                tempFile.writeText(content.toString())
-                if (tempFile.renameTo(configFile)) {
-                    Log.i(TAG, "Safe mode enabled - blocking disabled")
-                } else {
-                    Log.e(TAG, "Failed to atomically update config file")
-                }
-            }
+            val path = getConfigFile(context)
+            // Use sed via root to disable blocking safely
+            runRootCommand("sed -i 's/^enabled=1/enabled=0/' $path")
+            runRootCommand("sed -i '/force_safe_mode=/d' $path") // Clear old
+            runRootCommand("echo 'force_safe_mode=1' >> $path")
+            Log.i(TAG, "Safe mode enabled via root")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enable safe mode", e)
         }
     }
     
     fun onShutdown() {
-        Log.i(TAG, "Shutdown detected")
-        
-        val shutdownFile = File(NORMAL_SHUTDOWN_FLAG)
-        try {
-            shutdownFile.parentFile?.mkdirs()
-            shutdownFile.createNewFile()
+        runRootCommand("mkdir -p /data/local/tmp/inputblocker && touch $NORMAL_SHUTDOWN_FLAG")
+    }
+
+    fun clearEmergencyReset(context: Context) {
+        runRootCommand("rm -f ${getModulePath(context)}/config/kill_switch")
+    }
+
+    fun createBackup(context: Context): Boolean {
+        return try {
+            val modulePath = getModulePath(context)
+            val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.getDefault()).format(java.util.Date())
+            val backupDir = "/storage/emulated/0/InputBlocker/backups"
+            
+            runRootCommand("mkdir -p $backupDir")
+            runRootCommand("tar -czf $backupDir/backup_$timestamp.tar.gz -C $modulePath/config .")
+            true
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to create shutdown flag", e)
+            Log.e(TAG, "Backup failed: ${e.message}")
+            false
+        }
+    }
+
+    fun restoreBackup(context: Context, backupFile: File): Boolean {
+        return try {
+            val modulePath = getModulePath(context)
+            runRootCommand("mkdir -p $modulePath/config")
+            runRootCommand("tar -xzf ${backupFile.absolutePath} -C $modulePath/config")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Restore failed: ${e.message}")
+            false
         }
     }
 }

@@ -157,13 +157,13 @@
                                 android:textColor="@color/app_text_primary"
                                 android:textSize="16sp" />
 
-                            <com.google.android.material.switchmaterial.SwitchMaterial
-                                android:id="@+id/switch_lsposed"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:layout_alignParentEnd="true"
-                                app:thumbTint="@color/switch_thumb_selector"
-                                app:trackTint="@color/switch_track_selector" />
+                                <com.google.android.material.switchmaterial.SwitchMaterial
+                                    android:id="@+id/switch_blocking_method"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_alignParentEnd="true"
+                                    app:thumbTint="@color/switch_thumb_selector"
+                                    app:trackTint="@color/switch_track_selector" />
                         </RelativeLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -442,6 +442,56 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="VIEW" />
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Optimization & Advanced Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    app:cardBackgroundColor="@color/app_surface"
+                    app:cardCornerRadius="20dp"
+                    app:strokeColor="@color/app_border"
+                    app:strokeWidth="1dp">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_optimize_regions"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center_vertical"
+                            android:text="✨ Optimize Regions from Log" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_backup_restore"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center_vertical"
+                            android:text="💾 Backup &amp; Restore" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_import_preset"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center_vertical"
+                            android:text="📥 Import Preset" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btn_export_preset"
+                            style="@style/Widget.MaterialComponents.Button.TextButton"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="start|center_vertical"
+                            android:text="📤 Export Preset" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 

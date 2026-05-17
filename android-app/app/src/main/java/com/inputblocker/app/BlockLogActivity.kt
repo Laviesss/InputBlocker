@@ -1,16 +1,14 @@
 package com.inputblocker.app
 
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import java.text.SimpleDateFormat
+import java.io.File
+import java.io.Serializable
 import java.util.*
 
 class BlockLogActivity : AppCompatActivity() {
@@ -21,25 +19,32 @@ class BlockLogActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Simple layout programmatically to avoid extra XML files for a debug tool
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
-            setBackgroundColor(ContextCompat.getColor(this@BlockLogActivity, R.color.app_background))
+            setBackgroundColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.background_dark))
         }
 
         val title = TextView(this).apply {
             text = "Real-time Block Log"
             textSize = 24f
-            setTextColor(ContextCompat.getColor(this@BlockLogActivity, R.color.app_text_primary))
+            setTextColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.white))
             setPadding(0, 0, 0, 32)
         }
 
         btnClearLog = Button(this).apply {
             text = "Clear Log"
             setOnClickListener {
-                logContainer.removeAllViews()
-                Toast.makeText(this@BlockLogActivity, "Log cleared", Toast.LENGTH_SHORT).show()
+                try {
+                    val logFile = File(InputBlockerServiceManager.getModulePath(this@BlockLogActivity) + "/config/blocklog.txt")
+                    if (logFile.exists()) {
+                        logFile.delete()
+                    }
+                    refreshLog()
+                    Toast.makeText(this@BlockLogActivity, "Log cleared", Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    Toast.makeText(this@BlockLogActivity, "Failed to clear log: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
@@ -53,47 +58,54 @@ class BlockLogActivity : AppCompatActivity() {
         root.addView(logContainer)
 
         setContentView(root)
-        
-        // Initial load of the log
         refreshLog()
     }
 
     private fun refreshLog() {
         logContainer.removeAllViews()
-        val logs = OverlayService.getRecentBlocks()
         
-        if (logs.isEmpty()) {
-            val emptyView = TextView(this).apply {
-                text = "No blocked touches recorded yet."
-                setTextColor(ContextCompat.getColor(this@BlockLogActivity, R.color.app_text_secondary))
-                gravity = android.view.Gravity.CENTER
+        try {
+            val logFile = File(InputBlockerServiceManager.getModulePath(this) + "/config/blocklog.txt")
+            if (!logFile.exists()) {
+                showEmptyLog()
+                return
             }
-            logContainer.addView(emptyView)
-            return
-        }
 
-        logs.forEach { log ->
-            val item = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                setPadding(0, 0, 0, 16)
-            }
+            val logs = logFile.readLines().reversed().take(100)
             
-            val time = TextView(this).apply {
-                text = log.timestamp
-                textSize = 12f
-                setTextColor(ContextCompat.getColor(this@BlockLogActivity, R.color.app_text_secondary))
+            if (logs.isEmpty()) {
+                showEmptyLog()
+                return
             }
-            
-            val detail = TextView(this).apply {
-                text = log.message
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(this@BlockLogActivity, R.color.app_text_primary))
+
+            for (line in logs) {
+                val item = LinearLayout(this).apply {
+                    orientation = LinearLayout.VERTICAL
+                    setPadding(0, 0, 0, 16)
+                }
+                
+                val detail = TextView(this).apply {
+                    text = line
+                    textSize = 14f
+                    setTextColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.white))
+                }
+                
+                item.addView(detail)
+                logContainer.addView(item)
             }
-            
-            item.addView(time)
-            item.addView(detail)
-            logContainer.addView(item)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error reading log: ${e.message}", Toast.LENGTH_SHORT).show()
+            showEmptyLog()
         }
+    }
+
+    private fun showEmptyLog() {
+        val emptyView = TextView(this).apply {
+            text = "No blocked touches recorded yet."
+            setTextColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.darker_gray))
+            gravity = android.view.Gravity.CENTER
+        }
+        logContainer.addView(emptyView)
     }
 
     override fun onResume() {
@@ -101,5 +113,5 @@ class BlockLogActivity : AppCompatActivity() {
         refreshLog()
     }
 
-    data class BlockEntry(val timestamp: String, val message: String)
+    data class BlockEntry(val timestamp: String, val message: String) : Serializable
 }

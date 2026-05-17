@@ -65,5 +65,5 @@ A lightweight Swing-based alternative.
 ## CI/CD Pipeline
 
 Automated releases are handled via GitHub Actions (`.github/workflows/release.yml`).
-- **Trigger**: Push a tag matching `v*` (e.g., `git tag v1.0.0 && git push --tags`).
+- **Trigger**: Push a tag matching `v*` (e.g., `git tag v0.1.0 && git push --tags`).
 - **Process**: The pipeline injects versions, builds all components in parallel, generates SHA-256 checksums, and publishes a GitHub Release.

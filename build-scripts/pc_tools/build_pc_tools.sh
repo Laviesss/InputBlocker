@@ -91,8 +91,8 @@ if command -v java &> /dev/null; then
     echo "Building JAR..."
     ./gradlew jar 2>/dev/null
     if [ $? -eq 0 ]; then
-        cp -f "build/libs/InputBlockerSetup-1.0.0.jar" "$JAVA_OUTPUT/"
-        echo -e "${GREEN}Done: $JAVA_OUTPUT/InputBlockerSetup-1.0.0.jar${NC}"
+cp -f "build/libs/InputBlockerSetup-0.1.0.jar" "$JAVA_OUTPUT/"
+echo -e "${GREEN}Done: $JAVA_OUTPUT/InputBlockerSetup-0.1.0.jar${NC}"
     else
         echo -e "${RED}Failed to build Java JAR.${NC}"
     fi

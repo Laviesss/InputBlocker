@@ -222,18 +222,16 @@ class DetectionReviewActivity : Activity() {
 
     private fun saveAndApply() {
         try {
-            val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
-            configFile.parentFile?.mkdirs()
-            
             val content = StringBuilder()
+            content.append("# Detected Regions\n")
             content.append("enabled=1\n")
             content.append("force_safe_mode=0\n\n")
             
             for (region in regions) {
-                content.append("${region.x1},${region.y1},${region.x2},${region.y2}\n")
+                content.append("$region\n")
             }
             
-            configFile.writeText(content.toString())
+            InputBlockerServiceManager.saveConfig(this, "default", content.toString())
             
             val intent = Intent("com.inputblocker.RELOAD")
             sendBroadcast(intent)

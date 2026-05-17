@@ -1,6 +1,5 @@
 package com.inputblocker.app
 
-import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -17,9 +16,10 @@ class NotificationReceiver : BroadcastReceiver() {
         val action = intent.action ?: return
         Log.i("NotificationReceiver", "Received action: $action")
 
+        val configPath = InputBlockerServiceManager.getConfigFile(context, "default")
+
         when (action) {
             ACTION_TOGGLE_BLOCKING -> {
-                // We don't know current state here, so we fetch it from prefs
                 val prefs = context.getSharedPreferences("InputBlockerPrefs", Context.MODE_PRIVATE)
                 val currentStatus = prefs.getBoolean("enabled", true)
                 val newStatus = !currentStatus
@@ -27,21 +27,15 @@ class NotificationReceiver : BroadcastReceiver() {
                 prefs.edit().putBoolean("enabled", newStatus).apply()
                 
                 val cmd = if (newStatus) "enabled=1" else "enabled=0"
-                InputBlockerServiceManager.runRootCommand("sed -i 's/^enabled=.*/$cmd/' /data/adb/modules/inputblocker/config/blocked_regions.conf")
-                InputBlockerServiceManager.runRootCommand("am broadcast -a com.inputblocker.RELOAD")
+                InputBlockerServiceManager.runRootCommand("sed -i 's/^enabled=.*/$cmd/' $configPath")
+                context.sendBroadcast(Intent("com.inputblocker.RELOAD"))
             }
             ACTION_SAFE_MODE -> {
-                // Force Safe Mode: disable and clear regions
-                InputBlockerServiceManager.runRootCommand("sed -i 's/^enabled=.*/enabled=0/' /data/adb/modules/inputblocker/config/blocked_regions.conf")
-                InputBlockerServiceManager.runRootCommand("sed -i 's/^force_safe_mode=.*/force_safe_mode=1/' /data/adb/modules/inputblocker/config/blocked_regions.conf")
-                
-                // Clear regions manually using a shell script approach (truncating the region list)
-                // This is tricky with sed, so we just call a reload and handle in service.sh if needed
-                // For now, we'll trigger a reload and let the app handle the actual clear if it's open
-                InputBlockerServiceManager.runRootCommand("am broadcast -a com.inputblocker.RELOAD")
+                InputBlockerServiceManager.enableSafeMode(context)
+                context.sendBroadcast(Intent("com.inputblocker.RELOAD"))
             }
             ACTION_SYNC -> {
-                InputBlockerServiceManager.runRootCommand("am broadcast -a com.inputblocker.RELOAD")
+                context.sendBroadcast(Intent("com.inputblocker.RELOAD"))
             }
         }
     }

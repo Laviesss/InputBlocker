@@ -1,6 +1,6 @@
 id=inputblocker
 name=InputBlocker
-version=v1.0.0
+version=v0.1.0
 versionCode=1
 author=Laviesss
 description=Block ghost taps and unwanted touch inputs by defining rectangular regions.
