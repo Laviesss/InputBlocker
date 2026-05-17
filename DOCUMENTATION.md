@@ -1,33 +1,20 @@
-# ??? InputBlocker: Comprehensive Technical Documentation
+# InputBlocker: Comprehensive Technical Reference Manual
 
-InputBlocker is a professional-grade Android system utility designed to eliminate "ghost taps"�erratic, phantom touch inputs caused by hardware failure, screen degradation, or moisture. Unlike simple overlay apps that can be bypassed or cause lag, InputBlocker operates at the system level to ensure zero-latency interception and absolute reliability.
-
----
-
-## ?? Table of Contents
-1. [System Architecture](#-system-architecture)
-2. [The Coordinate Lifeline (Normalization)](#-the-coordinate-lifeline)
-3. [Blocking Engine Deep-Dive](#-blocking-engine-deep-dive)
-4. [Ghost Tap Detection Pipeline](#-ghost-tap-detection-pipeline)
-5. [Root Module & System Hardening](#-root-module--system-hardening)
-6. [Companion App Logic](#-companion-app-logic)
-7. [CI/CD & Release Engineering](#-cicd--release-engineering)
-8. [Installation & Maintenance](#-installation--maintenance)
-9. [Developer Reference](#-developer-reference)
+InputBlocker is a professional-grade Android system utility designed to eliminate "ghost taps"—erratic, phantom touch inputs caused by hardware failure, screen degradation, or moisture. Unlike simple overlay apps, InputBlocker operates at the system level to ensure zero-latency interception and absolute reliability.
 
 ---
 
-## ??? System Architecture
+## 🏛️ 1. System Architecture
 
 InputBlocker employs a **Tri-Layer Architecture** to separate system-level execution from user-level management.
 
-### 1. The Execution Layer (Xposed/LSPosed Hook)
-The core "brain" of the system. It resides within the Android System Server process (`system_server`). Its sole responsibility is to intercept raw motion events and decide whether they should be allowed to reach the rest of the OS. By hooking the input dispatcher, it can block touches before they are even processed by the window manager.
+### 1.1 The Execution Layer (Xposed/LSPosed Hook)
+The core "brain" of the system. It resides within the Android System Server process (`system_server`). Its sole responsibility is to intercept raw motion events and decide whether they should be allowed to reach the rest of the OS. By hooking the `InputDispatcher`, it can block touches before they are even processed by the window manager.
 
-### 2. The Management Layer (Companion App)
-A high-level UI that allows users to define and manage blocking regions. It handles the "intelligence" (detection), the visual configuration, and the communication with the execution layer via a shared configuration file stored in the root directory.
+### 1.2 The Management Layer (Companion App)
+A high-level UI that allows users to define and manage blocking regions. It handles the "intelligence" (adaptive detection), the visual configuration, and the communication with the execution layer via shared configuration files stored in the root directory.
 
-### 3. The Foundation Layer (Root Module)
+### 1.3 The Foundation Layer (Root Module)
 The glue that holds everything together. It ensures the companion app is always present and functional. It manages boot-time services and provides a gateway for root managers (Magisk, KernelSU, APatch) to interact with the system.
 
 **Data Flow**:
@@ -35,130 +22,129 @@ The glue that holds everything together. It ensures the companion app is always 
 
 ---
 
-## ?? The Coordinate Lifeline (Normalization)
+## 📐 2. The Coordinate Lifeline (Normalization)
 
-The most critical engineering challenge in Android system utilities is **Resolution Independence**. A blocking region defined on a 1080p screen would be incorrectly positioned on a 1440p screen if absolute pixels were used.
+To achieve **Resolution Independence**, InputBlocker treats the entire screen as a unit square from `(0.0, 0.0)` to `(1.0, 1.0)`.
 
-### The Solution: Normalized Coordinates
-InputBlocker treats the entire screen as a unit square from `(0.0, 0.0)` to `(1.0, 1.0)`.
+### 2.1 The Unit Square
+The entire screen is treated as a 2D plane from `(0.0, 0.0)` (Top-Left) to `(1.0, 1.0)` (Bottom-Right).
 
-#### Mathematical Model
-For any touch event at pixel position $(P_x, P_y)$ on a screen with width $W$ and height $H$:
+### 2.2 Mathematical Conversion
+When a touch event occurs, the system converts raw pixels to normalized coordinates:
+$$\text{NormalizedX} = \frac{\text{RawPixelX}}{\text{ScreenWidth}}$$
+$$\text{NormalizedY} = \frac{\text{RawPixelY}}{\text{ScreenHeight}}$$
 
-$$\text{Normalized } X = \frac{P_x}{W}$$
-$$\text{Normalized } Y = \frac{P_y}{H}$$
-
-#### Engineering Benefits:
-- **Device Portability**: A configuration file created on one device can be shared with another device of a different resolution and work perfectly.
-- **Computational Efficiency**: The hook does not need to query `DisplayMetrics` on every single touch event; it simply uses the normalized coordinates provided by the system or calculates them once per event.
-- **Consistency**: Region definitions are relative to the screen percentage, not the pixel count.
+### 2.3 Engineering Benefit
+This approach ensures that a blocking region defined on a 1080p screen remains perfectly aligned on a 1440p screen without manual adjustment. It also allows for "Community Presets" to be shared across different device models with similar screen aspect ratios.
 
 ---
 
-## ? Blocking Engine Deep-Dive
+## ⚙️ 3. Blocking Engine Deep-Dive
 
-### The Hook: `dispatchMotionLocked`
-The system hooks `com.android.server.input.InputDispatcher.dispatchMotionLocked`. This is the primary bottleneck of the Android input system. By intercepting here, we can block touches before they are even dispatched to the active window.
+### 3.1 Advanced Shape Support
+InputBlocker supports three geometric primitives for blocking:
+1. **Rectangles**: Standard boundary checks ($\text{x1} \le \text{nx} \le \text{x2}$ and $\text{y1} \le \text{ny} \le \text{y2}$).
+2. **Circles**: Euclidean distance check from center $(cx, cy)$ with radius $r$: $(nx-cx)^2 + (ny-cy)^2 \le r^2$.
+3. **Ellipses**: Normalized distance check: $\frac{(nx-cx)^2}{rx^2} + \frac{(ny-cy)^2}{ry^2} \le 1.0$.
 
-### Optimization: The TTL Cache
-Reading a file from `/data/adb/` on every single touch event (which can happen 120+ times per second on high-refresh screens) would cause massive system lag and CPU spikes.
+### 3.2 Surgical Filtering
+To prevent blocking intentional user interactions, the engine applies a a dual-threshold filter:
+- **Pressure Threshold**: Blocks only if $\text{Pressure} < \text{minPressure}$.
+- **Duration Threshold**: Blocks only if $\text{Duration} < \text{maxDuration}$.
+- **Logic**: Low-pressure, short-duration events are flagged as ghost taps. Firm presses and long-holds are passed through to the system.
 
-**The Strategy**:
-- **In-Memory Caching**: The hook loads the `default.conf` into a `mutableListOf<Region>` in memory.
-- **TTL (Time-To-Live)**: The cache is only refreshed every 5 seconds (`CACHE_TTL = 5000L`).
-- **Complexity**: Each touch event is checked against the list of regions in $O(N)$ time, where $N$ is the number of blocked regions (typically $<10$), ensuring negligible performance impact.
+### 3.3 Region Layering (Exclude Zones)
+The system implements a priority-based check:
+1. **Exclude Check**: If a touch falls within a region marked as `isExclude`, it is immediately allowed.
+2. **Block Check**: If not excluded, the touch is then checked against blocking regions.
 
----
+---ine applies a a dual-threshold filter:
+- **Pressure Threshold**: Blocks only if $\text{Pressure} < \text{minPressure}$.
+- **Duration Threshold**: Blocks only if $\text{Duration} < \text{maxDuration}$.
+- **Logic**: Low-pressure, short-duration events are flagged as ghost taps. Firm presses and long-holds are passed through to the system.
 
-## ?? Ghost Tap Detection Pipeline
-
-Instead of forcing users to manually guess the location of ghost taps, InputBlocker implements an automated detection pipeline.
-
-### Phase 1: Raw Sensing
-The `SensingActivity` creates a full-screen black overlay. It records every `ACTION_DOWN` event as a normalized coordinate pair. A **Real-time Heatmap** provides visual feedback, drawing a red circle at every detected point to show the user where the ghost taps are occurring.
-
-### Phase 2: DBSCAN Clustering
-The system uses a **Density-Based Spatial Clustering of Applications with Noise (DBSCAN)** algorithm to identify hotspots.
-
-**Algorithm Logic**:
-1. **Core Points**: A point is a "core point" if at least `MinPts` other points are within distance $\epsilon$.
-2. **Expansion**: The algorithm recursively expands the cluster by adding all reachable neighbors.
-3. **Noise**: Points that do not belong to any cluster are ignored as random noise.
-
-**User-Tuning**:
-Users can adjust $\epsilon$ (the radius of the search) and `MinPts` (the density required) via sliders in the `DetectionReviewActivity` to refine the clusters in real-time.
-
-### Phase 3: Bounding Box Generation
-Once clusters are identified, the system calculates the **Minimum Bounding Box** for each cluster:
-- $X_{min} = \min(\text{all points in cluster})$
-- $X_{max} = \max(\text{all points in cluster})$
-- $Y_{min} = \min(\text{all points in cluster})$
-- $Y_{max} = \max(\text{all points in cluster})$
+### Region Layering (Exclude Zones)
+The system implements a priority-based check:
+1. **Exclude Check**: If a touch falls within a region marked as `isExclude`, it is immediately allowed.
+2. **Block Check**: If not excluded, the touch is then checked against blocking regions.
 
 ---
 
-## ??? Root Module & System Hardening
+## 🧠 Intelligence & Automation
 
-### Root Agnosticism
-The module is designed to be compatible with all modern root managers:
-- **Magisk**: Standard module structure and boot scripts.
-- **KernelSU / APatch**: Compatible with the `/data/adb/modules` directory layout.
-- **SuperSU**: Legacy support for basic APK installation.
+### Adaptive Blocking
+The system uses a feedback loop to refine blocking regions:
+1. **Log Collection**: Every blocked touch is logged to `blocklog.txt`.
+2. **Hotspot Analysis**: The app analyzes the log to find the actual bounding box of all hits within a region.
+3. **Dynamic Shrinking**: Regions are shrunk to fit the actual hit density, reducing the blocked area and increasing usable screen space.
 
-### Hardening Scripts
-1. **`service.sh` (The Guardian)**: 
-   Runs at boot. It waits for the system to be fully ready (`sys.boot_completed=1`), then checks if the companion app is installed. If not, it silently installs it from the internal `common/` folder.
-2. **`action.sh` (The Gateway)**: 
-   Integrates with root manager "Action" buttons. It launches the app's Quick Actions menu via `am start` or performs an **Emergency Reset** (disabling all blocking) if the app is inaccessible.
-3. **`health-check.sh` (The Auditor)**: 
-   A standalone script that verifies the integrity of `module.prop` and the companion APK. If corruption is detected, it signals the system to initiate a self-repair sequence.
+### App-Specific Profiles
+The module detects the foreground package name using `ActivityManager`. If a config file exists for that package (`/profiles/[package].conf`), it is loaded; otherwise, the system defaults to `default.conf`.
+
+### Auto-Detection
+The sensing mode captures raw touch data and applies **DBSCAN (Density-Based Spatial Clustering of Applications with Noise)** to automatically identify clusters of ghost taps and suggest the optimal blocking regions.
 
 ---
 
-## ?? Companion App Logic
+## 🛡️ System Hardening & Recovery
 
-### Quick Actions FAB Menu
-The `MainActivity` features a Floating Action Button (FAB) that provides immediate access to critical tools:
-- **Safe Mode**: Temporarily disables all blocking to prevent lockouts.
-- **Sync**: Forces the Root Module to reload the current configuration from the file.
-- **Export**: Backs up the current blocking regions to a text file.
-- **Test Hook**: Creates a temporary `test_mode` file. While this file exists, the Xposed hook blocks ALL touch input for 5 seconds, allowing the user to verify the hook is active.
+### Emergency Reset
+To prevent "permanent lockout" due to misconfiguration, a secret gesture is implemented:
+- **Trigger**: Long-press (3s) in the top-left corner (first 5% of screen).
+- **Action**: Creates a `kill_switch` file in the config directory, which forces the blocking engine to disable itself immediately.
 
-### Theme Engine
-Supports a high-contrast UI with four modes: **System**, **Light**, **Dark**, and **AMOLED** (pure black), ensuring accessibility in all lighting conditions and saving battery on OLED screens.
-
----
-
-## ?? CI/CD & Release Engineering
-
-The project uses a professional-grade GitHub Actions pipeline (`release.yml`) to ensure every release is consistent and signed.
-
-### The Release Lifecycle
-1. **Versioning**: The `versionCode` is automatically derived from the total git commit count, ensuring a strictly increasing integer for Android's package manager.
-2. **Injection**: The pipeline uses `sed` to inject the version into `module.prop`, `update.json`, `build.gradle`, and `.csproj`.
-3. **Hardened Signing**: Instead of relying on third-party actions, the pipeline uses the official Android `apksigner` tool from the SDK to sign the APK using a Base64-encoded keystore stored in GitHub Secrets.
-4. **Update Authority**: The `update.json` is automatically deployed to **GitHub Pages**. This allows the app to check for updates without needing a dedicated backend server.
+### Performance Optimization
+To ensure zero UI lag, the Xposed hook employs:
+- **Metrics Caching**: `DisplayMetrics` are cached with a 30s TTL.
+- **Volatile Caching**: Configuration is cached in memory and updated every 5s.
+- **Index Access**: Direct argument access in `dispatchMotionLocked` to avoid expensive reflection.
 
 ---
 
-## ?? Installation & Maintenance
+## 🧠 4. Intelligence & Automation
 
-### Standard Installation
-1. Install the Root Module (`.zip`) via your preferred manager (Magisk/KernelSU/APatch).
-2. Reboot the device.
-3. The companion app will be auto-installed. Open it and grant **Overlay Permission**.
-4. Enable the **Xposed Module** in LSPosed/EdXposed and reboot.
+### 4.1 Adaptive Blocking (The Feedback Loop)
+Rather than relying on a user's "best guess" for region size, InputBlocker implements an adaptive optimization loop.
 
-### Troubleshooting
-- **App not installing?** Check if the `service.sh` logs show "APK not found".
-- **Blocking not working?** Verify that the Xposed hook is enabled and that the app is not in "Safe Mode".
-- **Lockout?** Use the Root Manager "Action" button to trigger an Emergency Reset.
+1. **Log Collection**: Every blocked touch is logged to `blocklog.txt` with its exact normalized coordinates.
+2. **Hotspot Analysis**: The app analyzes the logs to find the actual bounding box of all hits within a region.
+3. **Dynamic Shrinking**: Regions are shrunk to fit the actual "hit cloud" plus a small safety margin. This minimizes the amount of usable screen that is blocked.
+
+### 4.2 Auto-Detection (DBSCAN Clustering)
+The "Sensing Mode" utilizes the **DBSCAN (Density-Based Spatial Clustering of Applications with Noise)** algorithm.
+
+- **Why DBSCAN?**: Unlike K-Means, DBSCAN does not require the user to specify the number of clusters. It finds "dense" areas of touches and treats isolated touches as noise.
+- **Process**: The app captures touches $\rightarrow$ clusters them by density $\rightarrow$ calculates the bounding box for each cluster $\rightarrow$ suggests these as blocking regions.
+
+### 4.3 App-Specific Profiles
+The module detects the foreground package name using `ActivityManager`. If a config file exists for that package (`/profiles/[package].conf`), it is loaded; otherwise, the system defaults to `default.conf`.
 
 ---
 
-## ?? Project Specifications
-- **Minimum API**: 23 (Android 6.0)
-- **Target SDK**: 34 (Android 14)
-- **JDK**: 17 (Temurin)
-- **.NET**: 8.0 (Core)
-- **Root Managers**: Magisk, KernelSU, APatch, SuperSU.
+## 🛡️ 5. System Hardening & Recovery
+
+### 5.1 Emergency Reset
+To prevent a user from accidentally blocking the entire screen (and thus being unable to use the app to fix it), a secret gesture is implemented.
+- **Trigger**: Long-press (3s) in the top-left corner (first 5% of screen).
+- **Action**: Creates a `kill_switch` file in the config directory, which forces the blocking engine to disable itself immediately.
+
+### 5.2 Performance Optimization
+To ensure zero UI lag, the Xposed hook employs:
+- **Metrics Caching**: `DisplayMetrics` (screen width/height) are cached with a 30s TTL.
+- **Volatile Caching**: Configuration is cached in memory and updated every 5s.
+- **Index Access**: Direct argument access in `dispatchMotionLocked` to avoid expensive reflection.
+
+---
+
+## 🛠️ 6. Installation & Maintenance
+
+### 6.1 Installation
+1. Flash the module via your root manager.
+2. Reboot device.
+3. Open the Companion App to configure regions.
+
+### 6.2 Maintenance
+- **Config Path**: `/data/adb/modules/inputblocker/config/`
+- **Log Path**: `/data/adb/modules/inputblocker/config/blocklog.txt`
+- **Backup Path**: `/storage/emulated/0/InputBlocker/backups/`
+

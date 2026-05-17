@@ -1,8 +1,8 @@
 # Build Guide
 
-This document provides instructions for building InputBlocker components from source.
+This document provides streamlined instructions for building InputBlocker components from source.
 
-## Prerequisites
+## 🛠️ Prerequisites
 
 ### Toolchain
 - **JDK 17+**: Required for the Android app and Java PC tool.
@@ -14,17 +14,17 @@ This document provides instructions for building InputBlocker components from so
 - **Windows**: PowerShell 5.1+ recommended.
 - **Linux/macOS**: Bash shell.
 
-## Build Orchestration
+## 🚀 Build Orchestration
 
-The project includes automation scripts to simplify the build process. These are located in the `build-scripts/` directory.
+The project uses automation scripts in the `build-scripts/` directory to simplify the build process.
 
 ### Available Scripts
 | Script | Purpose | Output |
 |--------|---------|--------|
-| `build_all.sh` / `build_all.bat` | Builds all components | All binaries in `releases/` |
-| `build_android.sh` | Builds the Companion App only | `releases/InputBlocker.apk` |
-| `build_module.sh` | Packages the Root Module (includes APK) | `releases/InputBlocker.zip` |
-| `build_pc_tools.sh` | Builds both C# and Java tools | `releases/csharp/` and `releases/java/` |
+| `build_all.sh` / `build_all.bat` | Full pipeline build | All binaries in `releases/` |
+| `build_android.sh` | Build Companion App only | `releases/InputBlocker.apk` |
+| `build_module.sh` | Package Root Module (includes APK) | `releases/InputBlocker.zip` |
+| `build_pc_tools.sh` | Build C# and Java tools | `releases/csharp/` and `releases/java/` |
 
 ### Usage Examples
 **Windows:**
@@ -40,30 +40,28 @@ chmod +x *.sh
 ./build_all.sh
 ```
 
-## Component Details
+## 📦 Component Details
 
 ### Android App
-Built using Gradle.
-- **Debug Build**: `./gradlew :app:assembleDebug`
-- **Release Build**: `./gradlew :app:assembleRelease`
+Built via Gradle.
+- **Debug**: `./gradlew :app:assembleDebug`
+- **Release**: `./gradlew :app:assembleRelease`
 
 ### Root Module
-The module is a ZIP package containing:
-- `module.prop`: Module metadata.
-- `service.sh`: Installation and boot-time logic.
+A ZIP package comprising:
+- `module.prop`: Metadata and versioning.
+- `service.sh`: Installation and boot-time orchestration.
 - `common/InputBlocker.apk`: The companion management app.
 
 ### C# Setup Tool
 Built with Avalonia UI.
-- **Build Command**: `dotnet publish -c Release -r [RID] --self-contained true`
-- **Supported Platforms**: Windows (x64, ARM64), Linux (x64, ARM64), macOS (x64, ARM64).
+- **Build**: `dotnet publish -c Release -r [RID] --self-contained true`
 
 ### Java Setup Tool
-A lightweight Swing-based alternative.
+A lightweight Swing-based utility.
 - **Build**: Compiled via Gradle/javac and packaged as a runnable JAR.
 
-## CI/CD Pipeline
-
-Automated releases are handled via GitHub Actions (`.github/workflows/release.yml`).
+## ⚙️ CI/CD Pipeline
+Automated releases are managed via GitHub Actions (`.github/workflows/release.yml`).
 - **Trigger**: Push a tag matching `v*` (e.g., `git tag v0.1.0 && git push --tags`).
-- **Process**: The pipeline injects versions, builds all components in parallel, generates SHA-256 checksums, and publishes a GitHub Release.
+- **Pipeline**: Injects versions, builds all components in parallel, generates SHA-256 checksums, and publishes a GitHub Release.
