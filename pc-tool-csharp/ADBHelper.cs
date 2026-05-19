@@ -227,13 +227,13 @@ public class ADBHelper : IDisposable
             string tempFile = Path.Combine(Path.GetTempPath(), "inputblocker_config.txt");
             File.WriteAllText(tempFile, config.ToString());
 
-            RunProcess("adb", $"-s {deviceSerial} shell mkdir -p {cachedModulePath}/config");
-            RunProcess("adb", $"-s {deviceSerial} push \"{tempFile}\" {cachedModulePath}/config/blocked_regions.conf");
-            RunProcess("adb", $"-s {deviceSerial} shell chmod 644 {cachedModulePath}/config/blocked_regions.conf");
+            RunProcess("adb", $"-s {deviceSerial} shell mkdir -p {cachedModulePath}/config/profiles");
+            RunProcess("adb", $"-s {deviceSerial} push \"{tempFile}\" {cachedModulePath}/config/profiles/default.conf");
+            RunProcess("adb", $"-s {deviceSerial} shell chmod 644 {cachedModulePath}/config/profiles/default.conf");
 
             File.Delete(tempFile);
 
-            Console.WriteLine("Config pushed successfully!");
+            Console.WriteLine("Config pushed successfully to default profile!");
             return true;
         }
         catch (Exception ex)
@@ -277,7 +277,7 @@ public class ADBHelper : IDisposable
         return regions;
     }
 
-    private string RunProcess(string fileName, string arguments, int timeoutMilliseconds = 10000)
+    public string RunProcess(string fileName, string arguments, int timeoutMilliseconds = 10000)
     {
         var psi = new ProcessStartInfo
         {

@@ -1,67 +1,65 @@
-# Build Guide
+# 🛠️ Build Guide (v0.1.0)
 
-This document provides streamlined instructions for building InputBlocker components from source.
+This guide explains how to build the InputBlocker ecosystem from source.
 
-## 🛠️ Prerequisites
+---
 
-### Toolchain
-- **JDK 17+**: Required for the Android app and Java PC tool.
-- **.NET 8.0 SDK**: Required for the C# PC tool.
-- **Android SDK & Platform Tools**: Required for APK compilation and module packaging.
-- **Git**: For version control.
+## 📦 Project Structure
+- `/android-app`: The Android companion app and Xposed module.
+- `/shared`: The Kotlin Multiplatform (KMP) core containing shared `Region` logic.
+- `/pc-tool-kotlin`: The modern Compose for Desktop designer.
+- `/pc-tool-csharp`: The legacy Windows designer (Maintenance Mode).
 
-### OS-Specifics
-- **Windows**: PowerShell 5.1+ recommended.
-- **Linux/macOS**: Bash shell.
+---
 
-## 🚀 Build Orchestration
+## 📱 Building the Android App
+The app is a standard Android project with an Xposed module integration.
 
-The project uses automation scripts in the `build-scripts/` directory to simplify the build process.
+### Prerequisites
+- Android Studio (Hedgehog or newer)
+- JDK 17
 
-### Available Scripts
-| Script | Purpose | Output |
-|--------|---------|--------|
-| `build_all.sh` / `build_all.bat` | Full pipeline build | All binaries in `releases/` |
-| `build_android.sh` | Build Companion App only | `releases/InputBlocker.apk` |
-| `build_module.sh` | Package Root Module (includes APK) | `releases/InputBlocker.zip` |
-| `build_pc_tools.sh` | Build C# and Java tools | `releases/csharp/` and `releases/java/` |
+### Steps
+1. Open the `/android-app` folder in Android Studio.
+2. Sync Gradle.
+3. Build the APK: `Build` $\rightarrow$ `Build Bundle(s) / APK(s)` $\rightarrow$ `Build APK(s)`.
+4. The resulting APK should be flashed as a root module or installed as a standard app depending on your root manager's requirements.
 
-### Usage Examples
-**Windows:**
-```powershell
-cd build-scripts
-.\build_all.bat
-```
+---
 
-**Linux/macOS:**
-```bash
-cd build-scripts
-chmod +x *.sh
-./build_all.sh
-```
+## 💻 Building the Kotlin PC Tool
+The new designer is built with **Compose for Desktop**.
 
-## 📦 Component Details
+### Prerequisites
+- IntelliJ IDEA (Community or Ultimate)
+- JDK 17
 
-### Android App
-Built via Gradle.
-- **Debug**: `./gradlew :app:assembleDebug`
-- **Release**: `./gradlew :app:assembleRelease`
+### Steps
+1. Open the `/pc-tool-kotlin` folder in IntelliJ.
+2. Sync Gradle.
+3. Run the app: `./gradlew run`
+4. Create a native executable: `./gradlew packageDistributionForCurrentOS`
+   - The executable will be found in `build/compose/binaries`.
 
-### Root Module
-A ZIP package comprising:
-- `module.prop`: Metadata and versioning.
-- `service.sh`: Installation and boot-time orchestration.
-- `common/InputBlocker.apk`: The companion management app.
+---
 
-### C# Setup Tool
-Built with Avalonia UI.
-- **Build**: `dotnet publish -c Release -r [RID] --self-contained true`
+## 🪟 Building the C# PC Tool (Legacy)
+The legacy tool is built using **Avalonia UI**.
 
-### Java Setup Tool
-A lightweight Swing-based utility.
-- **Build**: Compiled via Gradle/javac and packaged as a runnable JAR.
+### Prerequisites
+- .NET 8 SDK
+- Visual Studio 2022 or VS Code with C# Dev Kit
 
-## ⚙️ CI/CD Pipeline
-Automated releases are managed via GitHub Actions (`.github/workflows/release.yml`).
-- **Trigger**: Push a tag matching `v*` (e.g., `git tag v0.1.0 && git push --tags`).
-- **Pipeline**: Injects versions, builds all components in parallel, generates SHA-256 checksums, and publishes a GitHub Release.
+### Steps
+1. Open the `/pc-tool-csharp` folder.
+2. Run the project: `dotnet run`
+3. Publish as a single-file executable:
+   `dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true`
+
+---
+
+## 🛠️ Troubleshooting Build Issues
+- **Gradle Sync Failures**: Ensure you have the correct JDK 17 configured in your IDE.
+- **ADB Connection**: If the PC tools can't see your device, check that USB Debugging is enabled and you have accepted the RSA fingerprint prompt on the phone.
+- **LSPosed Errors**: Ensure the module is enabled for the `system_server` process in the LSPosed manager.
+

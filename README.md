@@ -1,48 +1,66 @@
-# InputBlocker
+# 🛡️ InputBlocker v0.1.0
 
-A professional-grade Android system utility designed to eliminate "ghost taps"—erratic, phantom touch inputs caused by hardware failure or screen degradation. InputBlocker operates at the system level to provide zero-latency interception and absolute reliability.
+**Surgical-Grade Input Filtering for Android**
 
-[![Build](https://github.com/Laviesss/InputBlocker/actions/workflows/release.yml/badge.svg)](https://github.com/Laviesss/InputBlocker/actions)
-[![Release](https://img.shields.io/github/v/release/Laviesss/InputBlocker?style=flat-square)](https://github.com/Laviesss/InputBlocker/releases)
-[![License](https://img.shields.io/github/license/Laviesss/InputBlocker?style=flat-square)](LICENSE)
+InputBlocker is a system-level utility designed to kill "ghost taps"—those annoying phantom touches caused by failing screens. Instead of just blocking a whole chunk of your screen, we use **Surgical Filtering** to block only the electrical noise, while letting your actual fingers through.
 
-## 🚀 Core Features
+---
 
-### Precision Blocking
-- **Advanced Shape Support**: Define blocking zones as **Rectangles, Circles, or Ellipses** for pinpoint accuracy.
-- **Surgical Filtering**: Block only "ghost-like" touches using **Pressure and Duration thresholds**. Intentional long-presses and firm touches are allowed through.
-- **Region Layering**: Support for **Exclude Zones**—mark specific areas as "always allowed," which override any overlapping blocking regions.
-- **Coordinate Independence**: Uses a normalized coordinate system (0.0 to 1.0) to ensure regions remain consistent across different resolutions and densities.
+## ✨ What makes it special?
 
-### Intelligence & Automation
-- **Adaptive Blocking**: The system analyzes the block log to identify actual "hotspots" and can automatically shrink regions to the minimum required size.
-- **App-Specific Profiles**: Define different blocking configurations for different apps (e.g., strict blocking for a game, none for the home screen).
-- **Auto-Detection**: Integrated sensing mode using DBSCAN clustering to automatically identify and suggest blocking regions.
+### 🎯 Surgical Precision
+We don't just block areas; we block *behavior*.
+- **Pressure Sensing**: Block only the low-pressure "spikes" typical of hardware failure.
+- **Duration Control**: Filter out those weird 3-second long "stuck" pixels.
+- **Shape Support**: Use **Rectangles, Circles, or Ellipses** to match the exact shape of your screen's dead zone.
 
-### Reliability & Management
-- **Dual-Mode Engine**: 
-  - **LSPosed/Xposed**: High-performance system-level interception via `InputDispatcher`.
-  - **Overlay Mode**: Standard root-level blocking using a system-wide transparent overlay.
-- **Emergency Reset**: Secret gesture (long-press top-left corner) to instantly kill blocking and prevent lockouts.
-- **Cloud-Ready Backups**: Timestamped local backups and Community Preset support (`.ibpreset`) for easy sharing and syncing.
-- **Root Agnostic**: Compatible with Magisk, KernelSU, APatch, and SuperSU.
+### 📈 Adaptive Intelligence
+The tool learns where your screen is failing:
+- **Hotspot Detection**: The engine logs ghost taps and the PC tool analyzes them to find exactly where the noise is coming from.
+- **Auto-Shrinking**: Based on the logs, the tool suggests the smallest possible region to block, so you get your screen space back.
 
-## 🛠️ Installation
+### 📱 Pro-Grade Features
+- **Exclude Zones**: Need to block a huge area but keep one button usable? Just draw an "Exclude Zone" over the button, and it'll always work.
+- **App-Specific Profiles**: Different apps = different ghost tap behaviors. Set a "Gaming" profile for your favorite game and a "Daily" profile for everything else.
+- **Emergency Reset**: accidentally blocked your whole screen? Just hold the top-left corner for 3 seconds to kill everything.
 
-1. **Flash the Module**: Install the `InputBlocker.zip` through your root manager.
-2. **Reboot**: The companion app is automatically installed on the first boot.
-3. **Configuration**:
-   - Open the app and use **Auto-Detect** to find ghost tap hotspots.
-   - Use the **PC Setup Tool** for precise manual mapping of complex shapes.
+---
 
-## 📁 Repository Structure
+## 🛠️ The Toolkit
 
-- `/android-app`: The companion management application.
-- `/module`: The root module files (scripts, prop, and update JSON).
-- `/pc-tool-csharp`: Cross-platform setup tool (.NET 8).
-- `/pc-tool-java`: Lightweight setup tool (Java/Swing).
-- `/build-scripts`: Automation scripts for the full build pipeline.
+### 1. The Android Engine (LSPosed)
+The "muscle." It hooks into the Android system's input dispatcher to kill ghost taps before they even reach your apps.
 
-## 📚 Resources
-- **Technical Deep-Dive**: [DOCUMENTATION.md](DOCUMENTATION.md)
-- **Building from Source**: [BUILD.md](BUILD.md)
+### 2. The PC Setup Tool (Kotlin/Compose)
+The "brain." A professional visual designer where you can draw regions, tune thresholds, and analyze logs.
+> **Note**: We've moved to a modern Kotlin-based tool for better cross-platform support. The old C# version is now in maintenance mode and is being phased out.
+
+---
+
+## 🚀 Quick Start
+
+### Prerequisites
+- **Root**: Magisk, KernelSU, or APatch.
+- **Framework**: LSPosed (Recommended).
+- **PC**: ADB installed and USB Debugging enabled.
+
+### Setup
+1. **Install**: Flash the module zip via your root manager.
+2. **Enable**: Turn on the module in LSPosed and reboot.
+3. **Configure**: Open the **PC Setup Tool**, connect your phone, and start mapping your dead zones.
+
+---
+
+## 📐 Technical Bit (for the nerds)
+We use **Coordinate Normalization (0.0 to 1.0)**. This means if you share a config with a friend who has a different resolution, it still works perfectly.
+
+**The Surgical Formula**:
+$\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \text{MaxDuration})$
+
+---
+
+## 📖 More Info
+Check out the [DOCUMENTATION.md](./DOCUMENTATION.md) for the full technical deep-dive.
+
+## ⚠️ Disclaimer
+This tool modifies system-level input. Use it at your own risk. Always keep the Emergency Reset gesture in mind!

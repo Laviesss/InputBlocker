@@ -51,6 +51,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             ?: return
                         
                         val now = System.currentTimeMillis()
+                        val startNano = System.nanoTime()
                         updateMetricsIfNeeded(now)
                         
                         if (cachedWidth <= 0 || cachedHeight <= 0) return
@@ -66,6 +67,56 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                                 emergencyTouchStartTime = now
                                 isEmergencyGestureActive = true
                             }
+                        } else if (motionEvent.action == MotionEvent.ACTION_MOVE) {
+                            if (nx >= emergencyZoneSize || ny >= emergencyZoneSize) {
+                                isEmergencyGestureActive = false
+                            }
+                        } else if (motionEvent.action == MotionEvent.ACTION_UP || motionEvent.action == MotionEvent.ACTION_CANCEL) {
+                            isEmergencyGestureActive = false
+                            emergencyTouchStartTime = 0L
+                            emergencyResetTriggered = false
+                        }
+                        
+                        if (isEmergencyGestureActive && !emergencyResetTriggered && (now - emergencyTouchStartTime > 3000)) {
+                            triggerEmergencyReset()
+                        }
+                        
+                        if (!cachedEnabled) {
+                            logLatency(System.nanoTime() - startNano)
+                            return
+                        }
+                        
+                        // Test Mode
+                        if (File("/data/adb/modules/inputblocker/config/test_mode").exists()) {
+                            logLatency(System.nanoTime() - startNano)
+                            param.setResult(null)
+                            return
+                        }
+                        
+                        // Region Processing
+                        val currentRegions = cachedRegions
+                        
+                        // 1. Exclude Zones first
+                        for (region in currentRegions) {
+                            if (region.isExclude && isInsideRegion(nx, ny, region)) {
+                                logLatency(System.nanoTime() - startNano)
+                                return
+                            }
+                        }
+                        
+                        // 2. Blocking Zones
+                        for (region in currentRegions) {
+                            if (!region.isExclude && isInsideRegion(nx, ny, region)) {
+                                if (shouldBlockSurgically(motionEvent, region)) {
+                                    logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
+                                    logLatency(System.nanoTime() - startNano)
+                                    param.setResult(null) 
+                                    return
+                                }
+                            }
+                        }
+                        logLatency(System.nanoTime() - startNano)
+
                         } else if (motionEvent.action == MotionEvent.ACTION_MOVE) {
                             if (nx >= emergencyZoneSize || ny >= emergencyZoneSize) {
                                 isEmergencyGestureActive = false
@@ -99,11 +150,13 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                         // 2. Blocking Zones
                         for (region in currentRegions) {
                             if (!region.isExclude && isInsideRegion(nx, ny, region)) {
-                                if (shouldBlockSurgically(motionEvent, region)) {
-                                    logBlockedTouch(nx, ny, region)
-                                    param.setResult(null) 
-                                    return
-                                }
+                                 if (shouldBlockSurgically(motionEvent, region)) {
+                                     logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
+                                     param.setResult(null) 
+                                     return
+                                 }
+                                 logLiveEvent("ALLOW", nx, ny)
+
                             }
                         }
                     }
@@ -138,9 +191,9 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         val pressure = event.pressure
         val duration = event.eventTime - event.downTime
         
-        // Block if pressure is low OR if it's a long-held ghost tap
-        // (Ghost taps often have very low pressure or extremely long durations if the digitizer is failing)
-        return pressure < region.minPressure || duration > 2000 // Treat > 2s as abnormal ghost
+        // Block if pressure is low OR if the tap duration exceeds the region's specified threshold
+        // (Ghost taps often have very low pressure or abnormally long durations)
+        return pressure < region.minPressure || duration > region.maxDuration
     }
 
     private fun triggerEmergencyReset() {
@@ -176,11 +229,26 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         }
     }
 
-    private fun logBlockedTouch(nx: Float, ny: Float, region: Region) {
+    private fun logLiveEvent(type: String, nx: Float, ny: Float) {
+        try {
+            android.util.Log.i("InputBlockerLive", "$type|$nx|$ny")
+        } catch (e: Exception) { }
+    }
+
+    private fun logLatency(nanos: Long) {
+        try {
+            val logFile = File("/data/adb/modules/inputblocker/config/latency.log")
+            logFile.appendText("$nanos\n")
+            if (logFile.length() > 102400) logFile.delete()
+        } catch (e: Exception) { }
+    }
+
+    private fun logBlockedTouch(nx: Float, ny: Float, pressure: Float, duration: Long, region: Region) {
+        logLiveEvent("BLOCK", nx, ny)
         try {
             val logFile = File("/data/adb/modules/inputblocker/config/blocklog.txt")
             val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-            val entry = "$timestamp | X: ${"%.3f".format(nx)}, Y: ${"%.3f".format(ny)} | Region: [${region.x1}, ${region.y1}, ${region.x2}, ${region.y2}]\n"
+            val entry = "$timestamp | X: ${"%.3f".format(nx)}, Y: ${"%.3f".format(ny)} | P: ${"%.3f".format(pressure)}, D: ${duration}ms | Region: [${region.x1}, ${region.y1}, ${region.x2}, ${region.y2}]\n"
             logFile.appendText(entry)
             
             if (logFile.length() > 102400) logFile.delete() // 100KB rotate

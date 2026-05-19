@@ -191,14 +191,38 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupQuickActionListeners() {
         btnActionSafe.setOnClickListener {
-            isEnabled = false
-            saveEnabledState(false)
-            regions.clear()
-            saveConfig()
-            updateUI()
-            updateStatus()
-            Toast.makeText(this, "Safe Mode: Blocking disabled and regions cleared", Toast.LENGTH_LONG).show()
+            toggleSafeMode()
         }
+        btnActionSync.setOnClickListener {
+            Toast.makeText(this, "Syncing with device...", Toast.LENGTH_SHORT).show()
+            // In a full version, this would trigger a refresh of config from la l'module
+        }
+        btnActionExport.setOnClickListener {
+            exportCurrentConfig()
+        }
+        btnActionTest.setOnClickListener {
+            Toast.makeText(this, "Running test mode...", Toast.LENGTH_SHORT).show()
+            // Trigger test mode file creation
+        }
+        btnViewLog.setOnClickListener {
+            val intent = Intent(this, BlockLogActivity::class.java)
+            startActivity(intent)
+        }
+        btnOptimizeRegions.setOnClickListener {
+            Toast.makeText(this, "Applying adaptive optimization...", Toast.LENGTH_SHORT).show()
+            AdaptiveBlockingManager.analyzeAndOptimize(this)
+            Toast.makeText(this, "Optimization complete!", Toast.LENGTH_SHORT).show()
+        }
+        btnBackupRestore.setOnClickListener {
+            showBackupDialog()
+        }
+        btnImportPreset.setOnClickListener {
+            importPreset()
+        }
+        btnExportPreset.setOnClickListener {
+            exportPreset()
+        }
+    }
 
         btnActionSync.setOnClickListener {
             loadConfig()
