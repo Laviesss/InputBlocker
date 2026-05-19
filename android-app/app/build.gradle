@@ -11,8 +11,8 @@ android {
         applicationId = "com.inputblocker.app"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode project.hasProperty('VERSION_CODE') ? project.property('VERSION_CODE').toInteger() : 1
+        versionName project.hasProperty('VERSION_NAME') ? project.property('VERSION_NAME') : "0.0.0-dev"
     }
     
     buildTypes {

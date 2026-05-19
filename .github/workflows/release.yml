@@ -97,15 +97,12 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
-       - name: Inject Version
-         run: |
-           sed -i "s/versionCode = .*/versionCode = ${{ needs.setup.outputs.version_code }}/" android-app/app/build.gradle
-           sed -i "s/versionName = .*/versionName = \"${{ needs.setup.outputs.clean_version }}\"/" android-app/app/build.gradle
-       - name: Build Android APK
-         run: |
-           cd android-app
-           chmod +x gradlew
-           ./gradlew assembleRelease
+      - name: Build Android APK
+        run: |
+          cd android-app
+          chmod +x gradlew
+          ./gradlew assembleRelease -PVERSION_CODE=${{ needs.setup.outputs.version_code }} -PVERSION_NAME=${{ needs.setup.outputs.clean_version }}
+
 
 
       - name: Upload Android Artifact
