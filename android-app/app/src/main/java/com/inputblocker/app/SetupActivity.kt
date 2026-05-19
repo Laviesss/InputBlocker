@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.Region
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
@@ -88,34 +89,12 @@ class SetupActivity : AppCompatActivity() {
     }
 
     private fun applyThemeColors() {
-        val surfaceColor = getSurfaceColor()
-        val elevatedColor = getSurfaceElevatedColor()
-        val textPrimary = getTextPrimaryColor()
-        val textSecondary = getTextSecondaryColor()
-
-        tvRegionCount.setBackgroundColor(surfaceColor)
-        tvRegionCount.setTextColor(textPrimary)
-
-        tvInstructions.setBackgroundColor(elevatedColor)
-        tvInstructions.setTextColor(textSecondary)
-
-        btnUndo.backgroundTintList = ColorStateList.valueOf(elevatedColor)
-        btnUndo.setTextColor(textPrimary)
-
-        btnClear.backgroundTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.accent_orange)
-        )
-
-        btnSave.backgroundTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.accent_green)
-        )
-
-        btnCancel.backgroundTintList = ColorStateList.valueOf(elevatedColor)
-        btnCancel.setTextColor(textPrimary)
+        val colors = ThemeManager.getThemeColors(this, currentTheme)
+        ThemeManager.applyThemeToViewHierarchy(findViewById(android.R.id.content), colors)
 
         setupView.setThemeColors(
-            ContextCompat.getColor(this, R.color.accent_blue),
-            getBackgroundColor()
+            colors.accent,
+            colors.background
         )
     }
 
@@ -414,11 +393,17 @@ class SetupActivity : AppCompatActivity() {
                 MotionEvent.ACTION_MOVE -> {
                     if (isResizing && selectedRegion != null) {
                         val r = selectedRegion!!
-                        when (resizeHandle) {
-                            1 -> { r.x1 = (x / screenWidth).coerceIn(0f, r.x2 - 0.05f); r.y1 = (y / screenHeight).coerceIn(0f, r.y2 - 0.05f) }
-                            2 -> { r.x2 = (x / screenWidth).coerceIn(r.x1 + 0.05f, 1f); r.y1 = (y / screenHeight).coerceIn(0f, r.y2 - 0.05f) }
-                            3 -> { r.x1 = (x / screenWidth).coerceIn(0f, r.x2 - 0.05f); r.y2 = (y / screenHeight).coerceIn(r.y1 + 0.05f, 1f) }
-                            4 -> { r.x2 = (x / screenWidth).coerceIn(r.x1 + 0.05f, 1f); r.y2 = (y / screenHeight).coerceIn(r.y1 + 0.05f, 1f) }
+                        val index = regionsList.indexOf(r)
+                        if (index != -1) {
+                            val updated = when (resizeHandle) {
+                                1 -> r.copy(x1 = (x / screenWidth).coerceIn(0f, r.x2 - 0.05f), y1 = (y / screenHeight).coerceIn(0f, r.y2 - 0.05f))
+                                2 -> r.copy(x2 = (x / screenWidth).coerceIn(r.x1 + 0.05f, 1f), y1 = (y / screenHeight).coerceIn(0f, r.y2 - 0.05f))
+                                3 -> r.copy(x1 = (x / screenWidth).coerceIn(0f, r.x2 - 0.05f), y2 = (y / screenHeight).coerceIn(r.y1 + 0.05f, 1f))
+                                4 -> r.copy(x2 = (x / screenWidth).coerceIn(r.x1 + 0.05f, 1f), y2 = (y / screenHeight).coerceIn(r.y1 + 0.05f, 1f))
+                                else -> r
+                            }
+                            regionsList[index] = updated
+                            selectedRegion = updated
                         }
                         invalidate()
                         return true
@@ -426,19 +411,26 @@ class SetupActivity : AppCompatActivity() {
                     
                     if (selectedRegion != null) {
                         val r = selectedRegion!!
-                        val w = r.x2 - r.x1
-                        val h = r.y2 - r.y1
-                        
-                        val newCenterX = x / screenWidth
-                        val newCenterY = y / screenHeight
-                        
-                        val newX1 = (newCenterX - w/2).coerceIn(0f, 1f - w)
-                        val newY1 = (newCenterY - h/2).coerceIn(0f, 1f - h)
-                        
-                        r.x1 = newX1
-                        r.x2 = newX1 + w
-                        r.y1 = newY1
-                        r.y2 = newY1 + h
+                        val index = regionsList.indexOf(r)
+                        if (index != -1) {
+                            val w = r.x2 - r.x1
+                            val h = r.y2 - r.y1
+                            
+                            val newCenterX = x / screenWidth
+                            val newCenterY = y / screenHeight
+                            
+                            val newX1 = (newCenterX - w/2).coerceIn(0f, 1f - w)
+                            val newY1 = (newCenterY - h/2).coerceIn(0f, 1f - h)
+                            
+                            val updated = r.copy(
+                                x1 = newX1,
+                                x2 = newX1 + w,
+                                y1 = newY1,
+                                y2 = newY1 + h
+                            )
+                            regionsList[index] = updated
+                            selectedRegion = updated
+                        }
                         invalidate()
                         return true
                     }

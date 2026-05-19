@@ -5,14 +5,14 @@ import kotlin.math.max
 import kotlin.math.min
 
 data class Region(
-    var isExclude: Boolean = false,
-    var type: Int = 0,               // 0: Rect, 1: Circle, 2: Ellipse
-    var x1: Float = 0f,
-    var y1: Float = 0f,
-    var x2: Float = 0f,
-    var y2: Float = 0f,
-    var minPressure: Float = 0f,
-    var maxDuration: Long = 1000L
+    val isExclude: Boolean = false,
+    val type: Int = 0,               // 0: Rect, 1: Circle, 2: Ellipse
+    val x1: Float = 0f,
+    val y1: Float = 0f,
+    val x2: Float = 0f,
+    val y2: Float = 0f,
+    val minPressure: Float = 0f,
+    val maxDuration: Long = 1000L
 ) {
     constructor(x1: Float, y1: Float, x2: Float, y2: Float) : this(
         isExclude = false,

@@ -56,6 +56,11 @@ public class MainWindow : Window
     private static readonly IBrush DrawStroke = new SolidColorBrush(Color.Parse("#FF448AFF"));
     private static readonly IBrush DrawFill = new SolidColorBrush(Color.Parse("#4D448AFF"));
 
+    private void UpdateRegionCount()
+    {
+        regionCountLabel.Text = $"Regions: {regions.Count}";
+    }
+
     public MainWindow()
     {
         Title = "InputBlocker Setup - by Laviesss";
@@ -624,19 +629,20 @@ public class MainWindow : Window
                     context.FillRectangle(fill, new Rect(x1, y1, w, h));
                     context.DrawRectangle(stroke, new Pen(stroke, isSelected ? 4 : 3), new Rect(x1, y1, w, h));
                 } else if (r.Type == 1) {
-                    float cx = r.X1 * (float)canvas.Bounds.Width;
-                    float cy = r.Y1 * (float)canvas.Bounds.Height;
-                    float radius = r.X2 * (float)canvas.Bounds.Width;
-                    context.FillEllipse(fill, new Rect(cx - radius, cy - radius, radius * 2, radius * 2));
-                    context.DrawEllipse(stroke, new Pen(stroke, isSelected ? 4 : 3), new Rect(cx - radius, cy - radius, radius * 2, radius * 2));
-                } else if (r.Type == 2) {
-                    float cx = r.X1 * (float)canvas.Bounds.Width;
-                    float cy = r.Y1 * (float)canvas.Bounds.Height;
-                    float rx = r.X2 * (float)canvas.Bounds.Width;
-                    float ry = r.Y2 * (float)canvas.Bounds.Height;
-                    context.FillEllipse(fill, new Rect(cx - rx, cy - ry, rx * 2, ry * 2));
-                    context.DrawEllipse(stroke, new Pen(stroke, isSelected ? 4 : 3), new Rect(cx - rx, cy - ry, rx * 2, ry * 2));
-                }
+                                 float cx = r.X1 * (float)canvas.Bounds.Width;
+                                 float cy = r.Y1 * (float)canvas.Bounds.Height;
+                                 float radius = r.X2 * (float)canvas.Bounds.Width;
+                                 context.DrawEllipse(fill, new Pen(fill, radius * 2), new Rect(cx - radius, cy - radius, radius * 2, radius * 2));
+                                 context.DrawEllipse(stroke, new Pen(stroke, isSelected ? 4 : 3), new Rect(cx - radius, cy - radius, radius * 2, radius * 2));
+                              } else if (r.Type == 2) {
+                                 float cx = r.X1 * (float)canvas.Bounds.Width;
+                                 float cy = r.Y1 * (float)canvas.Bounds.Height;
+                                 float rx = r.X2 * (float)canvas.Bounds.Width;
+                                 float ry = r.Y2 * (float)canvas.Bounds.Height;
+                                 context.DrawEllipse(fill, new Pen(fill, ry * 2), new Rect(cx - rx, cy - ry, rx * 2, ry * 2));
+                                 context.DrawEllipse(stroke, new Pen(stroke, isSelected ? 4 : 3), new Rect(cx - rx, cy - ry, rx * 2, ry * 2));
+                              }
+
 
                 float centerX = (r.Left + r.Right) / 2 * (float)canvas.Bounds.Width;
                 float centerY = (r.Top + r.Bottom) / 2 * (float)canvas.Bounds.Height;

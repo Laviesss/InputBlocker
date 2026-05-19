@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.Region
 import android.view.MotionEvent
 import android.util.DisplayMetrics
 import android.view.WindowManager
@@ -116,49 +117,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             }
                         }
                         logLatency(System.nanoTime() - startNano)
-
-                        } else if (motionEvent.action == MotionEvent.ACTION_MOVE) {
-                            if (nx >= emergencyZoneSize || ny >= emergencyZoneSize) {
-                                isEmergencyGestureActive = false
-                            }
-                        } else if (motionEvent.action == MotionEvent.ACTION_UP || motionEvent.action == MotionEvent.ACTION_CANCEL) {
-                            isEmergencyGestureActive = false
-                            emergencyTouchStartTime = 0L
-                            emergencyResetTriggered = false
-                        }
-                        
-                        if (isEmergencyGestureActive && !emergencyResetTriggered && (now - emergencyTouchStartTime > 3000)) {
-                            triggerEmergencyReset()
-                        }
-
-                        if (!cachedEnabled) return
-                        
-                        // Test Mode
-                        if (File("/data/adb/modules/inputblocker/config/test_mode").exists()) {
-                            param.setResult(null)
-                            return
-                        }
-
-                        // Region Processing
-                        val currentRegions = cachedRegions
-                        
-                        // 1. Exclude Zones first
-                        for (region in currentRegions) {
-                            if (region.isExclude && isInsideRegion(nx, ny, region)) return
-                        }
-                        
-                        // 2. Blocking Zones
-                        for (region in currentRegions) {
-                            if (!region.isExclude && isInsideRegion(nx, ny, region)) {
-                                 if (shouldBlockSurgically(motionEvent, region)) {
-                                     logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
-                                     param.setResult(null) 
-                                     return
-                                 }
-                                 logLiveEvent("ALLOW", nx, ny)
-
-                            }
-                        }
                     }
                 }
             )

@@ -22,13 +22,17 @@ class BlockLogActivity : AppCompatActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
-            setBackgroundColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.background_dark))
+            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE).getInt("theme", ThemeManager.THEME_SYSTEM)
+            val colors = ThemeManager.getThemeColors(this@BlockLogActivity, currentTheme)
+            setBackgroundColor(colors.background)
         }
 
         val title = TextView(this).apply {
             text = "Real-time Block Log"
             textSize = 24f
-            setTextColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.white))
+            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE).getInt("theme", ThemeManager.THEME_SYSTEM)
+            val colors = ThemeManager.getThemeColors(this@BlockLogActivity, currentTheme)
+            setTextColor(colors.textPrimary)
             setPadding(0, 0, 0, 32)
         }
 
@@ -87,7 +91,9 @@ class BlockLogActivity : AppCompatActivity() {
                 val detail = TextView(this).apply {
                     text = line
                     textSize = 14f
-                    setTextColor(ContextCompat.getColor(this@BlockLogActivity, android.R.color.white))
+                    val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE).getInt("theme", ThemeManager.THEME_SYSTEM)
+                    val colors = ThemeManager.getThemeColors(this@BlockLogActivity, currentTheme)
+                    setTextColor(colors.textPrimary)
                 }
                 
                 item.addView(detail)

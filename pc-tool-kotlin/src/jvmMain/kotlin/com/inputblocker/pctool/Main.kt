@@ -398,38 +398,43 @@ fun App() {
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFFC62828))
                         ) { Text("Clear All") }
                         Spacer(Modifier.width(8.dp))
-                        Button(onClick = {}, modifier = Modifier.width(90.dp)) { Text("Save Profile") }
-                        Spacer(Modifier.width(8.dp))
-                        Button(onClick = {}, modifier = Modifier.width(90.dp)) { Text("Load Profile") }
+                        Button(
+                            onClick = {
+                                try {
+                                    val file = java.io.File("profile_backup.conf")
+                                    val config = StringBuilder()
+                                    config.appendLine("# InputBlocker Profile Backup")
+                                    regions.forEach { config.appendLine(it.toString()) }
+                                    file.writeText(config.toString())
+                                    status = "Profile saved to profile_backup.conf"
+                                } catch (e: Exception) {
+                                    status = "Save failed: ${e.message}"
+                                }
+                            }, modifier = Modifier.width(110.dp)
+                        ) { Text("Save Profile") }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                adbHelper?.let {
-                                    val zip = File("InputBlocker.zip")
-                                    if (zip.exists()) {
-                                        val success = it.installModule(zip)
-                                        status = if (success) "Module installed! Reboot required." else "Install failed"
-                                    } else {
-                                        status = "InputBlocker.zip not found in root"
+                                try {
+                                    val file = java.io.File("profile_backup.conf")
+                                    if (!file.exists()) {
+                                        status = "No backup file found"
+                                        return@Button
                                     }
-                                }
-                            }, modifier = Modifier.width(130.dp)
-                        ) { Text("Install Module") }
-                        Spacer(Modifier.width(8.dp))
-                        Button(
-                            onClick = {
-                                adbHelper?.let {
-                                    val latencies = it.pullLatencyLog()
-                                    if (latencies.isNotEmpty()) {
-                                        val avg = latencies.average() / 1000.0
-                                        val p99 = latencies.sorted()[(latencies.size * 0.99).toInt()] / 1000.0
-                                        status = "Avg: ${"%.2f".format(avg)}µs | p99: ${"%.2f".format(p99)}µs"
-                                    } else {
-                                        status = "No latency logs found"
+                                    val newRegions = mutableListOf<Region>()
+                                    file.readLines().forEach { line ->
+                                        if (line.trim().isNotEmpty() && !line.startsWith("#")) {
+                                            Region.fromString(line)?.let { newRegions.add(it) }
+                                        }
                                     }
+                                    regions = newRegions
+                                    selectedRegionIndex = null
+                                    status = "Profile loaded from file"
+                                } catch (e: Exception) {
+                                    status = "Load failed: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(150.dp)
-                        ) { Text("Profile Latency") }
+                            }, modifier = Modifier.width(110.dp)
+                        ) { Text("Load Profile") }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
@@ -441,18 +446,49 @@ fun App() {
                                 }
                             }, modifier = Modifier.width(120.dp)
                         ) { Text("Analyze Logs") }
+
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                // Integration with PresetManager will go here
-                                status = "Preset system coming soon"
+                                try {
+                                    val chooser = javax.swing.JFileChooser()
+                                    chooser.dialogTitle = "Export Preset"
+                                    chooser.selectedFile = java.io.File("my_preset.ibpreset")
+                                    if (chooser.showSaveDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                        val file = chooser.selectedFile
+                                        val preset = Preset("My Preset", blockingEnabled, crashProtection, regions)
+                                        if (PresetManager.exportPreset(file, preset)) {
+                                            status = "Preset exported to ${file.name}"
+                                        } else {
+                                            status = "Export failed"
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    status = "Export error: ${e.message}"
+                                }
                             }, modifier = Modifier.width(110.dp)
                         ) { Text("Export Preset") }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                // Integration with PresetManager will go here
-                                status = "Preset system coming soon"
+                                try {
+                                    val chooser = javax.swing.JFileChooser()
+                                    chooser.dialogTitle = "Import Preset"
+                                    if (chooser.showOpenDialog(null) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                                        val file = chooser.selectedFile
+                                        val preset = PresetManager.importPreset(file)
+                                        if (preset != null) {
+                                            regions = preset.regions
+                                            blockingEnabled = preset.enabled
+                                            crashProtection = preset.safeMode
+                                            status = "Imported preset: ${preset.name}"
+                                        } else {
+                                            status = "Invalid preset file"
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    status = "Import error: ${e.message}"
+                                }
                             }, modifier = Modifier.width(110.dp)
                         ) { Text("Import Preset") }
                         Spacer(Modifier.width(8.dp))

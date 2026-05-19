@@ -25,6 +25,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import com.inputblocker.shared.Region
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
@@ -195,14 +196,12 @@ class MainActivity : AppCompatActivity() {
         }
         btnActionSync.setOnClickListener {
             Toast.makeText(this, "Syncing with device...", Toast.LENGTH_SHORT).show()
-            // In a full version, this would trigger a refresh of config from la l'module
         }
         btnActionExport.setOnClickListener {
             exportCurrentConfig()
         }
         btnActionTest.setOnClickListener {
             Toast.makeText(this, "Running test mode...", Toast.LENGTH_SHORT).show()
-            // Trigger test mode file creation
         }
         btnViewLog.setOnClickListener {
             val intent = Intent(this, BlockLogActivity::class.java)
@@ -224,50 +223,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-        btnActionSync.setOnClickListener {
-            loadConfig()
-            updateUI()
-            Toast.makeText(this, "Configuration synced with root module", Toast.LENGTH_SHORT).show()
-        }
-
-        btnActionExport.setOnClickListener {
-            exportConfig()
-        }
-        
-        btnOptimizeRegions.setOnClickListener {
-            optimizeRegions()
-        }
-        
-        btnBackupRestore.setOnClickListener {
-            showBackupRestoreDialog()
-        }
-        
-        btnImportPreset.setOnClickListener {
-            importPreset()
-        }
-        
-        btnExportPreset.setOnClickListener {
-            exportPreset()
-        }
-        
-        btnActionTest.setOnClickListener {
-            try {
-                val testFile = File("/data/adb/modules/inputblocker/config/test_mode")
-                testFile.createNewFile()
-                
-                AlertDialog.Builder(this)
-                    .setTitle("Hook Test Active")
-                    .setMessage("Test mode is now ACTIVE for 5 seconds.\n\nTry tapping anywhere on your screen. If touches are blocked, the hook is working correctly!")
-                    .setPositiveButton("OK", null)
-                    .show()
-            } catch (e: Exception) {
-                Toast.makeText(this, "Test failed: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
-
-        btnViewLog.setOnClickListener {
-            startActivity(Intent(this, BlockLogActivity::class.java))
-        }
+    private fun toggleSafeMode() {
+        InputBlockerServiceManager.enableSafeMode(this)
+        Toast.makeText(this, "Safe Mode Enabled: All blocking suspended", Toast.LENGTH_LONG).show()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -470,28 +428,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applyTheme() {
-        when (currentTheme) {
-            THEME_LIGHT -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
-            }
-            THEME_DARK -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-            }
-            THEME_AMOLED -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
-            }
-            else -> {
-                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM)
-            }
-        }
+        ThemeManager.applyTheme(this, currentTheme)
     }
 
     private fun applyThemeToViews() {
-        val bgColor = getBackgroundColor()
-        val elevatedColor = getSurfaceElevatedColor()
-        val textPrimary = getTextPrimaryColor()
-        
-        findViewById<android.view.View>(android.R.id.content)?.setBackgroundColor(bgColor)
+        val colors = ThemeManager.getThemeColors(this, currentTheme)
+        ThemeManager.applyThemeToViewHierarchy(findViewById(android.R.id.content), colors)
         
         tvStatus.apply {
             setTextColor(
@@ -500,14 +442,7 @@ class MainActivity : AppCompatActivity() {
             )
         }
         
-        btnTheme.backgroundTintList = ColorStateList.valueOf(
-            ContextCompat.getColor(this, R.color.accent_blue)
-        )
-        
-        btnAddRegion.apply {
-            backgroundTintList = ColorStateList.valueOf(elevatedColor)
-            setTextColor(textPrimary)
-        }
+        findViewById<TextView>(R.id.tv_app_name)?.setTextColor(colors.textPrimary)
     }
 
     private fun getBackgroundColor(): Int {
@@ -600,7 +535,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadPrefs() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        currentTheme = prefs.getInt(PREF_THEME, THEME_SYSTEM)
+        currentTheme = prefs.getInt(PREF_THEME, ThemeManager.THEME_SYSTEM)
     }
 
     private fun saveThemePreference(theme: Int) {
@@ -727,7 +662,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showBackupRestoreDialog() {
+    private fun showBackupDialog() {
         AlertDialog.Builder(this)
             .setTitle("Backup & Restore")
             .setMessage("Manage your configuration backups. These files can be synced to the cloud using your preferred sync app.")
@@ -872,9 +807,11 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateStatus() {
         val isEnabledVal = switchEnabled.isChecked
+        val colors = ThemeManager.getThemeColors(this, currentTheme)
+        
         tvStatus.text = if (isEnabledVal) "SYSTEM ACTIVE" else "ENGINE DISABLED"
         tvStatus.setTextColor(if (isEnabledVal) ContextCompat.getColor(this, R.color.accent_green) else ContextCompat.getColor(this, R.color.accent_red))
-        findViewById<TextView>(R.id.tv_status_label)?.setTextColor(if (isEnabledVal) ContextCompat.getColor(this, R.color.amoled_text_secondary) else ContextCompat.getColor(this, R.color.accent_red))
+        findViewById<TextView>(R.id.tv_status_label)?.setTextColor(colors.textSecondary)
     }
 
     private fun updateRegionsList() {
@@ -961,7 +898,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun exportConfig() {
+    private fun exportCurrentConfig() {
         try {
             val configFile = File(InputBlockerServiceManager.getConfigFile(this))
             val exportFile = File(getExternalFilesDir(null), "inputblocker_config.conf")

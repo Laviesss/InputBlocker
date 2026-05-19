@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.Region
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.Context
@@ -327,7 +328,7 @@ class DetectionReviewActivity : Activity() {
                     }
 
                     // Check if tapped inside any region
-                    val tappedRegion = regionsList.find { r ->
+                    val tappedRegion = regionsList.find { r: Region ->
                         x >= r.x1 * width && x <= r.x2 * width && y >= r.y1 * height && y <= r.y2 * height
                     }
 
@@ -353,33 +354,41 @@ class DetectionReviewActivity : Activity() {
                     val dx = (x - lastX) / width
                     val dy = (y - lastY) / height
                     
-                    if (isResizing) {
-                        val r = selectedRegion!!
-                        when (activeHandle) {
-                            Handle.TOP_LEFT -> { r.x1 += dx; r.y1 += dy }
-                            Handle.TOP_RIGHT -> { r.x2 += dx; r.y1 += dy }
-                            Handle.BOTTOM_LEFT -> { r.x1 += dx; r.y2 += dy }
-                            Handle.BOTTOM_RIGHT -> { r.x2 += dx; r.y2 += dy }
-                            null -> {}
-                        }
-                    } else if (isDragging) {
-                        val r = selectedRegion!!
-                        r.x1 += dx
-                        r.x2 += dx
-                        r.y1 += dy
-                        r.y2 += dy
-                    }
+                                 if (isResizing) {
+                                     val r = selectedRegion!!
+                                     selectedRegion = when (activeHandle) {
+                                         Handle.TOP_LEFT -> r.copy(x1 = r.x1 + dx, y1 = r.y1 + dy) as Region
+                                         Handle.TOP_RIGHT -> r.copy(x2 = r.x2 + dx, y1 = r.y1 + dy) as Region
+                                         Handle.BOTTOM_LEFT -> r.copy(x1 = r.x1 + dx, y2 = r.y2 + dy) as Region
+                                         Handle.BOTTOM_RIGHT -> r.copy(x2 = r.x2 + dx, y2 = r.y2 + dy) as Region
+                                         else -> r as Region
+                                     }
+                                 } else if (isDragging) {
+                                     val r = selectedRegion!!
+                                     selectedRegion = r.copy(
+                                         x1 = r.x1 + dx,
+                                         x2 = r.x2 + dx,
+                                         y1 = r.y1 + dy,
+                                         y2 = r.y2 + dy
+                                     )
+                                 }
+
                     
-                    // Clamp to [0, 1]
-                    selectedRegion?.let {
-                        it.x1 = it.x1.coerceAtLeast(0f)
-                        it.y1 = it.y1.coerceAtLeast(0f)
-                        it.x2 = it.x2.coerceAtMost(1f)
-                        it.y2 = it.y2.coerceAtMost(1f)
-                        // Prevent inverted rectangles
-                        if (it.x1 > it.x2) it.x2 = it.x1
-                        if (it.y1 > it.y2) it.y2 = it.y1
-                    }
+                                 // Clamp to [0, 1] and prevent inversion
+                                 selectedRegion = selectedRegion?.let { r: Region ->
+                                     val nx1 = r.x1.coerceAtLeast(0f)
+                                     val ny1 = r.y1.coerceAtLeast(0f)
+                                     val nx2 = r.x2.coerceAtMost(1f)
+                                     val ny2 = r.y2.coerceAtMost(1f)
+                                     
+                                     val fx1 = if (nx1 > nx2) nx2 else nx1
+                                     val fx2 = if (nx1 > nx2) nx1 else nx2
+                                     val fy1 = if (ny1 > ny2) ny2 else ny1
+                                     val fy2 = if (ny1 > ny2) ny1 else ny2
+                                     
+                                     r.copy(x1 = fx1, y1 = fy1, x2 = fx2, y2 = fy2)
+                                 }
+
                     
                     lastX = x
                     lastY = y

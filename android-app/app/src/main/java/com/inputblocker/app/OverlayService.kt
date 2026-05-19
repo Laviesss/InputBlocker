@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.Region
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -362,7 +363,7 @@ class OverlayService : Service() {
                                             val pressure = event.pressure
                                             val duration = event.eventTime - event.downTime
                                             
-                                            if (pressure < region.minPressure && duration < region.maxDuration) {
+                                            if (pressure < region.minPressure || duration > region.maxDuration) {
                                                 val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
                                                 addBlockEntry(BlockLogActivity.BlockEntry(timeStr, "Blocked at (%.2f, %.2f)".format(nx, ny)))
                                                 return true
@@ -377,7 +378,7 @@ class OverlayService : Service() {
             return when (region.type) {
                 0 -> nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2
                 1 -> { val dx = (nx - region.x1) * width; val dy = (ny - region.y1) * height; val r = region.x2 * width; (dx * dx + dy * dy) <= (r * r) }
-                2 -> { val dx = (nx - region.x1) * width; val dy = (ny - region.y1) * height; val rx = region.x2 * width; val ry = region.y2 * height; (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1.0f }
+                2 -> { val dx = (nx - region.x1); val dy = (ny - region.y1); val rx = region.x2; val ry = region.y2; (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1.0f }
                 else -> false
             }
         }

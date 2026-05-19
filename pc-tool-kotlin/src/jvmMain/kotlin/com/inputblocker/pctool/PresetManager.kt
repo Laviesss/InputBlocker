@@ -1,46 +1,63 @@
 package com.inputblocker.pctool
 
-import java.io.*
-import java.util.*
+import com.inputblocker.shared.Region
+import java.io.File
 
 data class Preset(
     val name: String,
-    val author: String,
-    val regions: List<com.inputblocker.shared.Region>
+    val enabled: Boolean,
+    val safeMode: Boolean,
+    val regions: List<Region>
 )
 
 object PresetManager {
-    fun exportPreset(file: File, preset: Preset) {
-        file.bufferedWriter().use { writer ->
-            writer.write("Preset: ${preset.name}\n")
-            writer.write("Author: ${preset.author}\n")
-            writer.write("---\n")
-            preset.regions.forEach { region ->
-                writer.write(region.toString() + "\n")
-            }
+    private const val PRESET_EXTENSION = ".ibpreset"
+
+    fun exportPreset(file: File, preset: Preset): Boolean {
+        return try {
+            val content = StringBuilder()
+            content.appendLine("# InputBlocker Community Preset")
+            content.appendLine("name=${preset.name}")
+            content.appendLine("enabled=${if (preset.enabled) "1" else "0"}")
+            content.appendLine("safe_mode=${if (preset.safeMode) "1" else "0"}")
+            content.appendLine()
+            content.appendLine("# Regions")
+            preset.regions.forEach { content.appendLine(it.toString()) }
+            
+            file.writeText(content.toString())
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
-    fun importPreset(file: File): Preset {
-        val lines = file.readLines()
-        var name = "Unknown Preset"
-        var author = "Unknown"
-        val regions = mutableListOf<com.inputblocker.shared.Region>()
-        
-        var headerFinished = false
-        for (line in lines) {
-            if (line.isBlank()) continue
-            if (line == "---") {
-                headerFinished = true
-                continue
+    fun importPreset(file: File): Preset? {
+        return try {
+            val lines = file.readLines()
+            var name = "Unknown Preset"
+            var enabled = true
+            var safeMode = true
+            val regions = mutableListOf<Region>()
+
+            lines.forEach { line ->
+                val trimmed = line.trim()
+                if (trimmed.startsWith("#") || trimmed.isEmpty()) return@forEach
+                
+                if (trimmed.startsWith("name=")) {
+                    name = trimmed.substring(5)
+                } else if (trimmed.startsWith("enabled=")) {
+                    enabled = trimmed.substring(8) == "1"
+                } else if (trimmed.startsWith("safe_mode=")) {
+                    safeMode = trimmed.substring(10) == "1"
+                } else {
+                    Region.fromString(trimmed)?.let { regions.add(it) }
+                }
             }
-            if (!headerFinished) {
-                if (line.startsWith("Preset: ")) name = line.substring(8)
-                if (line.startsWith("Author: ")) author = line.substring(8)
-            } else {
-                com.inputblocker.shared.Region.fromString(line)?.let { regions.add(it) }
-            }
+            Preset(name, enabled, safeMode, regions)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
-        return Preset(name, author, regions)
     }
 }

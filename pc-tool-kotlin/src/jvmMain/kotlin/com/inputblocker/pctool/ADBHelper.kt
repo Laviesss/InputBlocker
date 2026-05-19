@@ -248,6 +248,23 @@ class ADBHelper : AutoCloseable {
         return output.lines().mapNotNull { it.trim().toLongOrNull() }
     }
 
+    fun pullConfig(): List<com.inputblocker.shared.Region> {
+        if (!ensureConnected()) return emptyList()
+        
+        val modulePath = cachedModulePath ?: return emptyList()
+        val configPath = "$modulePath/config/profiles/default.conf"
+        val output = runProcess("adb", "-s $deviceSerial shell cat $configPath")
+        
+        val regions = mutableListOf<com.inputblocker.shared.Region>()
+        output.lines().forEach { line ->
+            val trimmed = line.trim()
+            if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && !trimmed.startsWith("enabled=") && !trimmed.startsWith("force_safe_mode=")) {
+                com.inputblocker.shared.Region.fromString(trimmed)?.let { regions.add(it) }
+            }
+        }
+        return regions
+    }
+
     fun pushConfig(regions: List<com.inputblocker.shared.Region>, enabled: Boolean, forceSafeMode: Boolean): Boolean {
         if (!ensureConnected()) return false
 
