@@ -3,6 +3,7 @@
 # ============================================================
 
 # Local context files (for developer reference only)
+.omo/
 CONTEXT.md
 TODO.md
 .sisyphus/
