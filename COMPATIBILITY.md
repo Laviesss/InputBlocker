@@ -1,6 +1,6 @@
 # 📱 Compatibility Matrix & Root Support
 
-This document outlines the compatibility of InputBlocker across different Android versions and root management systems.
+This document outlines the intended compatibility of InputBlocker across different Android versions and root management systems.
 
 ## 🛠️ Root Manager Support
 
@@ -8,24 +8,26 @@ InputBlocker is designed to be **Root Agnostic**. The core engine relies on syst
 
 | Manager | Support Level | Notes |
 |---|---|---|
-| **Magisk** | Full | Standard installation via ZIP module. |
-| **KernelSU** | Full | Compatible with KSU module directory structure. |
-| **APatch** | Full | Supports APatch's module implementation. |
+| **Magisk** | Targeted | Standard installation via ZIP module. |
+| **KernelSU** | Targeted | Compatible with KSU module directory structure. |
+| **APatch** | Targeted | Supports APatch's module implementation. |
 | **SuperSU** | Legacy | Supported via `/su/su.d/` scripts, though not recommended for modern devices. |
 
 ## 🤖 Android Version Support
 
-| Version | API Level | Status | Known Issues / Notes |
+The following versions are targeted for support. **Status is based on API compatibility and intended design; actual device verification is ongoing.**
+
+| Version | API Level | Status | Notes |
 |---|---|---|---|
-| **Android 11** | 30 | ✅ Stable | Full support for `InputDispatcher` hooks. |
-| **Android 12** | 31/32 | ✅ Stable | Compatible with Android 12's updated input pipeline. |
-| **Android 13** | 33 | ✅ Stable | Verified on most devices; requires latest LSPosed. |
-| **Android 14** | 34 | ✅ Stable | Compatible with Android 14's security restrictions. |
-| **Android 15** | 35 | ⚠️ Beta | Initial tests show compatibility; some devices may require specific LSPosed versions. |
+| **Android 11** | 30 | Targeted | Support for `InputDispatcher` hooks. |
+| **Android 12** | 31/32 | Targeted | Support for updated input pipeline. |
+| **Android 13** | 33 | Targeted | Requires latest LSPosed versions. |
+| **Android 14** | 34 | Targeted | Target for current development. |
+| **Android 15** | 35 | Experimental | Initial analysis only; verification pending. |
 
 ## 🔍 Compatibility Testing Checklist
 
-Before every major release, the following matrix must be verified:
+Before any release is marked as "Stable," the following must be verified on physical hardware:
 
 ### 1. Installation Flow
 - [ ] Module flashes correctly in Magisk.
@@ -34,7 +36,7 @@ Before every major release, the following matrix must be verified:
 - [ ] Companion app installs automatically on first boot.
 
 ### 2. Core Engine Functionality
-- [ ] `InputDispatcher` hook is active on all tested versions.
+- [ ] `InputDispatcher` hook is active on the specific OS version.
 - [ ] Surgical filtering blocks ghost taps correctly.
 - [ ] Exclude zones override blocking zones.
 - [ ] Emergency Reset gesture works globally.
@@ -48,4 +50,4 @@ Before every major release, the following matrix must be verified:
 
 - **Module not loading**: Ensure LSPosed is installed and the module is enabled for the `system_server` process.
 - **Config not applying**: Verify that the module path is correctly detected (e.g., `/data/adb/modules/inputblocker`).
-- **UI Lag**: Check if the device has extreme resource constraints; the hook is designed for $<10\mu s$ overhead.
+- **UI Lag**: Check if the device has extreme resource constraints; the hook is designed for minimal overhead.
