@@ -30,6 +30,10 @@ data class Region(
     val top: Float get() = min(y1, y2)
     val bottom: Float get() = max(y1, y2)
 
+    fun copyWithCoords(newX1: Float, newY1: Float, newX2: Float, newY2: Float): Region {
+        return this.copy(x1 = newX1, y1 = newY1, x2 = newX2, y2 = newY2)
+    }
+
     override fun toString(): String {
         return "${if (isExclude) 1 else 0},$type,$x1,$y1,$x2,$y2,$minPressure,$maxDuration"
     }

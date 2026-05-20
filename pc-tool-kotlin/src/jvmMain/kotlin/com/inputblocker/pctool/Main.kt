@@ -190,22 +190,27 @@ fun App() {
                                         if (isDrawing) {
                                             drawEnd = drawEnd + dragAmount
                                         } else if (isDragging && selectedRegionIndex != null) {
-                                            val r = regions[selectedRegionIndex!!]
-                                            val newLeft = (change.position.x - dragOffset.x) / size.width
-                                            val newTop = (change.position.y - dragOffset.y) / size.height
-                                            r.SetCoords(newLeft, newTop, newLeft + r.width, newTop + r.height)
-                                            regions = regions.toList()
+                                             val r = regions[selectedRegionIndex!!]
+                                             val newLeft = (change.position.x - dragOffset.x) / size.width
+                                             val newTop = (change.position.y - dragOffset.y) / size.height
+                                             regions = regions.toMutableList().apply {
+                                                 this[selectedRegionIndex!!] = r.copyWithCoords(newLeft, newTop, newLeft + r.width, newTop + r.height)
+                                             }
+                                             regions = regions.toList()
                                         } else if (isResizing && selectedRegionIndex != null) {
-                                            val r = regions[selectedRegionIndex!!]
-                                            val nx = change.position.x / size.width
-                                            val ny = change.position.y / size.height
-                                            when (resizeHandleIndex) {
-                                                0 -> { r.x1 = nx; r.y1 = ny }
-                                                1 -> { r.x2 = nx; r.y1 = ny }
-                                                2 -> { r.x1 = nx; r.y2 = ny }
-                                                3 -> { r.x2 = nx; r.y2 = ny }
-                                            }
-                                            regions = regions.toList()
+                                             val r = regions[selectedRegionIndex!!]
+                                             val nx = change.position.x / size.width
+                                             val ny = change.position.y / size.height
+                                             regions = regions.toMutableList().apply {
+                                                 this[selectedRegionIndex!!] = when (resizeHandleIndex) {
+                                                     0 -> r.copy(x1 = nx, y1 = ny)
+                                                     1 -> r.copy(x2 = nx, y1 = ny)
+                                                     2 -> r.copy(x1 = nx, y2 = ny)
+                                                     3 -> r.copy(x2 = nx, y2 = ny)
+                                                     else -> r
+                                                 }
+                                             }
+                                             regions = regions.toList()
                                         }
                                     },
                                     onDragEnd = {
@@ -413,21 +418,33 @@ fun App() {
                                       ) { Text("Auto-Tune", color = Color.Black) }
 
                                      
-                                     Text("Min Pressure:", color = TextMuted, fontSize = 12.sp)
-                                     TextField(
-                                         value = selectedRegion.minPressure.toString(), 
-                                         onValueChange = { val p = it.toFloatOrNull() ?: 0f; selectedRegion.minPressure = p; regions = regions.toList() }, 
-                                         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                         colors = TextFieldDefaults.textFieldColors(backgroundColor = BgDark)
-                                     )
+                                      Text("Min Pressure:", color = TextMuted, fontSize = 12.sp)
+                                      TextField(
+                                          value = selectedRegion.minPressure.toString(), 
+                                          onValueChange = { 
+                                              val p = it.toFloatOrNull() ?: 0f
+                                              regions = regions.toMutableList().apply {
+                                                  this[selectedRegionIndex!!] = selectedRegion.copy(minPressure = p)
+                                              }
+                                              regions = regions.toList() 
+                                          }, 
+                                          modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                          colors = TextFieldDefaults.textFieldColors(backgroundColor = BgDark)
+                                      )
                                      
-                                     Text("Max Duration (ms):", color = TextMuted, fontSize = 12.sp)
-                                     TextField(
-                                         value = selectedRegion.maxDuration.toString(), 
-                                         onValueChange = { val d = it.toLongOrNull() ?: 1000L; selectedRegion.maxDuration = d; regions = regions.toList() }, 
-                                         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                         colors = TextFieldDefaults.textFieldColors(backgroundColor = BgDark)
-                                     )
+                                      Text("Max Duration (ms):", color = TextMuted, fontSize = 12.sp)
+                                      TextField(
+                                          value = selectedRegion.maxDuration.toString(), 
+                                          onValueChange = { 
+                                              val d = it.toLongOrNull() ?: 1000L
+                                              regions = regions.toMutableList().apply {
+                                                  this[selectedRegionIndex!!] = selectedRegion.copy(maxDuration = d)
+                                              }
+                                              regions = regions.toList() 
+                                          }, 
+                                          modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                          colors = TextFieldDefaults.textFieldColors(backgroundColor = BgDark)
+                                      )
                                  }
 
                     }
