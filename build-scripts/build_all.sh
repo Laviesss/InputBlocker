@@ -64,7 +64,7 @@ echo ""
 if [ "$BUILD_CSHARP" == "1" ]; then
     echo -e "\033[93mBuilding C# Version...\033[0m"
 
-    cd "${SCRIPT_DIR}/pc-tool-csharp"
+    cd "${SCRIPT_DIR}/"
 
     CSHARP_OUTPUT="${OUTPUT_DIR}/csharp"
     mkdir -p "${CSHARP_OUTPUT}"
@@ -116,7 +116,7 @@ fi
 if [ "$BUILD_JAVA" == "1" ]; then
     echo -e "\033[93mBuilding Java Version...\033[0m"
 
-    cd "${SCRIPT_DIR}/pc-tool-java"
+    cd "${SCRIPT_DIR}/"
 
     JAVA_OUTPUT="${OUTPUT_DIR}/java"
     mkdir -p "${JAVA_OUTPUT}"
@@ -130,7 +130,7 @@ if [ "$BUILD_JAVA" == "1" ]; then
         ./gradlew jar
 
         echo ""
-        echo -e "\033[92mJAR built at: pc-tool-java/build/libs/\033[0m"
+        echo -e "\033[92mJAR built at: /build/libs/\033[0m"
     fi
     echo ""
 fi

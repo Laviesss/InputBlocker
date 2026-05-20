@@ -10,7 +10,7 @@ This project is a monorepo consisting of the Android Engine, the PC Designer, an
 
 ### Android SDK
 - **Compile/Target SDK**: 34
-- **Min SDK**: 21
+- **Min SDK**: 23
 
 ---
 

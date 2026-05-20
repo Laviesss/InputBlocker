@@ -1,0 +1,32 @@
+name: "CI Pipeline"
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test-and-lint:
+    name: "Test & Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: "Run Tests & Lint"
+        run: ./gradlew test lint --configuration-cache
+
+      - name: "Upload Lint Results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results
+          path: '**/build/reports/lint-results/'
+          retention-days: 7

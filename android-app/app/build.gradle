@@ -9,7 +9,7 @@ android {
     
     defaultConfig {
         applicationId = "com.inputblocker.app"
-        minSdk = 21
+            minSdk = 23
         targetSdk = 34
         versionCode project.property("VERSION_CODE").toInteger()
         versionName project.property("VERSION_NAME")

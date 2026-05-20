@@ -38,7 +38,7 @@ BUILD_JAVA=0
 echo -e "${YELLOW}Building C# Version (all platforms)...${NC}"
 echo ""
 
-cd "$SCRIPT_DIR/pc-tool-csharp"
+cd "$SCRIPT_DIR/"
 
 if command -v dotnet &> /dev/null; then
     BUILD_CSHARP=1
@@ -81,7 +81,7 @@ echo ""
 echo -e "${YELLOW}Building Java Version...${NC}"
 echo ""
 
-cd "$SCRIPT_DIR/pc-tool-java"
+cd "$SCRIPT_DIR/"
 
 if command -v java &> /dev/null; then
     BUILD_JAVA=1

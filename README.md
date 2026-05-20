@@ -40,6 +40,13 @@ A visual editor for your PC. Use it to:
 
 ---
 
+## 📥 Download
+You can find the latest releases on the [Releases Page](https://github.com/Laviesss/InputBlocker/releases).
+- **Android users**: Download the `.zip` file and flash it via your root manager.
+- **PC users**: Download the `.exe` (Windows), `.AppImage` (Linux), or `.dmg` (macOS) to use the Designer.
+
+---
+
 ## 🧪 We're looking for Testers!
 InputBlocker is in active development. If you have a device with ghost taps and want to help us refine the filtering logic:
 - **How to help**: Install the module, try out different threshold settings, and let us know what works (or what crashes).

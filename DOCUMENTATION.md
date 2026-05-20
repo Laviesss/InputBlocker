@@ -14,6 +14,7 @@ Unlike traditional overlays, InputBlocker operates at the **input dispatcher lev
 5. [Configuration Reference](#configuration-reference)
 6. [Auto-Tuning Logic](#auto-tuning-logic)
 7. [Installation & Recovery](#installation--recovery)
+8. [Developer Reference](#developer-reference)
 
 ---
 
@@ -126,3 +127,22 @@ InputBlocker operates as a closed-loop feedback system:
 To prevent accidental screen lockouts:
 - **Emergency Gesture**: Hold the top-left corner (5% area) for 3 seconds to disable all blocking.
 - **Kill Switch**: Create a file at `/data/adb/modules/inputblocker/config/kill_switch` containing `1` to force the module into a dormant state.
+
+---
+
+## 🛠️ Developer Reference
+
+### Coordinate System
+All coordinates are stored as normalized floats (0.0 to 1.0).
+`NormalizedX = PixelX / ScreenWidth`
+`NormalizedY = PixelY / ScreenHeight`
+
+### Hooking Point
+The module hooks `com.android.server.input.InputDispatcher.dispatchMotionLocked`. This is the central point of entry for all motion events in Android. Returning `null` as a result of the hook effectively drops the event, preventing it from reaching the window manager.
+
+### Configuration File Path
+The core config is located at:
+`/data/adb/modules/inputblocker/config/profiles/default.conf`
+
+Profiles are located at:
+`/data/adb/modules/inputblocker/config/profiles/[package_name].conf`
