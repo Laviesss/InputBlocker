@@ -1,4 +1,4 @@
-name: "?? Production Release Pipeline"
+name: "Production Release Pipeline"
 
 on:
   push:
@@ -7,13 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       version_name:
-        description: 'Version Name (e.g., 1.0.1)'
+        description: 'Version Name — must be semver X.Y.Z (e.g., 1.2.3)'
         required: true
       version_code:
-        description: 'Version Code (Integer)'
-        required: true
+        description: 'Version Code override (integer). Leave blank to auto-calculate from version name: (major*10000)+(minor*100)+patch'
+        required: false
+        default: ''
       release_notes:
-        description: 'Release notes (Markdown)'
+        description: 'Release notes (Markdown). Leave blank to auto-generate from git log.'
         required: false
         default: ''
       draft:
@@ -26,85 +27,614 @@ on:
         required: false
         default: false
         type: boolean
+      build_android:
+        description: 'Build Android APK + Root Module'
+        required: false
+        default: true
+        type: boolean
+      build_windows:
+        description: 'Build PC Tool — Windows (.exe)'
+        required: false
+        default: true
+        type: boolean
+      build_linux:
+        description: 'Build PC Tool — Linux (.AppImage)'
+        required: false
+        default: true
+        type: boolean
+      build_macos:
+        description: 'Build PC Tool — macOS (.dmg)'
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
+  pages: write
+  issues: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
+# ============================================================
+# JOB 1: VALIDATE
+# Resolves version, calculates/overrides version code,
+# guards against duplicate releases, checks for regressions,
+# and generates release notes.
+# ============================================================
 jobs:
-  release:
-    name: "?? Build & Publish"
-    runs-on: windows-latest
+  validate:
+    name: "Validate & Pre-flight"
+    runs-on: ubuntu-latest
+    outputs:
+      version_name:  ${{ steps.versioning.outputs.VERSION_NAME }}
+      version_code:  ${{ steps.versioning.outputs.VERSION_CODE }}
+      tag_name:      ${{ steps.versioning.outputs.TAG_NAME }}
+      release_notes: ${{ steps.notes.outputs.BODY }}
+      started_at:    ${{ steps.versioning.outputs.STARTED_AT }}
+
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: "?? Setup Environment"
+      - name: "Resolve & Validate Version"
+        id: versioning
+        shell: pwsh
+        run: |
+          $version_name      = "${{ github.event.inputs.version_name }}"
+          $version_code_raw  = "${{ github.event.inputs.version_code }}"
+
+          # On a tag push, derive version_name from the tag
+          if ("${{ github.event_name }}" -eq "push") {
+              $tag = "${{ github.ref_name }}"
+              $version_name = $tag.TrimStart('v')
+              echo "Tag push detected. Derived version name: $version_name"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($version_name)) {
+              throw "CRITICAL ERROR: VERSION_NAME is missing."
+          }
+
+          # Strict semver validation: must be X.Y.Z
+          if ($version_name -notmatch '^\d+\.\d+\.\d+$') {
+              throw "CRITICAL ERROR: '$version_name' is not valid semver. Expected format: X.Y.Z (e.g., 1.2.3)."
+          }
+
+          $parts = $version_name -split '\.'
+          $major = [int]$parts[0]
+          $minor = [int]$parts[1]
+          $patch = [int]$parts[2]
+
+          # Use override if provided, otherwise auto-calculate
+          # Formula: (major * 10000) + (minor * 100) + patch
+          #   e.g.  1.0.0 ->  10000 | 1.2.3 -> 10203 | 2.0.0 -> 20000
+          if (-not [string]::IsNullOrWhiteSpace($version_code_raw)) {
+              $version_code = [int]$version_code_raw
+              echo "Using provided version code override: $version_code"
+          } else {
+              $version_code = ($major * 10000) + ($minor * 100) + $patch
+              echo "Auto-calculated version code: $version_code"
+          }
+
+          echo "Resolved -> name: $version_name | code: $version_code"
+
+          $started_at = (Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
+
+          echo "VERSION_NAME=$version_name" >> $env:GITHUB_OUTPUT
+          echo "VERSION_CODE=$version_code" >> $env:GITHUB_OUTPUT
+          echo "TAG_NAME=v$version_name"    >> $env:GITHUB_OUTPUT
+          echo "STARTED_AT=$started_at"     >> $env:GITHUB_OUTPUT
+
+      - name: "Guard Against Duplicate Releases"
+        shell: bash
+        run: |
+          TAG="${{ steps.versioning.outputs.TAG_NAME }}"
+          echo "Checking if release $TAG already exists..."
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG")
+
+          if [ "$STATUS" = "200" ]; then
+            echo "::error::Release $TAG already exists. Bump the version or delete the existing release first."
+            exit 1
+          fi
+          echo "No existing release found for $TAG. Proceeding."
+
+      - name: "Check Version Code Regression"
+        shell: bash
+        run: |
+          NEW_CODE=${{ steps.versioning.outputs.VERSION_CODE }}
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/update.json"
+
+          echo "Checking live update.json at: $PAGES_URL"
+          if curl -sf "$PAGES_URL" -o update_live.json; then
+            LIVE_CODE=$(jq -r '.versionCode' update_live.json)
+            echo "Live versionCode: $LIVE_CODE | New versionCode: $NEW_CODE"
+            if [ "$NEW_CODE" -le "$LIVE_CODE" ]; then
+              echo "::error::VERSION_CODE regression: new=$NEW_CODE is not greater than live=$LIVE_CODE. Root managers will ignore this update."
+              exit 1
+            fi
+            echo "Version code OK: $LIVE_CODE -> $NEW_CODE"
+          else
+            echo "No live update.json found — skipping regression check (likely a first release)."
+          fi
+
+      - name: "Generate Release Notes"
+        id: notes
+        shell: pwsh
+        run: |
+          $v      = "${{ steps.versioning.outputs.VERSION_NAME }}"
+          $c      = "${{ steps.versioning.outputs.VERSION_CODE }}"
+          $manual = "${{ github.event.inputs.release_notes }}"
+
+          if (-not [string]::IsNullOrWhiteSpace($manual)) {
+              echo "Using manually provided release notes."
+              $body = $manual
+          } else {
+              echo "Auto-generating release notes from git log..."
+              $prev = git describe --tags --abbrev=0 HEAD^ 2>$null
+              if ($prev) {
+                  $log    = git log "$prev..HEAD" --pretty=format:"- %s" --no-merges
+                  $header = "## What's Changed (since $prev)"
+              } else {
+                  $log    = git log --pretty=format:"- %s" --no-merges -20
+                  $header = "## What's Changed"
+              }
+              $body = "$header`n$log"
+          }
+
+          # Append a requirements footer to every release body
+          $footer = @"
+
+---
+### Requirements
+| | |
+|---|---|
+| **Root** | Magisk / KernelSU / APatch / SuperSU |
+| **Framework** | LSPosed (recommended) |
+| **Android** | 6.0+ (API 23) |
+| **Version Code** | $c |
+"@
+          $body = $body + $footer
+
+          echo "BODY<<EOF"  >> $env:GITHUB_OUTPUT
+          echo $body        >> $env:GITHUB_OUTPUT
+          echo "EOF"        >> $env:GITHUB_OUTPUT
+
+# ============================================================
+# JOB 2: TEST
+# Runs unit tests before any build begins.
+# All build jobs are blocked until this passes.
+# ============================================================
+  test:
+    name: "Run Unit Tests"
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Java"
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
 
-      - name: "?? Validate Versioning"
-        id: versioning
+      - name: "Run Tests"
+        run: ./gradlew test --configuration-cache
+
+      - name: "Upload Test Results"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/build/reports/tests/'
+          retention-days: 7
+
+# ============================================================
+# JOB 3: BUILD PC TOOL (Matrix)
+# Builds the Compose for Desktop tool on all three platforms
+# in parallel. Each platform is gated by its checkbox input.
+# Tag pushes always build all three.
+# ============================================================
+  build-pc-tool:
+    name: "Build PC Tool (${{ matrix.label }})"
+    needs: [validate, test]
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      needs.test.result == 'success' &&
+      (
+        github.event_name == 'push' ||
+        (matrix.label == 'windows' && github.event.inputs.build_windows == 'true') ||
+        (matrix.label == 'linux'   && github.event.inputs.build_linux   == 'true') ||
+        (matrix.label == 'macos'   && github.event.inputs.build_macos   == 'true')
+      )
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows
+            artifact_name: pc-tool-windows
+            glob: "*.exe"
+          - os: ubuntu-latest
+            label: linux
+            artifact_name: pc-tool-linux
+            glob: "*.AppImage"
+          - os: macos-latest
+            label: macos
+            artifact_name: pc-tool-macos
+            glob: "*.dmg"
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: "Build for ${{ matrix.label }}"
+        shell: bash
+        run: |
+          ./gradlew :pc-tool-kotlin:packageDistributionForCurrentOS \
+            --configuration-cache \
+            -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
+            -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
+
+      - name: "Upload PC Tool Artifact"
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: pc-tool-kotlin/build/compose/binaries/${{ matrix.glob }}
+          retention-days: 1
+
+# ============================================================
+# JOB 4: BUILD ANDROID & ROOT MODULE
+# Builds the signed APK and the Magisk/KernelSU/APatch ZIP.
+# Gated by the build_android checkbox input.
+# ============================================================
+  build-android:
+    name: "Build Android & Root Module"
+    needs: [validate, test]
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      needs.test.result == 'success' &&
+      (github.event_name == 'push' || github.event.inputs.build_android == 'true')
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Setup Java"
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: "Build APK & Module ZIP"
+        run: |
+          ./gradlew buildAndroid buildModule \
+            --configuration-cache \
+            -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
+            -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
+
+      - name: "Upload Android Artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-artifacts
+          path: |
+            android-app/app/build/outputs/apk/release/app-release.apk
+            build/distributions/inputblocker.zip
+          retention-days: 1
+
+# ============================================================
+# JOB 5: RELEASE
+# Stages, validates, signs-checks, checksums, releases,
+# deploys update.json, and writes a full summary.
+# Runs even if some build jobs were skipped (partial release).
+# On failure, auto-opens a GitHub issue.
+# ============================================================
+  release:
+    name: "Publish Release"
+    needs: [validate, build-pc-tool, build-android]
+    if: always() && needs.validate.result == 'success'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Download All Artifacts"
+        uses: actions/download-artifact@v4
+        with:
+          path: raw-artifacts
+
+      - name: "Stage & Rename Artifacts"
         shell: pwsh
         run: |
-          $version_name = "${{ github.event.inputs.version_name }}"
-          $version_code = "${{ github.event.inputs.version_code }}"
-          
-          # Handle Tag Push
+          $v          = "${{ needs.validate.outputs.version_name }}"
+          $do_android = "${{ github.event.inputs.build_android }}" -ne 'false'
+          $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'false'
+          $do_linux   = "${{ github.event.inputs.build_linux }}"   -ne 'false'
+          $do_macos   = "${{ github.event.inputs.build_macos }}"   -ne 'false'
+
+          # Tag pushes always build everything
           if ("${{ github.event_name }}" -eq "push") {
-              $tag = "${{ github.ref_name }}"
-              $version_name = $tag.TrimStart('v')
+              $do_android = $true; $do_windows = $true
+              $do_linux   = $true; $do_macos   = $true
           }
-          
-          # Strict Validation: No fallbacks
-          if ([string]::IsNullOrWhiteSpace($version_name)) {
-              throw "CRITICAL ERROR: VERSION_NAME is missing. You must provide a version name in the inputs or use a git tag (v*)."
-          }
-          
-          if ([string]::IsNullOrWhiteSpace($version_code)) {
-              throw "CRITICAL ERROR: VERSION_CODE is missing. You must provide a numeric version code in the workflow inputs. Git tags do not provide version codes, so please use 'Run workflow' for production releases."
-          }
-          
-          echo "VERSION_NAME=$version_name" >> $env:GITHUB_OUTPUT
-          echo "VERSION_CODE=$version_code" >> $env:GITHUB_OUTPUT
-          echo "TAG_NAME=v$version_name" >> $env:GITHUB_OUTPUT
 
-      - name: "?? Build All Artifacts"
+          New-Item -ItemType Directory -Path "release-assets" -Force
+
+          if ($do_android) {
+              Copy-Item "raw-artifacts/android-artifacts/app-release.apk" `
+                        "release-assets/InputBlocker-v$v.apk"
+              Copy-Item "raw-artifacts/android-artifacts/inputblocker.zip" `
+                        "release-assets/InputBlocker-v$v.zip"
+          }
+          if ($do_windows) {
+              Copy-Item (Get-ChildItem "raw-artifacts/pc-tool-windows/*.exe")[0].FullName `
+                        "release-assets/InputBlockerSetup-v$v.exe"
+          }
+          if ($do_linux) {
+              $f = Get-ChildItem "raw-artifacts/pc-tool-linux/*.AppImage" -ErrorAction SilentlyContinue
+              if ($f) { Copy-Item $f[0].FullName "release-assets/InputBlockerSetup-v$v.AppImage" }
+              else    { echo "Linux build not found, skipping." }
+          }
+          if ($do_macos) {
+              $f = Get-ChildItem "raw-artifacts/pc-tool-macos/*.dmg" -ErrorAction SilentlyContinue
+              if ($f) { Copy-Item $f[0].FullName "release-assets/InputBlockerSetup-v$v.dmg" }
+              else    { echo "macOS build not found, skipping." }
+          }
+
+          echo "Staged artifacts:"
+          Get-ChildItem "release-assets" | Select-Object Name,
+              @{N="Size"; E={[math]::Round($_.Length/1MB, 2).ToString() + " MB"}}
+
+      - name: "Verify Artifacts (Existence + Size)"
         shell: pwsh
         run: |
-          .\gradlew buildAll -PVERSION_NAME="${{ steps.versioning.outputs.VERSION_NAME }}" -PVERSION_CODE=${{ steps.versioning.outputs.VERSION_CODE }}
+          $v          = "${{ needs.validate.outputs.version_name }}"
+          $do_android = "${{ github.event.inputs.build_android }}" -ne 'false'
+          $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'false'
+          $is_push    = "${{ github.event_name }}" -eq "push"
 
-      - name: "?? Verify Artifacts"
-        shell: pwsh
+          $required = @()
+          if ($do_android -or $is_push) {
+              $required += "release-assets/InputBlocker-v$v.apk"
+              $required += "release-assets/InputBlocker-v$v.zip"
+          }
+          if ($do_windows -or $is_push) {
+              $required += "release-assets/InputBlockerSetup-v$v.exe"
+          }
+          if ($required.Count -eq 0) {
+              throw "Nothing was selected to build. Enable at least one build target."
+          }
+          foreach ($pattern in $required) {
+              $f = Get-ChildItem $pattern -ErrorAction SilentlyContinue | Select-Object -First 1
+              if (-not $f)           { throw "Missing required artifact: $pattern" }
+              if ($f.Length -lt 1KB) { throw "Suspiciously small artifact: $($f.Name) ($($f.Length) bytes)" }
+              echo "OK: $($f.Name) — $([math]::Round($f.Length/1MB, 2)) MB"
+          }
+
+      - name: "Validate ZIP Integrity"
+        if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
+        shell: bash
         run: |
-          $apk = Get-ChildItem "android-app/app/build/outputs/apk/release/*.apk"
-          $exe = Get-ChildItem "pc-tool-kotlin/build/compose/binaries/*.exe"
-          $zip = Get-ChildItem "build/distributions/inputblocker.zip"
-          
-          if (-not $apk) { throw "Android APK not found!" }
-          if (-not $exe) { throw "PC Tool EXE not found!" }
-          if (-not $zip) { throw "Root Module ZIP not found!" }
-          
-          echo "All artifacts verified successfully."
+          V="${{ needs.validate.outputs.version_name }}"
+          ZIP="release-assets/InputBlocker-v$V.zip"
+          echo "Testing ZIP integrity: $ZIP"
+          unzip -t "$ZIP"
+          if [ $? -ne 0 ]; then
+            echo "::error::Module ZIP failed integrity check — it may be corrupt."
+            exit 1
+          fi
+          echo "ZIP integrity OK."
 
-      - name: "?? Create GitHub Release"
+      - name: "Verify APK Signature"
+        if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
+        shell: bash
+        run: |
+          V="${{ needs.validate.outputs.version_name }}"
+          APK="release-assets/InputBlocker-v$V.apk"
+
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          APKSIGNER="$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner"
+
+          echo "Using apksigner: $APKSIGNER"
+          "$APKSIGNER" verify --verbose "$APK"
+          if [ $? -ne 0 ]; then
+            echo "::error::APK signature verification failed. Refusing to release an unsigned APK."
+            exit 1
+          fi
+          echo "APK signature verified successfully."
+
+      - name: "Extract APK Metadata"
+        if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
+        id: apk_meta
+        shell: bash
+        run: |
+          V="${{ needs.validate.outputs.version_name }}"
+          APK="release-assets/InputBlocker-v$V.apk"
+
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          AAPT="$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt2"
+
+          BADGING=$("$AAPT" dump badging "$APK" 2>/dev/null || true)
+
+          PKG=$(echo "$BADGING"       | grep "^package"         | grep -oP "name='\K[^']+")
+          VER=$(echo "$BADGING"       | grep "^package"         | grep -oP "versionName='\K[^']+")
+          MIN=$(echo "$BADGING"       | grep "sdkVersion"       | grep -oP "'\K[^']+")
+          TARGET=$(echo "$BADGING"    | grep "targetSdkVersion" | grep -oP "'\K[^']+")
+
+          echo "Package:   $PKG"
+          echo "Version:   $VER"
+          echo "Min SDK:   $MIN"
+          echo "Target SDK: $TARGET"
+
+          echo "PKG=$PKG"       >> $GITHUB_OUTPUT
+          echo "VER=$VER"       >> $GITHUB_OUTPUT
+          echo "MIN=$MIN"       >> $GITHUB_OUTPUT
+          echo "TARGET=$TARGET" >> $GITHUB_OUTPUT
+
+      - name: "Generate SHA-256 Checksums"
+        shell: bash
+        run: |
+          V="${{ needs.validate.outputs.version_name }}"
+          cd release-assets
+          sha256sum * > "checksums-v$V.txt"
+          echo "--- Checksums ---"
+          cat "checksums-v$V.txt"
+
+      - name: "Upload Staged Artifacts"
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-v${{ needs.validate.outputs.version_name }}
+          path: release-assets/*
+          retention-days: 7
+
+      - name: "Create GitHub Release"
+        id: gh_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.versioning.outputs.TAG_NAME }}
-          name: "Release ${{ steps.versioning.outputs.TAG_NAME }}"
-          body: ${{ github.event.inputs.release_notes || 'Automated production release.' }}
-          draft: ${{ github.event.inputs.draft || 'false' }}
+          tag_name:   ${{ needs.validate.outputs.tag_name }}
+          name:       "Release ${{ needs.validate.outputs.tag_name }}"
+          body:       ${{ needs.validate.outputs.release_notes }}
+          draft:      ${{ github.event.inputs.draft      || 'false' }}
           prerelease: ${{ github.event.inputs.prerelease || 'false' }}
-          files: |
-            android-app/app/build/outputs/apk/release/*.apk
-            pc-tool-kotlin/build/compose/binaries/*.exe
-            build/distributions/inputblocker.zip
+          files:      release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Deploy update.json to GitHub Pages"
+        if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
+        shell: bash
+        run: |
+          V="${{ needs.validate.outputs.version_name }}"
+          C="${{ needs.validate.outputs.version_code }}"
+          REPO="${{ github.repository }}"
+
+          APK_SHA=$(sha256sum "release-assets/InputBlocker-v$V.apk" | awk '{print $1}')
+          ZIP_SHA=$(sha256sum "release-assets/InputBlocker-v$V.zip" | awk '{print $1}')
+
+          mkdir -p pages-deploy
+          cat > pages-deploy/update.json << EOF
+          {
+            "version":     "$V",
+            "versionCode": $C,
+            "apkUrl":      "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.apk",
+            "zipUrl":      "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.zip",
+            "changelog":   "${{ needs.validate.outputs.release_notes }}",
+            "apkSha256":   "$APK_SHA",
+            "zipSha256":   "$ZIP_SHA"
+          }
+          EOF
+          echo "update.json:"; cat pages-deploy/update.json
+
+      - name: "Push update.json"
+        if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir:  ./pages-deploy
+          keep_files:   true
+          commit_message: "deploy: update.json for v${{ needs.validate.outputs.version_name }}"
+
+      - name: "Open Issue on Failure"
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const v       = "${{ needs.validate.outputs.version_name }}";
+            const runUrl  = `https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo:  context.repo.repo,
+              title: `?? Release pipeline failed — v${v}`,
+              body: [
+                `The production release pipeline for **v${v}** failed.`,
+                ``,
+                `**Triggered by:** ${{ github.event_name }}`,
+                `**Commit:** ${{ github.sha }}`,
+                `**Run:** [View logs](${runUrl})`,
+                ``,
+                `Please investigate the [failed run](${runUrl}) and re-trigger once resolved.`,
+              ].join("\n"),
+              labels: ["bug", "release"],
+            });
+
+      - name: "Write Job Summary"
+        if: always()
+        shell: pwsh
+        run: |
+          $v          = "${{ needs.validate.outputs.version_name }}"
+          $c          = "${{ needs.validate.outputs.version_code }}"
+          $status     = "${{ job.status }}"
+          $started    = "${{ needs.validate.outputs.started_at }}"
+          $finished   = (Get-Date -Format "yyyy-MM-dd HH:mm:ss UTC")
+          $icon       = if ($status -eq "success") { "?" } else { "?" }
+          $run_url    = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          Add-Content $env:GITHUB_STEP_SUMMARY "## $icon Release $status — v$v"
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Field        | Value |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "|--------------|-------|"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Version      | v$v |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Version Code | $c |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Trigger      | ${{ github.event_name }} |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Commit       | ``${{ github.sha }}`` |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Started      | $started |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Finished     | $finished |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Status       | $status |"
+          Add-Content $env:GITHUB_STEP_SUMMARY "| Run          | [View logs]($run_url) |"
+          Add-Content $env:GITHUB_STEP_SUMMARY ""
+
+          # APK metadata section
+          $pkg    = "${{ steps.apk_meta.outputs.PKG }}"
+          $minSdk = "${{ steps.apk_meta.outputs.MIN }}"
+          $tgtSdk = "${{ steps.apk_meta.outputs.TARGET }}"
+          if (-not [string]::IsNullOrWhiteSpace($pkg)) {
+              Add-Content $env:GITHUB_STEP_SUMMARY "### APK Metadata"
+              Add-Content $env:GITHUB_STEP_SUMMARY "| Field | Value |"
+              Add-Content $env:GITHUB_STEP_SUMMARY "|-------|-------|"
+              Add-Content $env:GITHUB_STEP_SUMMARY "| Package | ``$pkg`` |"
+              Add-Content $env:GITHUB_STEP_SUMMARY "| Min SDK | $minSdk |"
+              Add-Content $env:GITHUB_STEP_SUMMARY "| Target SDK | $tgtSdk |"
+              Add-Content $env:GITHUB_STEP_SUMMARY ""
+          }
+
+          if (Test-Path "release-assets") {
+              # Fetch previous release APK size for delta comparison
+              try {
+                  $prev = Invoke-RestMethod `
+                    "https://api.github.com/repos/${{ github.repository }}/releases/latest" `
+                    -Headers @{ Authorization = "Bearer ${{ secrets.GITHUB_TOKEN }}" }
+                  $prev_apk = $prev.assets | Where-Object { $_.name -like "*.apk" } | Select-Object -First 1
+              } catch { $prev_apk = $null }
+
+              Add-Content $env:GITHUB_STEP_SUMMARY "### Artifacts"
+              Add-Content $env:GITHUB_STEP_SUMMARY "| File | Size | Delta |"
+              Add-Content $env:GITHUB_STEP_SUMMARY "|------|------|-------|"
+
+              Get-ChildItem "release-assets" | ForEach-Object {
+                  $size_mb = [math]::Round($_.Length / 1MB, 2)
+                  $delta   = "—"
+                  if ($prev_apk -and $_.Name -like "*.apk") {
+                      $prev_mb = [math]::Round($prev_apk.size / 1MB, 2)
+                      $diff    = [math]::Round($size_mb - $prev_mb, 2)
+                      $sign    = if ($diff -ge 0) { "+" } else { "" }
+                      $delta   = "$sign$diff MB vs previous"
+                  }
+                  Add-Content $env:GITHUB_STEP_SUMMARY "| ``$($_.Name)`` | $size_mb MB | $delta |"
+              }
+          }
