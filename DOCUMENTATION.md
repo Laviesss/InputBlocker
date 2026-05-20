@@ -1,330 +1,128 @@
 # InputBlocker Technical Documentation
 
-InputBlocker is a system-level tool designed to stop "ghost taps" (phantom touches) caused by hardware failure on Android devices.
+InputBlocker is a system-level utility designed to mitigate "ghost taps" (phantom touches) caused by hardware digitizer failure on Android devices.
 
-Unlike traditional blocking apps that overlay a transparent view, InputBlocker operates at the **input dispatcher level**, allowing for touch filtering based on physical properties.
-
----
-
-## 📖 Table of Contents
-1. [How it works](#how-it-works)
-2. [System Architecture](#system-architecture)
-3. [The Android Engine](#the-android-engine)
-    - [The Xposed Hook](#the-xposed-hook)
-    - [Touch Filtering Logic](#touch-filtering-logic)
-    - [Region Layering](#region-layering)
-    - [Emergency Recovery](#emergency-recovery)
-4. [The PC Setup Tool](#the-pc-setup-tool)
-    - [Visual Designer](#visual-designer)
-    - [ADB Bridge](#adb-bridge)
-    - [Log Analysis & Hotspots](#log-analysis--hotspots)
-5. [Configuration Reference](#configuration-reference)
-    - [The CSV Format](#the-csv-format)
-    - [Profile System](#profile-system)
-6. [Auto-Tuning](#auto-tuning)
-7. [Installation & Setup](#installation--setup)
-8. [Troubleshooting](#troubleshooting)
+Unlike traditional overlays, InputBlocker operates at the **input dispatcher level**, enabling the filtering of touches based on physical properties rather than just screen coordinates.
 
 ---
 
-## 🎯 How it works
-
-### The Problem: Digitizer Failure
-When a screen's digitizer fails, it generates "ghost taps"—electrical noise that the system interprets as a touch. These taps usually have:
-1. **Low Pressure**: They lack the physical force of a real finger.
-2. **Abnormal Duration**: They are either instantaneous spikes or unnaturally long holds.
-3. **Localized**: They usually occur in specific areas on the panel.
-
-### The Solution: Touch Filtering
-InputBlocker blocks specific types of touches within a defined region. 
-- **Blunt Blocking**: Blocks everything in a rectangle.
-- **Filtered Blocking**: Blocks touches in a rectangle **ONLY IF** they have pressure $< X$ or duration $> Y$. This allows real touches to pass through.
-
----
-
-## 🏗️ System Architecture
-
-InputBlocker consists of three modules:
-
-### 1. The Designer (PC Tool)
-Allows users to visually map out blocking regions and tune thresholds using a canvas. It communicates with the device via **ADB**.
-
-### 2. The Shared Core (KMP)
-A Kotlin Multiplatform module containing the `Region` definitions and coordinate normalization logic. This ensures consistency between the PC and Android sides.
-
-### 3. The Engine (Android App/Xposed)
-Hooks into the Android system server's `InputDispatcher` to stop ghost taps before they reach any application.
-
-**Data Flow**:
-`PC Tool` $\xrightarrow{\text{ADB Push}}$ `/config/profiles/default.conf` $\xrightarrow{\text{Xposed Load}}$ `Touch Filter` $\xrightarrow{\text{Block/Allow}}$ `Android OS`
-
----
-
-## 📱 The Android Engine
-
-### The Xposed Hook
-The engine hooks `com.android.server.input.InputDispatcher.dispatchMotionLocked`. This intercepts all touch input on Android.
-
-### Touch Filtering Logic
-Every touch event is passed through the filter:
-$\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \text{MaxDuration})$
-
-- **MinPressure**: Filters out low-pressure electrical noise.
-- **MaxDuration**: Filters out "stuck" pixels.
-
-### Region Layering
-1. **Exclude Zones**: High-priority areas. If a touch falls here, it is **always allowed**.
-2. **Blocking Zones**: Areas where touch filtering is applied.
-
-**Priority Order**: `Exclude Zone` $\rightarrow$ `Blocking Zone` $\rightarrow$ `Allow`.
-
-### Emergency Recovery
-1. **The Emergency Gesture**: Hold the top-left corner (top 5% of screen) for 3 seconds to disable all blocking.
-2. **The Kill Switch**: A file at `/data/adb/modules/inputblocker/config/kill_switch`. If it contains `1`, the module stops blocking.
-
----
-
-## 💻 The PC Setup Tool
-
-### Visual Designer
-A canvas that mirrors the device screen.
-- **Normalization**: All coordinates are floats from `0.0` to `1.0` for resolution independence.
-- **Interactive Handles**: Drag regions to move them or use corners to resize.
-- **Property Inspector**: Adjust filtering thresholds in real-time.
-
-### ADB Bridge
-Uses `ADBHelper` to:
-- Detect the module path (Magisk, KernelSU, APatch, SuperSU).
-- Push `.conf` files to the device.
-- Pull `blocklog.txt` for analysis.
-
-### Log Analysis & Hotspots
-The engine logs blocked touches to `blocklog.txt`. The PC tool analyzes this to find **Hotspots**.
-- **Calculation**: Identifies clusters of blocked touches using the DBSCAN algorithm.
-- **Suggestion**: Calculates a smaller bounding box based on the clusters to help the user reclaim screen space.
-
----
-
-## ⚙️ Configuration Reference
-
-### The CSV Format
-Configurations use plain-text CSV:
-`isExclude, type, x1, y1, x2, y2, minPressure, maxDuration`
-
-| Column | Name | Type | Description |
-| :--- | :--- | :--- | :--- |
-| 1 | `isExclude` | Boolean (0/1) | `1` = Exclude Zone, `0` = Blocking Zone |
-| 2 | `type` | Integer | `0` = Rectangle, `1` = Circle, `2` = Ellipse |
-| 3-4 | `x1, y1` | Float (0-1) | Top-Left (Rect) or Center (Circle/Ellipse) |
-| 5-6 | `x2, y2` | Float (0-1) | Bottom-Right (Rect) or Radius (Circle/Ellipse) |
-| 7 | `minPressure` | Float | Minimum pressure threshold for a "real" touch |
-| 8 | `maxDuration` | Long (ms) | Maximum duration before a touch is flagged as a ghost |
-
-**Example Line**:
-`0,0,0.1,0.1,0.2,0.2,0.05,2000`
-
-### Profile System
-Supports per-app profiles via `/config/profiles/[package_name].conf`. Falls back to `default.conf`.
-
----
-
-## 📈 Auto-Tuning
-
-InputBlocker uses a feedback loop:
-1. **Sensing**: The engine blocks a ghost tap and logs the $(x, y)$ coordinate.
-2. **Analysis**: The PC Tool analyzes these logs.
-3. **Shrinking**: If ghost taps are clustered in a smaller area, boundaries are adjusted.
-4. **Enforcement**: The updated `.conf` is saved, and the engine reloads it.
-
----
-
-## 🛠️ Installation & Setup
-
-### Prerequisites
-- **Root Access**: Magisk, KernelSU, or APatch.
-- **Xposed Framework**: LSPosed (Recommended).
-- **ADB**: Installed on PC.
-
-### Setup Steps
-1. **Install Module**: Flash the `InputBlocker.zip`.
-2. **Enable Module**: Enable in LSPosed and reboot.
-3. **Connect PC**: Enable USB Debugging and connect to the PC Tool.
-4. **Configure**: Map your dead zones in the Visual Designer.
-
----
-
-## ❓ Troubleshooting
-
-| Issue | Possible Cause | Solution |
-| :--- | :--- | :--- |
-| **Regions not blocking** | Module not enabled in LSPosed | Check LSPosed $\rightarrow$ Modules $\rightarrow$ InputBlocker |
-| **Screen frozen** | Too many blocking regions | Use the **Emergency Reset Gesture** (Hold top-left corner for 3s) |
-| **Config not updating** | Path mismatch | Use the PC Tool to "Push to Device" |
-| **Filter too aggressive** | `minPressure` set too high | Lower the `minPressure` in the Property Inspector |
-
-Welcome to the official technical documentation for **InputBlocker**. InputBlocker is a system-level tool designed to combat hardware-level digitizer failures (commonly known as "ghost taps") on Android devices.
-
-Unlike traditional blocking apps that simply overlay a transparent view, InputBlocker operates at the **input dispatcher level**, allowing for touch filtering based on physical touch properties.
-
----
-
-## 📖 Table of Contents
+## ?? Table of Contents
 1. [Core Philosophy](#core-philosophy)
 2. [System Architecture](#system-architecture)
 3. [The Android Engine](#the-android-engine)
-    - [The Xposed Hook](#the-xposed-hook)
-    - [Surgical Filtering Logic](#surgical-filtering-logic)
-    - [Region Layering](#region-layering)
-    - [Emergency Recovery](#emergency-recovery)
-4. [The PC Setup Tool](#the-pc-setup-tool)
-    - [Visual Designer](#visual-designer)
-    - [ADB Bridge](#adb-bridge)
-    - [Log Analysis & Hotspots](#log-analysis--hotspots)
+4. [The PC Designer](#the-pc-designer)
 5. [Configuration Reference](#configuration-reference)
-    - [The CSV Format](#the-csv-format)
-    - [Profile System](#profile-system)
-6. [Adaptive Optimization](#adaptive-optimization)
-7. [Installation & Setup](#installation--setup)
-8. [Troubleshooting](#troubleshooting)
+6. [Auto-Tuning Logic](#auto-tuning-logic)
+7. [Installation & Recovery](#installation--recovery)
 
 ---
 
-## 🎯 How it works
+## ?? Core Philosophy
 
-### The Problem: Digitizer Failure
-When a screen's digitizer fails, it often generates "ghost taps"—electrical noise that the system interprets as a user touch. These taps are usually:
-1. **Low Pressure**: They lack the physical force of a real finger.
-2. **Abnormal Duration**: They are either instantaneous spikes or unnaturally long holds.
-3. **Localized**: They usually occur in specific "dead zones" on the panel.
+### The Problem: Digitizer Noise
+Hardware failure in screens often manifests as "ghost taps"�electrical noise that the system interprets as touch events. These events typically share three characteristics:
+1. **Low Pressure**: They lack the physical force of a human finger.
+2. **Abnormal Duration**: They are often near-instantaneous spikes or unnaturally long, static holds.
+3. **Localization**: They typically cluster in specific "dead zones" on the panel.
 
 ### The Solution: Touch Filtering
-InputBlocker does not just block a region; it blocks **specific types of touches** within that region. 
-- **Blunt Blocking**: "Block everything in this rectangle." (Prevents use of the area).
-- **Filtered Blocking**: "Block touches in this rectangle **ONLY IF** they have pressure $< X$ or duration $> Y$." (Allows real touches to pass through while killing ghost taps).
+Instead of blocking a region entirely, InputBlocker applies a conditional filter.
+- **Standard Blocking**: All input in the region is dropped.
+- **Filtered Blocking**: Input is dropped **only if** it meets the criteria for hardware noise (Pressure < Threshold OR Duration > Threshold). This preserves the usability of the screen.
 
 ---
 
-## 🏗️ System Architecture
+## ??? System Architecture
 
-InputBlocker is composed of three primary modules that form a closed-loop feedback system:
+InputBlocker is split into three primary components:
 
 ### 1. The Designer (PC Tool)
-The control center. It allows users to visually map out blocking regions and tune their thresholds using a canvas. It communicates with the device via **ADB (Android Debug Bridge)**.
+A visual interface used to define blocking regions and tune filter thresholds. It interacts with the device via **ADB (Android Debug Bridge)** to push configurations and pull diagnostic logs.
 
 ### 2. The Shared Core (KMP)
-A Kotlin Multiplatform module that contains the mathematical definitions of a `Region` and the logic for coordinate normalization. This ensures that a "Circle" defined on the PC is interpreted exactly the same way by the Android engine.
+A Kotlin Multiplatform module that ensures the mathematical definition of a `Region` (center, radius, bounds) is identical across both the PC and Android platforms.
 
-### 3. The Engine (Android App/Xposed)
-The enforcement layer. It hooks into the Android system server's `InputDispatcher` to intercept every touch event before it reaches any application.
+### 3. The Engine (Xposed Module)
+The enforcement layer. It hooks the Android system server to intercept touch events before they are dispatched to any application.
 
 **Data Flow**:
-`PC Tool` $\xrightarrow{\text{ADB Push}}$ `/config/profiles/default.conf` $\xrightarrow{\text{Xposed Load}}$ `Touch Filter` $\xrightarrow{\text{Block/Allow}}$ `Android OS`
+`PC Tool` $\rightarrow$ `ADB Push` $\rightarrow$ `/config/profiles/default.conf` $\rightarrow$ `Xposed Engine` $\rightarrow$ `Touch Filter` $\rightarrow$ `Android OS`
 
 ---
 
-## 📱 The Android Engine
+## ?? The Android Engine
 
-### The Xposed Hook
-The engine hooks `com.android.server.input.InputDispatcher.dispatchMotionLocked`. This is the "bottleneck" of all touch input on Android. By intercepting events here, InputBlocker can stop a ghost tap before it ever triggers a click in an app.
+### The Hook
+The engine intercepts `com.android.server.input.InputDispatcher.dispatchMotionLocked`. By hooking this method, the tool can drop events at the highest possible level in the input pipeline.
 
-### Touch Filtering Logic
-Every touch event is passed through the filter:
+### Filtering Logic
+Every touch event within a defined region is evaluated:
 $\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \text{MaxDuration})$
 
 - **MinPressure**: Filters out low-pressure electrical noise.
-- **MaxDuration**: Filters out "stuck" pixels that simulate a long-press.
+- **MaxDuration**: Filters out "stuck" pixels simulating a long-press.
 
-### Region Layering
-InputBlocker supports two types of zones:
-1. **Exclude Zones (White-lists)**: High-priority areas (e.g. the Home button or a specific app icon). If a touch falls here, it is **always allowed**, regardless of other rules.
-2. **Blocking Zones (Black-lists)**: Areas where surgical filtering is applied.
-
-**Priority Order**: `Exclude Zone` $\rightarrow$ `Blocking Zone` $\rightarrow$ `Allow`.
-
-### Emergency Recovery
-To prevent users from accidentally blocking their entire screen, two safety mechanisms are implemented:
-1. **The Emergency Gesture**: Holding the top-left corner (top 5% of screen) for 3 seconds triggers an immediate override, disabling all blocking.
-2. **The Kill Switch**: A file at `/data/adb/modules/inputblocker/config/kill_switch`. If this file contains `1`, the module enters a dormant state.
+### Layering & Priority
+1. **Exclude Zones**: Highest priority. Any touch here is **always allowed**.
+2. **Blocking Zones**: Filtered blocking is applied here.
+3. **Default**: Any touch not in a zone is allowed.
 
 ---
 
-## 💻 The PC Setup Tool
+## ?? The PC Designer
 
-### Visual Designer
-The tool provides a professional canvas that mirrors the device screen.
-- **Normalization**: All coordinates are stored as floats from `0.0` to `1.0`. This ensures that configs created on one device work on another device with a different resolution.
-- **Interactive Handles**: Users can drag regions to move them or use corner handles to resize them.
-- **Property Inspector**: A sidebar allowing real-time adjustment of the surgical thresholds.
+### Visual Canvas
+The designer uses a normalized coordinate system (0.0 to 1.0), making configurations resolution-independent. 
 
 ### ADB Bridge
-The tool uses a custom `ADBHelper` to:
-- Auto-detect the module path (supporting Magisk, KernelSU, APatch, and SuperSU).
-- Push configurations as `.conf` files to the device's internal storage.
-- Pull `blocklog.txt` for diagnostic analysis.
+The tool automatically detects the root manager path (Magisk, KernelSU, APatch, SuperSU) to ensure configurations are pushed to the correct directory.
 
-### Log Analysis & Hotspots
-When the Android engine blocks a touch, it logs the coordinates to `blocklog.txt`. The PC tool can analyze this file to find **Hotspots**.
-- **Calculation**: The tool identifies clusters of blocked touches.
-- **Suggestion**: It calculates a new, smaller bounding box that encompasses the ghost taps, allowing the user to shrink their blocking region and reclaim usable screen space.
+### Hotspot Analysis
+The engine logs every blocked touch to `blocklog.txt`. The PC tool uses the **DBSCAN (Density-Based Spatial Clustering of Applications with Noise)** algorithm to:
+1. Identify clusters of ghost taps.
+2. Calculate the tightest possible bounding box around those clusters.
+3. Suggest a reduced region size to the user to maximize usable screen area.
 
 ---
 
-## ⚙️ Configuration Reference
+## ?? Configuration Reference
 
-### The CSV Format
-Configurations are stored in plain-text CSV files. Each region is defined on a single line:
+### CSV Format
+Configurations are stored in plain-text CSV files.
 `isExclude, type, x1, y1, x2, y2, minPressure, maxDuration`
 
 | Column | Name | Type | Description |
 | :--- | :--- | :--- | :--- |
-| 1 | `isExclude` | Boolean (0/1) | `1` = Exclude Zone, `0` = Blocking Zone |
-| 2 | `type` | Integer | `0` = Rectangle, `1` = Circle, `2` = Ellipse |
-| 3-4 | `x1, y1` | Float (0-1) | Top-Left (Rect) or Center (Circle/Ellipse) |
-| 5-6 | `x2, y2` | Float (0-1) | Bottom-Right (Rect) or Radius (Circle/Ellipse) |
-| 7 | `minPressure` | Float | Minimum pressure threshold for a "real" touch |
-| 8 | `maxDuration` | Long (ms) | Maximum duration before a touch is flagged as a ghost |
-
-**Example Line**:
-`0,0,0.1,0.1,0.2,0.2,0.05,2000`
-*(A blocking rectangle from 10% to 20% of the screen, blocking touches with pressure < 0.05 or duration > 2s)*
+| 1 | `isExclude` | Bool | `1` = Exclude (Allow), `0` = Blocking |
+| 2 | `type` | Int | `0` = Rect, `1` = Circle, `2` = Ellipse |
+| 3-4 | `x1, y1` | Float | Top-Left (Rect) or Center (Circle/Ellipse) |
+| 5-6 | `x2, y2` | Float | Bottom-Right (Rect) or Radius (Circle/Ellipse) |
+| 7 | `minPressure` | Float | Min pressure required for a "real" touch |
+| 8 | `maxDuration` | Long | Max duration (ms) before touch is flagged as ghost |
 
 ### Profile System
-The engine supports per-app profiles. If a file exists at `/config/profiles/[package_name].conf`, the engine will load that specific profile when that app is in the foreground. Otherwise, it falls back to `default.conf`.
+The engine supports per-app profiles. If a config exists at `/config/profiles/[package_name].conf`, it takes priority over `default.conf` when that app is in the foreground.
 
 ---
 
-## 📈 Auto-Tuning
+## ?? Auto-Tuning Logic
 
-InputBlocker uses a feedback loop:
-1. **Sensing**: The engine blocks a ghost tap and logs the $(x, y)$ coordinate.
-2. **Analysis**: The PC Tool analyzes these logs.
-3. **Shrinking**: If ghost taps are clustered in a smaller area, boundaries are adjusted.
-4. **Enforcement**: The updated `.conf` is saved, and the engine reloads it.
-
-This process reduces the amount of usable screen lost, ensuring the smallest possible area is blocked.
+InputBlocker operates as a closed-loop feedback system:
+1. **Log**: The Engine blocks a ghost tap and logs its coordinates.
+2. **Analyze**: The PC Tool identifies the cluster using DBSCAN.
+3. **Shrink**: The Designer suggests a smaller region that still covers the noise.
+4. **Deploy**: The updated config is pushed to the device.
 
 ---
 
-## 🛠️ Installation & Setup
+## ??? Installation & Recovery
 
-### Prerequisites
-- **Root Access**: Magisk, KernelSU, or APatch.
-- **Xposed Framework**: LSPosed (Recommended).
-- **ADB**: Android Debug Bridge installed on PC.
+### Setup
+1. Flash `InputBlocker.zip` via your root manager.
+2. Enable the module in LSPosed and reboot.
+3. Use the PC Designer to map your dead zones.
 
-### Setup Steps
-1. **Install Module**: Flash the `InputBlocker.zip` via your root manager.
-2. **Enable Module**: Enable "InputBlocker" in the LSPosed manager and reboot.
-3. **Connect PC**: Enable USB Debugging on the device and connect to the PC Setup Tool.
-4. **Configure**: Use the Visual Designer to map your ghost tap zones and push the config.
-
----
-
-## ❓ Troubleshooting
-
-| Issue | Possible Cause | Solution |
-| :--- | :--- | :--- |
-| **Regions not blocking** | Module not enabled in LSPosed | Check LSPosed $\rightarrow$ Modules $\rightarrow$ InputBlocker |
-| **Screen frozen** | Too many blocking regions | Use the **Emergency Reset Gesture** (Hold top-left corner for 3s) |
-| **Config not updating** | Path mismatch | Use the PC Tool to "Push to Device" |
-| **Filter too aggressive** | `minPressure` set too high | Lower the `minPressure` in the Property Inspector |
+### Emergency Recovery
+To prevent accidental screen lockouts:
+- **Emergency Gesture**: Hold the top-left corner (5% area) for 3 seconds to disable all blocking.
+- **Kill Switch**: Create a file at `/data/adb/modules/inputblocker/config/kill_switch` containing `1` to force the module into a dormant state.

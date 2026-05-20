@@ -1,64 +1,55 @@
-# 🛡️ InputBlocker
+# ??? InputBlocker
 
-InputBlocker is a system-level tool that stops "ghost taps" (phantom touches) caused by failing screens. Instead of blocking large areas of the screen, it filters out touches based on their physical properties.
+If your Android screen is failing and you're dealing with "ghost taps" (random phantom touches), InputBlocker is for you. 
 
----
-
-## ✨ Features
-
-### 🎯 Touch Filtering
-The tool blocks touches based on behavior:
-- **Pressure**: Blocks touches that are too light (typical of hardware noise).
-- **Duration**: Blocks touches that last too long (stuck pixels).
-- **Shapes**: Supports **Rectangles, Circles, and Ellipses** to match your screen's dead zones.
-
-### 📈 Auto-Tuning
-The tool can help you find the best settings:
-- **Hotspot Detection**: It logs ghost taps so you can see exactly where the noise is.
-- **Automatic Shrinking**: It suggests the smallest possible area to block based on those logs.
-
-### 📱 Other Features
-- **Exclude Zones**: Keep specific buttons usable even inside a blocked area.
-- **App Profiles**: Use different blocking settings for different apps.
-- **Emergency Reset**: Hold the top-left corner for 3 seconds to disable all blocking.
+Most solutions just block off chunks of your screen, making it unusable. InputBlocker is different. It works at the system level to filter touches based on their physical properties�meaning you can often keep using your screen while the ghost taps are killed.
 
 ---
 
-## 🛠️ The Toolkit
+## ?? How it works
+Instead of a "dumb" block, we use **Touch Filtering**. The engine analyzes every touch in a designated area:
+- **Pressure**: If a touch is too light (typical of electrical noise), it's blocked.
+- **Duration**: If a touch is held for an unnatural amount of time (stuck pixel), it's blocked.
+- **Real Touches**: Actual finger presses usually have enough pressure and the right timing to pass through the filter.
 
-### 1. The Android Engine (LSPosed)
-Hooks into the system's input dispatcher to stop ghost taps before they reach your apps.
+## ??? The Toolkit
 
-### 2. The PC Setup Tool (Kotlin/Compose)
-A visual editor to draw regions, change filter settings, and analyze logs via ADB.
-> **Note**: The old C# version is in maintenance mode and is being phased out.
+### ?? The Android Engine (Xposed/LSPosed)
+The core module that hooks into the system's input dispatcher. It intercepts touches before they ever reach your apps.
+
+### ?? The PC Designer (Kotlin/Compose)
+A visual editor for your PC. Use it to:
+- Draw your blocking regions (Rectangles, Circles, Ellipses).
+- Tune pressure and duration thresholds.
+- Analyze logs to find exactly where your ghost taps are happening.
+- Push configs to your device via ADB.
 
 ---
 
-## 🚀 Quick Start
+## ?? Quick Start
 
 ### Prerequisites
 - **Root**: Magisk, KernelSU, or APatch.
-- **Framework**: LSPosed (Recommended).
-- **PC**: ADB installed and USB Debugging enabled.
+- **Framework**: LSPosed.
+- **PC**: ADB installed and USB Debugging enabled on your phone.
 
 ### Setup
 1. **Install**: Flash the module zip.
-2. **Enable**: Turn on the module in LSPosed and reboot.
-3. **Configure**: Open the **PC Setup Tool** and map your dead zones.
+2. **Enable**: Enable the module in LSPosed and reboot.
+3. **Configure**: Run the PC Designer, map your dead zones, and push the config.
 
 ---
 
-## 📐 Technical Details
-We use **Normalized Coordinates (0.0 to 1.0)** so configs work across different screen resolutions.
-
-**The Filtering Formula**:
-$\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \text{MaxDuration})$
+## ?? We're looking for Testers!
+InputBlocker is in active development. If you have a device with ghost taps and want to help us refine the filtering logic:
+- **How to help**: Install the module, try out different threshold settings, and let us know what works (or what crashes).
+- **Feedback**: Open an issue on GitHub with your device model and the results of your tests.
 
 ---
 
-## 📖 More Info
-See [DOCUMENTATION.md](./DOCUMENTATION.md) for more details.
+## ?? Technical Bits
+- **Resolution Independent**: We use Normalized Coordinates (0.0 to 1.0), so one config works across different screen sizes.
+- **The Formula**: $\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \text{MaxDuration})$
 
-## ⚠️ Disclaimer
+## ?? Disclaimer
 This tool modifies system input. Use it at your own risk.
