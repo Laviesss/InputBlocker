@@ -6,7 +6,7 @@ Unlike traditional overlays, InputBlocker operates at the **input dispatcher lev
 
 ---
 
-## ?? Table of Contents
+## 📖 Table of Contents
 1. [Core Philosophy](#core-philosophy)
 2. [System Architecture](#system-architecture)
 3. [The Android Engine](#the-android-engine)
@@ -17,10 +17,10 @@ Unlike traditional overlays, InputBlocker operates at the **input dispatcher lev
 
 ---
 
-## ?? Core Philosophy
+## 🎯 Core Philosophy
 
 ### The Problem: Digitizer Noise
-Hardware failure in screens often manifests as "ghost taps"�electrical noise that the system interprets as touch events. These events typically share three characteristics:
+Hardware failure in screens often manifests as "ghost taps"—electrical noise that the system interprets as touch events. These events typically share three characteristics:
 1. **Low Pressure**: They lack the physical force of a human finger.
 2. **Abnormal Duration**: They are often near-instantaneous spikes or unnaturally long, static holds.
 3. **Localization**: They typically cluster in specific "dead zones" on the panel.
@@ -32,7 +32,7 @@ Instead of blocking a region entirely, InputBlocker applies a conditional filter
 
 ---
 
-## ??? System Architecture
+## 🏗️ System Architecture
 
 InputBlocker is split into three primary components:
 
@@ -50,7 +50,7 @@ The enforcement layer. It hooks the Android system server to intercept touch eve
 
 ---
 
-## ?? The Android Engine
+## 📱 The Android Engine
 
 ### The Hook
 The engine intercepts `com.android.server.input.InputDispatcher.dispatchMotionLocked`. By hooking this method, the tool can drop events at the highest possible level in the input pipeline.
@@ -69,7 +69,7 @@ $\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \
 
 ---
 
-## ?? The PC Designer
+## 💻 The PC Designer
 
 ### Visual Canvas
 The designer uses a normalized coordinate system (0.0 to 1.0), making configurations resolution-independent. 
@@ -85,7 +85,7 @@ The engine logs every blocked touch to `blocklog.txt`. The PC tool uses the **DB
 
 ---
 
-## ?? Configuration Reference
+## ⚙️ Configuration Reference
 
 ### CSV Format
 Configurations are stored in plain-text CSV files.
@@ -105,7 +105,7 @@ The engine supports per-app profiles. If a config exists at `/config/profiles/[p
 
 ---
 
-## ?? Auto-Tuning Logic
+## 📈 Auto-Tuning Logic
 
 InputBlocker operates as a closed-loop feedback system:
 1. **Log**: The Engine blocks a ghost tap and logs its coordinates.
@@ -115,7 +115,7 @@ InputBlocker operates as a closed-loop feedback system:
 
 ---
 
-## ??? Installation & Recovery
+## 🛠️ Installation & Recovery
 
 ### Setup
 1. Flash `InputBlocker.zip` via your root manager.

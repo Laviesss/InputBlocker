@@ -2,7 +2,7 @@
 
 This project is a monorepo consisting of the Android Engine, the PC Designer, and a shared Kotlin Multiplatform (KMP) core.
 
-## ??? Requirements
+## 🛠️ Requirements
 
 ### Java Development Kit (JDK)
 - **Version**: JDK 17 (Required).
@@ -14,7 +14,7 @@ This project is a monorepo consisting of the Android Engine, the PC Designer, an
 
 ---
 
-## ?? Building the Project
+## 📦 Building the Project
 
 The project uses the Gradle Wrapper. No manual Gradle installation is required.
 
@@ -44,7 +44,7 @@ The build will **fail** if version flags are missing.
 
 ---
 
-## ?? Output Locations
+## 📂 Output Locations
 
 After a successful `buildAll`, artifacts are located here:
 - **Android APK**: `android-app/app/build/outputs/apk/release/app-release.apk`
@@ -53,7 +53,7 @@ After a successful `buildAll`, artifacts are located here:
 
 ---
 
-## ?? Troubleshooting
+## ⚠️ Troubleshooting
 
 ### Java Version Mismatch
 If you encounter an `Unsupported class file major version` error, your environment is not using JDK 17. Check your `JAVA_HOME` and IDE settings.
@@ -64,7 +64,7 @@ If Gradle cannot locate the Android SDK, create a `local.properties` file in the
 
 ---
 
-## ?? Project Structure
+## 📂 Project Structure
 - `/android-app`: Android companion app and Xposed module.
 - `/shared`: KMP core (Region logic, coordinate normalization).
 - `/pc-tool-kotlin`: Compose for Desktop visual designer.
