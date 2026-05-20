@@ -1,39 +1,37 @@
 # 🛡️ InputBlocker v0.1.0
 
-**Surgical-Grade Input Filtering for Android**
-
-InputBlocker is a system-level utility designed to kill "ghost taps"—those annoying phantom touches caused by failing screens. Instead of just blocking a whole chunk of your screen, we use **Surgical Filtering** to block only the electrical noise, while letting your actual fingers through.
+InputBlocker is a system-level tool that stops "ghost taps" (phantom touches) caused by failing screens. Instead of blocking large areas of the screen, it filters out touches based on their physical properties.
 
 ---
 
-## ✨ What makes it special?
+## ✨ Features
 
-### 🎯 Surgical Precision
-We don't just block areas; we block *behavior*.
-- **Pressure Sensing**: Block only the low-pressure "spikes" typical of hardware failure.
-- **Duration Control**: Filter out those weird 3-second long "stuck" pixels.
-- **Shape Support**: Use **Rectangles, Circles, or Ellipses** to match the exact shape of your screen's dead zone.
+### 🎯 Touch Filtering
+The tool blocks touches based on behavior:
+- **Pressure**: Blocks touches that are too light (typical of hardware noise).
+- **Duration**: Blocks touches that last too long (stuck pixels).
+- **Shapes**: Supports **Rectangles, Circles, and Ellipses** to match your screen's dead zones.
 
-### 📈 Adaptive Intelligence
-The tool learns where your screen is failing:
-- **Hotspot Detection**: The engine logs ghost taps and the PC tool analyzes them to find exactly where the noise is coming from.
-- **Auto-Shrinking**: Based on the logs, the tool suggests the smallest possible region to block, so you get your screen space back.
+### 📈 Auto-Tuning
+The tool can help you find the best settings:
+- **Hotspot Detection**: It logs ghost taps so you can see exactly where the noise is.
+- **Automatic Shrinking**: It suggests the smallest possible area to block based on those logs.
 
-### 📱 Pro-Grade Features
-- **Exclude Zones**: Need to block a huge area but keep one button usable? Just draw an "Exclude Zone" over the button, and it'll always work.
-- **App-Specific Profiles**: Different apps = different ghost tap behaviors. Set a "Gaming" profile for your favorite game and a "Daily" profile for everything else.
-- **Emergency Reset**: accidentally blocked your whole screen? Just hold the top-left corner for 3 seconds to kill everything.
+### 📱 Other Features
+- **Exclude Zones**: Keep specific buttons usable even inside a blocked area.
+- **App Profiles**: Use different blocking settings for different apps.
+- **Emergency Reset**: Hold the top-left corner for 3 seconds to disable all blocking.
 
 ---
 
 ## 🛠️ The Toolkit
 
 ### 1. The Android Engine (LSPosed)
-The "muscle." It hooks into the Android system's input dispatcher to kill ghost taps before they even reach your apps.
+Hooks into the system's input dispatcher to stop ghost taps before they reach your apps.
 
 ### 2. The PC Setup Tool (Kotlin/Compose)
-The "brain." A professional visual designer where you can draw regions, tune thresholds, and analyze logs.
-> **Note**: We've moved to a modern Kotlin-based tool for better cross-platform support. The old C# version is now in maintenance mode and is being phased out.
+A visual editor to draw regions, change filter settings, and analyze logs via ADB.
+> **Note**: The old C# version is in maintenance mode and is being phased out.
 
 ---
 
@@ -45,22 +43,22 @@ The "brain." A professional visual designer where you can draw regions, tune thr
 - **PC**: ADB installed and USB Debugging enabled.
 
 ### Setup
-1. **Install**: Flash the module zip via your root manager.
+1. **Install**: Flash the module zip.
 2. **Enable**: Turn on the module in LSPosed and reboot.
-3. **Configure**: Open the **PC Setup Tool**, connect your phone, and start mapping your dead zones.
+3. **Configure**: Open the **PC Setup Tool** and map your dead zones.
 
 ---
 
-## 📐 Technical Bit (for the nerds)
-We use **Coordinate Normalization (0.0 to 1.0)**. This means if you share a config with a friend who has a different resolution, it still works perfectly.
+## 📐 Technical Details
+We use **Normalized Coordinates (0.0 to 1.0)** so configs work across different screen resolutions.
 
-**The Surgical Formula**:
+**The Filtering Formula**:
 $\text{Block} = (\text{Pressure} < \text{MinPressure}) \lor (\text{Duration} > \text{MaxDuration})$
 
 ---
 
 ## 📖 More Info
-Check out the [DOCUMENTATION.md](./DOCUMENTATION.md) for the full technical deep-dive.
+See [DOCUMENTATION.md](./DOCUMENTATION.md) for more details.
 
 ## ⚠️ Disclaimer
-This tool modifies system-level input. Use it at your own risk. Always keep the Emergency Reset gesture in mind!
+This tool modifies system input. Use it at your own risk.

@@ -1,4 +1,72 @@
-# 🛠️ Build Guide (v0.1.0)
+# Build Instructions
+
+This project is a monorepo containing the Android app, the PC Setup Tool, and a shared Kotlin Multiplatform (KMP) core.
+
+## 🛠️ Environment Requirements
+
+### Java Development Kit (JDK)
+- **Version**: JDK 17 (Required)
+- **Recommended**: Eclipse Temurin or OpenJDK 17.
+- **Note**: If you have multiple Java versions installed, ensure your `JAVA_HOME` is set to JDK 17.
+
+### Android SDK
+- **Compile SDK**: 34
+- **Min SDK**: 21
+- **Target SDK**: 34
+
+---
+
+## 📦 Building the Project
+
+The project uses the Gradle Wrapper. You do not need to install Gradle manually.
+
+### 1. Build Everything (Recommended)
+To build the Android APK, the PC Tool EXE, and the Root Module ZIP in one go:
+
+**Windows (PowerShell):**
+```powershell
+.\gradlew buildAll -PVERSION_NAME="0.1.0" -PVERSION_CODE=1
+```
+
+**Linux/macOS:**
+```bash
+./gradlew buildAll -PVERSION_NAME="0.1.0" -PVERSION_CODE=1
+```
+
+### 2. Build Individual Parts
+If you only need a specific component, use these tasks:
+
+- **Android APK**: `.\gradlew buildAndroid -PVERSION_NAME="0.1.0" -PVERSION_CODE=1`
+- **PC Tool EXE**: `.\gradlew buildPC -PVERSION_NAME="0.1.0" -PVERSION_CODE=1`
+- **Root Module ZIP**: `.\gradlew buildModule -PVERSION_NAME="0.1.0" -PVERSION_CODE=1`
+
+### 3. Understanding Version Flags
+The build will fail if you don't provide the version flags.
+- `-PVERSION_NAME`: The user-visible version (e.g., `0.1.0`).
+- `-PVERSION_CODE`: The internal integer version (e.g., `1`).
+
+---
+
+## 📂 Output Locations
+
+After a successful `buildAll`, you can find your files here:
+
+- **Android APK**: `android-app/app/build/outputs/apk/release/app-release.apk`
+- **PC Tool EXE**: `pc-tool-kotlin/build/compose/binaries/InputBlockerSetup.exe`
+- **Module ZIP**: `build/distributions/inputblocker.zip`
+
+---
+
+## ⚠️ Troubleshooting
+
+### Java Version Error
+If you see an error about `Unsupported class file major version`, your system is likely using a Java version other than 17.
+- **Fix**: Set your `JAVA_HOME` environment variable to point to JDK 17.
+
+### SDK Not Found
+If Gradle cannot find the Android SDK:
+- **Fix**: Create a `local.properties` file in the root directory and add:
+  `sdk.dir=C\:\\Users\\YourUser\\AppData\\Local\\Android\\Sdk`
 
 This guide explains how to build the InputBlocker ecosystem from source.
 

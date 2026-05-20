@@ -102,9 +102,6 @@ jobs:
           cd android-app
           chmod +x gradlew
           ./gradlew assembleRelease -PVERSION_CODE=${{ needs.setup.outputs.version_code }} -PVERSION_NAME=${{ needs.setup.outputs.clean_version }}
-
-
-
       - name: Upload Android Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -126,7 +123,7 @@ jobs:
       - name: Build PC Tool
         run: |
           cd pc-tool-kotlin
-          .\gradlew packageDistributionForCurrentOS
+          .\gradlew packageDistributionForCurrentOS -PVERSION_NAME=${{ needs.setup.outputs.clean_version }}
       - name: Upload PC Tool Artifact
         uses: actions/upload-artifact@v4
         with:

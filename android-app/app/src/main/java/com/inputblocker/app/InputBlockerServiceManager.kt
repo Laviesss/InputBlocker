@@ -123,6 +123,15 @@ object InputBlockerServiceManager {
         }
     }
     
+    fun reportCrash() {
+        try {
+            runRootCommand("mkdir -p /data/local/tmp/inputblocker && touch ${CRASH_FLAG}")
+            Log.e(TAG, "Crash detected! Safe Mode flag set.")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to report crash", e)
+        }
+    }
+
     fun onShutdown() {
         runRootCommand("mkdir -p /data/local/tmp/inputblocker && touch $NORMAL_SHUTDOWN_FLAG")
     }

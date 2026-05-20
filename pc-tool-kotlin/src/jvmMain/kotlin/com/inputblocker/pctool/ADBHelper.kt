@@ -2,8 +2,7 @@ package com.inputblocker.pctool
 
 import java.io.*
 import java.util.*
-
-data class LiveEvent(val type: String, val x: Float, val y: Float, val timestamp: Long)
+import com.inputblocker.shared.GhostTap
 
 class ADBHelper : AutoCloseable {
     var deviceSerial: String? = null

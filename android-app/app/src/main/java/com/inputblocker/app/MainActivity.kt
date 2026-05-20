@@ -99,6 +99,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Set up global crash detection for Safe Mode recovery
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            InputBlockerServiceManager.reportCrash()
+            // Let the default handler take over to show the crash dialog
+            throw throwable
+        }
+
         setContentView(R.layout.activity_main)
 
         // Bind Views
@@ -513,11 +521,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkOverlayPermission() {
         if (isLsposedMode) {
-            // In LSPosed mode, we bypass the system settings check
-            // and launch setup directly, as root permissions are assumed.
-            val intent = Intent(this, SensingActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            startActivity(intent)
+            showVisualEditor()
             return
         }
 
@@ -526,11 +530,32 @@ class MainActivity : AppCompatActivity() {
                 val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
                 overlayPermissionLauncher.launch(intent)
             } else {
-                val intent = Intent(this, SensingActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(intent)
+                showVisualEditor()
             }
         }
+    }
+
+    private fun showVisualEditor() {
+        val editor = RegionEditorView(this).apply {
+            setRegions(regions)
+            onRegionChanged = { updatedRegions ->
+                regions.clear()
+                regions.addAll(updatedRegions)
+                saveConfig()
+                updateUI()
+            }
+        }
+        
+        AlertDialog.Builder(this)
+            .setTitle("Visual Region Setup")
+            .setMessage("Drag to draw new regions. Select a region to move or resize it.")
+            .setView(editor)
+            .setPositiveButton("Save") { _, _ ->
+                saveConfig()
+                updateUI()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun loadPrefs() {

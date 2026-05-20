@@ -3,6 +3,6 @@ name=InputBlocker
 version=v0.1.0
 versionCode=1
 author=Laviesss
-description=Block ghost taps and unwanted touch inputs by defining rectangular regions.
+description=Professional ghost-tap filtering using surgical pressure/duration analysis and multi-shape blocking regions.
 minMagisk=20400
 updateJson=https://Laviesss.github.io/InputBlocker/update.json

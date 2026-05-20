@@ -11,6 +11,9 @@ import de.robv.android.xposed.XposedHelpers
 import java.io.File
 import java.io.BufferedReader
 import java.io.FileReader
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 class InputBlockerXposed : IXposedHookZygoteInit {
     companion object {
@@ -24,12 +27,47 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private var isEmergencyGestureActive = false
         private var emergencyResetTriggered = false
         
-        // Cached system objects to avoid reflection in the hot path
         private var cachedWindowManager: WindowManager? = null
         private var cachedWidth = 0
         private var cachedHeight = 0
         private var lastMetricsUpdate = 0L
         private const val METRICS_TTL = 30000L // 30 seconds
+
+        // --- Async Logging System ---
+        private val logQueue = LinkedBlockingQueue<String>(1000)
+        private val logExecutor = ThreadPoolExecutor(
+            1, 1, 0L, TimeUnit.MILLISECONDS,
+            LinkedBlockingQueue<Runnable>(1000),
+            ThreadPoolExecutor.DiscardOldestPolicy()
+        )
+
+        init {
+            // Start the background logger thread
+            logExecutor.execute {
+                while (true) {
+                    try {
+                        val logEntry = logQueue.take()
+                        if (logEntry.startsWith("LATENCY:")) {
+                            writeLog("/data/adb/modules/inputblocker/config/latency.log", logEntry.substring(8))
+                        } else if (logEntry.startsWith("BLOCK:")) {
+                            writeLog("/data/adb/modules/inputblocker/config/blocklog.txt", logEntry.substring(6))
+                        }
+                    } catch (e: InterruptedException) {
+                        break
+                    } catch (e: Exception) {
+                        // Silently fail to avoid crashing the system server
+                    }
+                }
+            }
+        }
+
+        private fun writeLog(path: String, content: String) {
+            try {
+                val file = File(path)
+                file.appendText("$content\n")
+                if (file.length() > 102400) file.delete()
+            } catch (e: Exception) {}
+        }
     }
 
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
@@ -194,23 +232,14 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     }
 
     private fun logLatency(nanos: Long) {
-        try {
-            val logFile = File("/data/adb/modules/inputblocker/config/latency.log")
-            logFile.appendText("$nanos\n")
-            if (logFile.length() > 102400) logFile.delete()
-        } catch (e: Exception) { }
+        logQueue.offer("LATENCY:$nanos")
     }
 
     private fun logBlockedTouch(nx: Float, ny: Float, pressure: Float, duration: Long, region: Region) {
         logLiveEvent("BLOCK", nx, ny)
-        try {
-            val logFile = File("/data/adb/modules/inputblocker/config/blocklog.txt")
-            val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-            val entry = "$timestamp | X: ${"%.3f".format(nx)}, Y: ${"%.3f".format(ny)} | P: ${"%.3f".format(pressure)}, D: ${duration}ms | Region: [${region.x1}, ${region.y1}, ${region.x2}, ${region.y2}]\n"
-            logFile.appendText(entry)
-            
-            if (logFile.length() > 102400) logFile.delete() // 100KB rotate
-        } catch (e: Exception) { }
+        val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+        val entry = "$timestamp | X: ${"%.3f".format(nx)}, Y: ${"%.3f".format(ny)} | P: ${"%.3f".format(pressure)}, D: ${duration}ms | Region: [${region.x1}, ${region.y1}, ${region.x2}, ${region.y2}]"
+        logQueue.offer("BLOCK:$entry")
     }
 
     private fun getCurrentPackage(): String? {

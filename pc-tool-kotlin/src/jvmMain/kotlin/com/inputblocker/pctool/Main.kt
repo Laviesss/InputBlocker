@@ -46,6 +46,7 @@ fun App() {
     var ghostTaps by remember { mutableStateOf(listOf<GhostTap>()) }
     var liveEvents by remember { mutableStateOf(listOf<LiveEvent>()) }
     var isLivePreviewEnabled by remember { mutableStateOf(false) }
+    var showGallery by remember { mutableStateOf(false) }
     var selectedRegionIndex by remember { mutableStateOf<Int?>(null) }
     
     // Drawing/Dragging State
@@ -293,9 +294,71 @@ fun App() {
                                     val y2 = Math.max(drawStart.y, drawEnd.y)
                                     drawRect(color = DrawFill, topLeft = Offset(x1, y1), size = Size(x2 - x1, y2 - y1))
                                     drawRect(color = DrawStroke, topLeft = Offset(x1, y1), size = Size(x2 - x1, y2 - y1), style = Stroke(width = 3f))
+                    }
+                }
+            }
+
+            if (showGallery) {
+                Dialog(onDismissRequest = { showGallery = false }) {
+                    Surface(
+                        modifier = Modifier.width(400.dp).fillMaxHeight(0.7f),
+                        color = BgPanel,
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, BorderColor)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text("Preset Gallery", color = TextMain, fontSize = 18.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
+                            
+                            Box(modifier = Modifier.weight(1f)) {
+                                val galleryDir = java.io.File("presets")
+                                if (!galleryDir.exists() || galleryDir.listFiles()?.isEmpty() == true) {
+                                    Text("No presets found in /presets folder.", color = TextMuted, modifier = Modifier.align(Alignment.Center))
+                                } else {
+                                    // Simple list of presets
+                                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                        galleryDir.listFiles { _, name -> name.endsWith(".ibpreset") }?.forEach { file ->
+                                            val preset = PresetManager.importPreset(file)
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 4.dp)
+                                                    .background(BgDark, RoundedCornerShape(4.dp))
+                                                    .clickable {
+                                                        if (preset != null) {
+                                                            regions = preset.regions
+                                                            blockingEnabled = preset.enabled
+                                                            crashProtection = preset.safeMode
+                                                            status = "Applied preset: ${preset.name}"
+                                                            showGallery = false
+                                                        }
+                                                    }
+                                                    .padding(8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(preset?.name ?: file.name, color = TextMain, fontSize = 14.sp)
+                                                Text("Apply", color = AccentColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                            
+                            Button(
+                                onClick = { showGallery = false },
+                                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                                colors = ButtonDefaults.buttonColors(backgroundColor = BorderColor)
+                            ) {
+                                Text("Close", color = TextMain)
+                            }
                         }
+                    }
+                }
+            }
+        }
+    }
+}
+
                     }
 
                     if (selectedRegionIndex != null) {
@@ -316,23 +379,39 @@ fun App() {
                                          modifier = Modifier.padding(bottom = 16.dp)
                                      )
                                      
-                                     Button(
-                                         onClick = {
-                                             val tapsInRegion = ghostTaps.filter { it.x in selectedRegion.left..selectedRegion.right && it.y in selectedRegion.top..selectedRegion.bottom }
-                                             if (tapsInRegion.isNotEmpty()) {
-                                                 val maxP = tapsInRegion.maxOf { it.pressure }
-                                                 val minD = tapsInRegion.minOf { it.duration }
-                                                 selectedRegion.minPressure = maxP + 0.01f
-                                                 selectedRegion.maxDuration = (minD - 50).coerceAtLeast(100L)
-                                                 regions = regions.toList()
-                                                 status = "Tuned region from ${tapsInRegion.size} taps"
-                                             } else {
-                                                 status = "No logs found for this region"
-                                             }
-                                         },
-                                         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                         colors = ButtonDefaults.buttonColors(backgroundColor = AccentColor)
-                                     ) { Text("Suggest Tuning", color = Color.Black) }
+                                      Button(
+                                          onClick = {
+                                              val tapsInRegion = ghostTaps.filter { it.x in selectedRegion.left..selectedRegion.right && it.y in selectedRegion.top..selectedRegion.bottom }
+                                              if (tapsInRegion.isNotEmpty()) {
+                                                  val clusters = ClusterUtils.clusterTaps(tapsInRegion, 0.05f, 3)
+                                                  if (clusters.isNotEmpty()) {
+                                                      val mainCluster = clusters.maxByOrNull { it.size }!!
+                                                      
+                                                      // Update Region Bounds
+                                                      val newBounds = ClusterUtils.calculateBoundingBox(mainCluster)
+                                                      selectedRegion.x1 = newBounds.x1
+                                                      selectedRegion.y1 = newBounds.y1
+                                                      selectedRegion.x2 = newBounds.x2
+                                                      selectedRegion.y2 = newBounds.y2
+                                                      
+                                                      // Update Thresholds
+                                                      val (suggestedP, suggestedD) = ClusterUtils.suggestThresholds(mainCluster)
+                                                      selectedRegion.minPressure = suggestedP
+                                                      selectedRegion.maxDuration = suggestedD
+                                                      
+                                                      regions = regions.toList()
+                                                      status = "Auto-tuned based on ${mainCluster.size} taps"
+                                                  } else {
+                                                      status = "Too few taps for clustering"
+                                                  }
+                                              } else {
+                                                  status = "No logs found for this region"
+                                              }
+                                          },
+                                          modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                                          colors = ButtonDefaults.buttonColors(backgroundColor = AccentColor)
+                                      ) { Text("Auto-Tune", color = Color.Black) }
+
                                      
                                      Text("Min Pressure:", color = TextMuted, fontSize = 12.sp)
                                      TextField(
@@ -459,6 +538,11 @@ fun App() {
                                         val preset = Preset("My Preset", blockingEnabled, crashProtection, regions)
                                         if (PresetManager.exportPreset(file, preset)) {
                                             status = "Preset exported to ${file.name}"
+                                            
+                                            // Also save to gallery
+                                            val galleryDir = java.io.File("presets")
+                                            if (!galleryDir.exists()) galleryDir.mkdirs()
+                                            PresetManager.exportPreset(java.io.File(galleryDir, file.name), preset)
                                         } else {
                                             status = "Export failed"
                                         }
@@ -468,6 +552,12 @@ fun App() {
                                 }
                             }, modifier = Modifier.width(110.dp)
                         ) { Text("Export Preset") }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = {
+                                showGallery = true
+                            }, modifier = Modifier.width(110.dp)
+                        ) { Text("Gallery") }
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {

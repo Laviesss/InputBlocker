@@ -11,12 +11,25 @@ android {
         applicationId = "com.inputblocker.app"
         minSdk = 21
         targetSdk = 34
-        versionCode project.hasProperty('VERSION_CODE') ? project.property('VERSION_CODE').toInteger() : 1
-        versionName project.hasProperty('VERSION_NAME') ? project.property('VERSION_NAME') : "0.0.0-dev"
+        versionCode project.property("VERSION_CODE").toInteger()
+        versionName project.property("VERSION_NAME")
     }
-    
+
+    signingConfigs {
+        release {
+            // These properties are loaded from local.properties or passed via -P
+            storeFile file(project.findProperty("MYAPP_RELEASE_STORE_FILE") ?: "release.keystore")
+            storePassword project.findProperty("MYAPP_RELEASE_STORE_PASSWORD") ?: ""
+            keyAlias project.findProperty("MYAPP_RELEASE_KEY_ALIAS") ?: ""
+            keyPassword project.findProperty("MYAPP_RELEASE_KEY_PASSWORD") ?: ""
+        }
+    }
+
     buildTypes {
         release {
+            if (project.hasProperty("SIGN_APK") && project.property("SIGN_APK") == "true") {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
