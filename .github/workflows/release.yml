@@ -1,4 +1,4 @@
-name: "🚀 Production Release Pipeline"
+name: "?? Production Release Pipeline"
 
 on:
   push:
@@ -6,18 +6,14 @@ on:
       - 'v*'
   workflow_dispatch:
     inputs:
-      build_type:
-        description: 'Components to build (all is recommended)'
+      version_name:
+        description: 'Version Name (e.g., 1.0.1)'
         required: true
-        default: all
-        type: choice
-        options: [all, android, kotlin-pc, module]
-      version:
-        description: 'Custom version (e.g., v1.0.1)'
-        required: false
-        default: ''
+      version_code:
+        description: 'Version Code (Integer)'
+        required: true
       release_notes:
-        description: 'Release notes (Markdown supported)'
+        description: 'Release notes (Markdown)'
         required: false
         default: ''
       draft:
@@ -33,133 +29,82 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
-env:
-  PROJECT_NAME: InputBlocker
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
-
 jobs:
-  setup:
-    name: "⚙️ Setup & Versioning"
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.vars.outputs.version }}
-      clean_version: ${{ steps.vars.outputs.clean_version }}
-      version_code: ${{ steps.vars.outputs.version_code }}
-      build_type: ${{ steps.vars.outputs.build_type }}
-      draft: ${{ steps.vars.outputs.draft }}
-      prerelease: ${{ steps.vars.outputs.prerelease }}
+  release:
+    name: "?? Build & Publish"
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: "Generate variables"
-        id: vars
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ "${{ github.event_name }}" == "push" ]]; then
-            VERSION="${GITHUB_REF_NAME}"
-            BUILD_TYPE="all"
-          else
-            VERSION="${{ github.event.inputs.version }}"
-            BUILD_TYPE="${{ github.event.inputs.build_type }}"
-          fi
-          [[ -z "$VERSION" ]] && VERSION="v0.0.0-dev"
-          VERSION=$(echo "$VERSION" | tr -d '\r' | xargs)
-          [[ "$VERSION" != v* ]] && VERSION="v${VERSION}"
-          
-          CLEAN_VERSION="${VERSION#v}"
-          VERSION_CODE=$(git rev-list --count HEAD)
-          
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          echo "version_code=$VERSION_CODE" >> $GITHUB_OUTPUT
-          echo "build_type=$BUILD_TYPE" >> $GITHUB_OUTPUT
-          echo "draft=${{ github.event.inputs.draft || 'false' }}" >> $GITHUB_OUTPUT
-          echo "prerelease=${{ github.event.inputs.prerelease || 'false' }}" >> $GITHUB_OUTPUT
 
-  build-android:
-    needs: setup
-    if: needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'android'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: set up JDK 17
+      - name: "?? Setup Environment"
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
-      - name: Build Android APK
-        run: |
-          cd android-app
-          chmod +x gradlew
-          ./gradlew assembleRelease -PVERSION_CODE=${{ needs.setup.outputs.version_code }} -PVERSION_NAME=${{ needs.setup.outputs.clean_version }}
-      - name: Upload Android Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: android-app/app/build/outputs/apk/release/*.apk
 
-  build-pc-tool:
-    needs: setup
-    if: needs.setup.outputs.build_type == 'all' || needs.setup.outputs.build_type == 'kotlin-pc'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-          cache: 'gradle'
-      - name: Build PC Tool
+      - name: "?? Validate Versioning"
+        id: versioning
+        shell: pwsh
         run: |
-          cd pc-tool-kotlin
-          .\gradlew packageDistributionForCurrentOS -PVERSION_NAME=${{ needs.setup.outputs.clean_version }}
-      - name: Upload PC Tool Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pc-tool-windows
-          path: pc-tool-kotlin/build/compose/binaries/*.exe
+          $version_name = "${{ github.event.inputs.version_name }}"
+          $version_code = "${{ github.event.inputs.version_code }}"
+          
+          # Handle Tag Push
+          if ("${{ github.event_name }}" -eq "push") {
+              $tag = "${{ github.ref_name }}"
+              $version_name = $tag.TrimStart('v')
+          }
+          
+          # Strict Validation: No fallbacks
+          if ([string]::IsNullOrWhiteSpace($version_name)) {
+              throw "CRITICAL ERROR: VERSION_NAME is missing. You must provide a version name in the inputs or use a git tag (v*)."
+          }
+          
+          if ([string]::IsNullOrWhiteSpace($version_code)) {
+              throw "CRITICAL ERROR: VERSION_CODE is missing. You must provide a numeric version code in the workflow inputs. Git tags do not provide version codes, so please use 'Run workflow' for production releases."
+          }
+          
+          echo "VERSION_NAME=$version_name" >> $env:GITHUB_OUTPUT
+          echo "VERSION_CODE=$version_code" >> $env:GITHUB_OUTPUT
+          echo "TAG_NAME=v$version_name" >> $env:GITHUB_OUTPUT
 
-  publish:
-    needs: [setup, build-android, build-pc-tool]
-    if: always() && (needs.setup.result == 'success')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Download Android Artifact
-        if: needs.build-android.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: android-apk
-          path: releases/android
-      - name: Download PC Tool Artifact
-        if: needs.build-pc-tool.result == 'success'
-        uses: actions/download-artifact@v4
-        with:
-          name: pc-tool-windows
-          path: releases/pc
-      - name: Create GitHub Release
+      - name: "?? Build All Artifacts"
+        shell: pwsh
+        run: |
+          .\gradlew buildAll -PVERSION_NAME="${{ steps.versioning.outputs.VERSION_NAME }}" -PVERSION_CODE=${{ steps.versioning.outputs.VERSION_CODE }}
+
+      - name: "?? Verify Artifacts"
+        shell: pwsh
+        run: |
+          $apk = Get-ChildItem "android-app/app/build/outputs/apk/release/*.apk"
+          $exe = Get-ChildItem "pc-tool-kotlin/build/compose/binaries/*.exe"
+          $zip = Get-ChildItem "build/distributions/inputblocker.zip"
+          
+          if (-not $apk) { throw "Android APK not found!" }
+          if (-not $exe) { throw "PC Tool EXE not found!" }
+          if (-not $zip) { throw "Root Module ZIP not found!" }
+          
+          echo "All artifacts verified successfully."
+
+      - name: "?? Create GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.setup.outputs.version }}
-          name: Release ${{ needs.setup.outputs.version }}
-          body: ${{ github.event.inputs.release_notes || 'Automatic production release.' }}
-          draft: ${{ needs.setup.outputs.draft }}
-          prerelease: ${{ needs.setup.outputs.prerelease }}
+          tag_name: ${{ steps.versioning.outputs.TAG_NAME }}
+          name: "Release ${{ steps.versioning.outputs.TAG_NAME }}"
+          body: ${{ github.event.inputs.release_notes || 'Automated production release.' }}
+          draft: ${{ github.event.inputs.draft || 'false' }}
+          prerelease: ${{ github.event.inputs.prerelease || 'false' }}
           files: |
-            releases/android/*.apk
-            releases/pc/*.exe
+            android-app/app/build/outputs/apk/release/*.apk
+            pc-tool-kotlin/build/compose/binaries/*.exe
+            build/distributions/inputblocker.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
