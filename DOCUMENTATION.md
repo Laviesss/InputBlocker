@@ -1,4 +1,4 @@
-# InputBlocker Technical Documentation (v0.1.0)
+# InputBlocker Technical Documentation
 
 InputBlocker is a system-level tool designed to stop "ghost taps" (phantom touches) caused by hardware failure on Android devices.
 

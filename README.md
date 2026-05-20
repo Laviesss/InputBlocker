@@ -1,4 +1,4 @@
-# 🛡️ InputBlocker v0.1.0
+# 🛡️ InputBlocker
 
 InputBlocker is a system-level tool that stops "ghost taps" (phantom touches) caused by failing screens. Instead of blocking large areas of the screen, it filters out touches based on their physical properties.
 

@@ -25,25 +25,25 @@ To build the Android APK, the PC Tool EXE, and the Root Module ZIP in one go:
 
 **Windows (PowerShell):**
 ```powershell
-.\gradlew buildAll -PVERSION_NAME="0.1.0" -PVERSION_CODE=1
+.\gradlew buildAll -PVERSION_NAME="<version_name>" -PVERSION_CODE=<version_code>
 ```
 
 **Linux/macOS:**
 ```bash
-./gradlew buildAll -PVERSION_NAME="0.1.0" -PVERSION_CODE=1
+./gradlew buildAll -PVERSION_NAME="<version_name>" -PVERSION_CODE=<version_code>
 ```
 
 ### 2. Build Individual Parts
 If you only need a specific component, use these tasks:
 
-- **Android APK**: `.\gradlew buildAndroid -PVERSION_NAME="0.1.0" -PVERSION_CODE=1`
-- **PC Tool EXE**: `.\gradlew buildPC -PVERSION_NAME="0.1.0" -PVERSION_CODE=1`
-- **Root Module ZIP**: `.\gradlew buildModule -PVERSION_NAME="0.1.0" -PVERSION_CODE=1`
+- **Android APK**: `.\gradlew buildAndroid -PVERSION_NAME="<version_name>" -PVERSION_CODE=<version_code>`
+- **PC Tool EXE**: `.\gradlew buildPC -PVERSION_NAME="<version_name>" -PVERSION_CODE=<version_code>`
+- **Root Module ZIP**: `.\gradlew buildModule -PVERSION_NAME="<version_name>" -PVERSION_CODE=<version_code>`
 
 ### 3. Understanding Version Flags
 The build will fail if you don't provide the version flags.
-- `-PVERSION_NAME`: The user-visible version (e.g., `0.1.0`).
-- `-PVERSION_CODE`: The internal integer version (e.g., `1`).
+- `-PVERSION_NAME`: The user-visible version (e.g., `1.0.0`).
+- `-PVERSION_CODE`: The internal integer version (e.g., `10`).
 
 ---
 
