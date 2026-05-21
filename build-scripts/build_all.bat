@@ -5,20 +5,19 @@ echo ============================================================
 echo  InputBlocker - Build All Platforms (Windows)
 echo ============================================================
 
-set "SCRIPT_DIR=%~dp0"
+echo Building entire ecosystem via Gradle...
+call gradlew buildAll
 
-echo Building Android APK...
-call "%SCRIPT_DIR%apk\build_android.bat"
+if %ERRORLEVEL% equ 0 (
+    echo.
+    echo ============================================================
+    echo  ALL COMPONENTS BUILT SUCCESSFULLY
+    echo ============================================================
+) else (
+    echo.
+    echo ============================================================
+    echo  BUILD FAILED
+    echo ============================================================
+)
 
-echo Building PC Tools...
-call "%SCRIPT_DIR%pc_tools\build_pc_tools.bat"
-
-echo Packaging Root Module...
-call "%SCRIPT_DIR%module\build_module.bat"
-
-echo.
-echo ============================================================
-echo  ALL COMPONENTS BUILT SUCCESSFULLY
-echo ============================================================
 pause
-

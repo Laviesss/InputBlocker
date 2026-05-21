@@ -1,6 +1,8 @@
 {
-  "version": "0.1.0",
-  "url": "https://github.com/Laviesss/InputBlocker/releases/download/v0.1.0/inputblocker.zip",
-  "changelog": "Initial Professional Release: Added Smart Filtering, PC Tool, and Adaptive Tuning.",
-  "is_critical": false
+  "version": "v{VERSION}",
+  "versionCode": "{VERSION_CODE}",
+  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v{VERSION}/InputBlocker-v{VERSION}.zip",
+  "changelog": "{CHANGELOG_URL}",
+  "support": ["Magisk", "KernelSU", "APatch"],
+  "minApi": 23
 }

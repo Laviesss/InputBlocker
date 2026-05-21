@@ -6,13 +6,12 @@ import android.util.Log
 import java.io.File
 
 object ProfileManager {
-    private const val PROFILES_DIR = "/data/adb/modules/inputblocker/config/profiles"
     
     fun getProfilePath(packageName: String?): String {
         return if (packageName != null) {
-            "$PROFILES_DIR/$packageName.conf"
+            "${Constants.PROFILES_DIR}/$packageName.conf"
         } else {
-            "$PROFILES_DIR/default.conf"
+            "${Constants.PROFILES_DIR}/default.conf"
         }
     }
 

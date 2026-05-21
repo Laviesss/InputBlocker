@@ -4,7 +4,7 @@
 
 We take the security of InputBlocker seriously. If you discover a security vulnerability, please do not open a public issue. Instead, report it privately to the maintainers.
 
-**Contact**: Please reach out via the project's official communication channels or email the maintainer directly.
+**Contact**: Please report security vulnerabilities privately via [GitHub Security Advisories](https://github.com/Laviesss/InputBlocker/security/advisories/new).
 
 ## Supported Versions
 

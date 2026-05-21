@@ -19,7 +19,7 @@ compose.desktop {
     application {
         mainClass = "com.inputblocker.pctool.MainKt"
         nativeDistributions {
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe)
+             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
             packageName = "InputBlockerSetup"
             packageVersion = project.property("VERSION_NAME").toString()
         }

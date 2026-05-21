@@ -125,7 +125,7 @@ InputBlocker operates as a closed-loop feedback system:
 
 ### Emergency Recovery
 To prevent accidental screen lockouts:
-- **Emergency Gesture**: Hold the top-left corner (5% area) for 3 seconds to disable all blocking.
+- **Emergency Gesture**: Use the sequence **Volume Down ×3 → Volume Up ×3** to disable all blocking.
 - **Kill Switch**: Create a file at `/data/adb/modules/inputblocker/config/kill_switch` containing `1` to force the module into a dormant state.
 
 ---

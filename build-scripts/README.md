@@ -7,7 +7,7 @@ This directory contains automation scripts to build the InputBlocker ecosystem.
 - **`build_all.sh` / `build_all.bat`**: The primary entry point. Builds the Android APK, Root Module, and all PC tools.
 - **`build_android.sh`**: Compiles the Android companion app APK.
 - **`build_module.sh`**: Packages the final root module ZIP. Requires a successful Android build first.
-- **`build_pc_tools.sh`**: Compiles the C# and Java setup tools for multiple platforms.
+- **`build_pc_tools.sh`**: Compiles the Kotlin Compose Designer tool.
 
 ## Usage
 
