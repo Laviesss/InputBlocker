@@ -309,8 +309,6 @@ class OverlayService : Service() {
         private val textPaint = Paint().apply { color = Color.parseColor("#00FF00"); textSize = 36f; isFakeBoldText = true }
         private val regionsList = mutableListOf<Region>()
         private var enabled = true
-        private var gestureStartTime = 0L
-        private var isGestureActive = false
 
         fun setRegions(list: List<Region>) { regionsList.clear(); regionsList.addAll(list); invalidate() }
         fun setBlockingEnabled(enabled: Boolean) { this.enabled = enabled; invalidate() }
@@ -341,18 +339,6 @@ class OverlayService : Service() {
         override fun onTouchEvent(event: MotionEvent): Boolean {
             val service = serviceRef.get()
             
-            // 3-finger long press in top-left
-            if (event.pointerCount >= 3) {
-                var allInTopLeft = true
-                for (i in 0 until event.pointerCount) {
-                    if (event.getX(i) > width * 0.05f || event.getY(i) > height * 0.05f) { allInTopLeft = false; break }
-                }
-                if (allInTopLeft) {
-                    if (!isGestureActive) { gestureStartTime = System.currentTimeMillis(); isGestureActive = true }
-                    else if (System.currentTimeMillis() - gestureStartTime >= 3000) { service?.emergencyReset(); isGestureActive = false; return true }
-                } else isGestureActive = false
-            } else isGestureActive = false
-
             if (!enabled || regionsList.isEmpty()) return false
             val nx = event.x / width; val ny = event.y / height
             

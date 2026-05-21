@@ -316,7 +316,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showAboutDialog() {
-        val version = "1.0.0" // Simplified for this context
+        val version = BuildConfig.VERSION_NAME
         AlertDialog.Builder(this)
             .setTitle("About InputBlocker")
             .setMessage("InputBlocker v$version\n\nBlock ghost taps and unwanted touch inputs.\n\nCreated by Laviesss")

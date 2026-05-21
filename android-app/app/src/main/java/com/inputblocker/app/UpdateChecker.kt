@@ -1,8 +1,8 @@
 package com.inputblocker.app
 
-import android.os.Build
 import android.util.Log
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ExecutorService
@@ -19,7 +19,8 @@ object UpdateChecker {
         val version: String,
         val releaseUrl: String,
         val body: String,
-        val publishedAt: String
+        val publishedAt: String? = null,
+        val isCritical: Boolean = false
     )
     
     interface UpdateCallback {
@@ -27,86 +28,6 @@ object UpdateChecker {
         fun onNoUpdateAvailable(currentVersion: String)
         fun onError(error: String)
     }
-    
-    fun checkForUpdate(callback: UpdateCallback) {
-        executor.execute {
-            try {
-                val currentVersion = getCurrentVersion()
-                // App uses GitHub API for updates as requested
-                val updateInfo = fetchLatestRelease()
-                
-                if (updateInfo != null) {
-                    if (isNewerVersion(updateInfo.version, currentVersion)) {
-                        callback.onUpdateAvailable(updateInfo, currentVersion)
-                    } else {
-                        callback.onNoUpdateAvailable(currentVersion)
-                    }
-                } else {
-                    callback.onNoUpdateAvailable(currentVersion)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Update check failed", e)
-                callback.onError(e.message ?: "Unknown error")
-            }
-        }
-    }
-
-    private fun getCurrentVersion(): String {
-        return try {
-            val packageInfo = App.instance.packageManager.getPackageInfo(App.instance.packageName, 0)
-            packageInfo.versionName ?: "1.0.0"
-        } catch (e: Exception) {
-            "1.0.0"
-        }
-    }
-
-    private fun fetchLatestRelease(): UpdateInfo? {
-        return try {
-            val url = URL(GITHUB_API)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.setRequestProperty("Accept", "application/vnd.github+json")
-            connection.setRequestProperty("User-Agent", "InputBlocker-Android")
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
-            
-            if (connection.responseCode == HttpURLConnection.HTTP_OK) {
-                val reader = connection.inputStream.bufferedReader().readText()
-                val json = JSONObject(reader)
-                
-                UpdateInfo(
-                    version = json.optString("tag_name", "").removePrefix("v"),
-                    releaseUrl = json.optString("html_url", ""),
-                    body = json.optString("body", ""),
-                    publishedAt = json.optString("published_at", "")
-                )
-            } else null
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to fetch release", e)
-            null
-        }
-    }
-
-    private fun isNewerVersion(latest: String, current: String): Boolean {
-        val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
-        val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
-        
-        val maxLen = maxOf(latestParts.size, currentParts.size)
-        
-        for (i in 0 until maxLen) {
-            val latestNum = latestParts.getOrElse(i) { 0 }
-            val currentNum = currentParts.getOrElse(i) { 0 }
-            
-            when {
-                latestNum > currentNum -> return true
-                latestNum < currentNum -> return false
-            }
-        }
-        
-        return false
-    }
-}
-
     
     fun checkForUpdate(callback: UpdateCallback) {
         executor.execute {
@@ -137,7 +58,7 @@ object UpdateChecker {
             }
         }
     }
-
+    
     private fun getUpdateUrlFromModuleProp(): String? {
         return try {
             val propFile = File(InputBlockerServiceManager.getModulePath(App.instance) + "/module.prop")
@@ -149,7 +70,7 @@ object UpdateChecker {
             null
         }
     }
-
+    
     private fun fetchUpdateFromJson(urlStr: String): UpdateInfo? {
         return try {
             val url = URL(urlStr)
@@ -174,10 +95,10 @@ object UpdateChecker {
             null
         }
     }
-
+    
     private fun fetchLatestRelease(): UpdateInfo? {
         return try {
-            val url = URL(FALLBACK_GITHUB_API)
+            val url = URL(GITHUB_API)
             val connection = url.openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.setRequestProperty("Accept", "application/vnd.github+json")
@@ -201,7 +122,7 @@ object UpdateChecker {
             null
         }
     }
-
+    
     private fun getCurrentVersion(): String {
         return try {
             val moduleProp = File(InputBlockerServiceManager.getModulePath(App.instance) + "/module.prop")
@@ -209,17 +130,15 @@ object UpdateChecker {
                 moduleProp.readLines().firstOrNull { it.startsWith("version=") }
                     ?.substringAfter("=")
                     ?.removePrefix("v")
-                    ?.trim() ?: "1.0.0"
+                    ?.trim() ?: "0.1.0"
             } else {
-                "1.0.0"
+                "0.1.0"
             }
         } catch (e: Exception) {
-            "1.0.0"
+            "0.1.0"
         }
     }
-
-    }
-
+    
     private fun isNewerVersion(latest: String, current: String): Boolean {
         val latestParts = latest.split(".").mapNotNull { it.toIntOrNull() }
         val currentParts = current.split(".").mapNotNull { it.toIntOrNull() }
@@ -239,4 +158,3 @@ object UpdateChecker {
         return false
     }
 }
-

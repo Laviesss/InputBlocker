@@ -23,10 +23,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private var lastLoadTime = 0L
         private const val CACHE_TTL = 5000L // 5 seconds
         
-        private var emergencyTouchStartTime = 0L
-        private var isEmergencyGestureActive = false
-        private var emergencyResetTriggered = false
-        
         private var cachedWindowManager: WindowManager? = null
         private var cachedWidth = 0
         private var cachedHeight = 0
@@ -97,28 +93,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                         
                         val nx = motionEvent.x / cachedWidth
                         val ny = motionEvent.y / cachedHeight
-                        
-                        // Unified Emergency Reset Gesture (Top-left corner 5%)
-                        val emergencyZoneSize = 0.05f
-                        
-                        if (motionEvent.action == MotionEvent.ACTION_DOWN) {
-                            if (nx < emergencyZoneSize && ny < emergencyZoneSize) {
-                                emergencyTouchStartTime = now
-                                isEmergencyGestureActive = true
-                            }
-                        } else if (motionEvent.action == MotionEvent.ACTION_MOVE) {
-                            if (nx >= emergencyZoneSize || ny >= emergencyZoneSize) {
-                                isEmergencyGestureActive = false
-                            }
-                        } else if (motionEvent.action == MotionEvent.ACTION_UP || motionEvent.action == MotionEvent.ACTION_CANCEL) {
-                            isEmergencyGestureActive = false
-                            emergencyTouchStartTime = 0L
-                            emergencyResetTriggered = false
-                        }
-                        
-                        if (isEmergencyGestureActive && !emergencyResetTriggered && (now - emergencyTouchStartTime > 3000)) {
-                            triggerEmergencyReset()
-                        }
                         
                         if (!cachedEnabled) {
                             logLatency(System.nanoTime() - startNano)
@@ -192,16 +166,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         return pressure < region.minPressure || duration > region.maxDuration
     }
 
-    private fun triggerEmergencyReset() {
-        try {
-            File("/data/adb/modules/inputblocker/config/kill_switch").writeText("1")
-            cachedEnabled = false
-            emergencyResetTriggered = true
-            XposedBridge.log("$TAG: Emergency reset triggered!")
-        } catch (e: Exception) {
-            XposedBridge.log("$TAG: Failed to write kill_switch: ${e.message}")
-        }
-    }
 
     private fun updateMetricsIfNeeded(now: Long) {
         if (now - lastMetricsUpdate < METRICS_TTL && cachedWidth > 0) return

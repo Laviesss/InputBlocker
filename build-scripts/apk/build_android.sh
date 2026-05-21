@@ -16,7 +16,7 @@
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ANDROID_APP_DIR="$SCRIPT_DIR/android-app"
+ANDROID_APP_DIR="$(dirname "$0")/../../android-app"
 OUTPUT_DIR="$SCRIPT_DIR/releases"
 
 RED='\033[0;31m'
