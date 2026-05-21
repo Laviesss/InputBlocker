@@ -1,13 +1,7 @@
 plugins {
-    kotlin("multiplatform") version "1.9.20" apply false
-    id("com.android.application") version "8.2.0" apply false
-    id("org.jetbrains.compose") version "1.5.11" apply false
-}
-
-plugins {
-    kotlin("multiplatform") version "1.9.20" apply false
-    id("com.android.application") version "8.2.0" apply false
-    id("org.jetbrains.compose") version "1.5.11" apply false
+    kotlin("multiplatform") version "2.3.21" apply false
+    id("com.android.application") version "9.2.1" apply false
+    id("org.jetbrains.compose") version "1.11.0" apply false
 }
 
 tasks.register<Zip>("buildModule") {
@@ -55,4 +49,3 @@ tasks.register("buildShared") {
     description = "Builds the Shared KMP library"
     dependsOn(":shared:assemble")
 }
-
