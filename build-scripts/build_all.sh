@@ -6,7 +6,7 @@
 echo ""
 echo "============================================================"
 echo " InputBlocker Setup - Build All Platforms"
-echo, "============================================================"
+echo "============================================================"
 echo ""
 
 echo "Building entire ecosystem via Gradle..."

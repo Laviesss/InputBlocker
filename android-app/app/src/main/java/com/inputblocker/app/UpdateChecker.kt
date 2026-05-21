@@ -32,7 +32,10 @@ object UpdateChecker {
     fun checkForUpdate(callback: UpdateCallback) {
         executor.execute {
             try {
-                val currentVersion = getCurrentVersion()
+                val currentVersion = getCurrentVersion() ?: run {
+                    callback.onError("Could not determine current version")
+                    return@execute
+                }
                 
                 // 1. Try to get the update URL from module.prop
                 val updateUrl = getUpdateUrlFromModuleProp()
@@ -123,19 +126,12 @@ object UpdateChecker {
         }
     }
     
-    private fun getCurrentVersion(): String {
+    private fun getCurrentVersion(): String? {
         return try {
-            val moduleProp = File(InputBlockerServiceManager.getModulePath(App.instance) + "/module.prop")
-            if (moduleProp.exists()) {
-                moduleProp.readLines().firstOrNull { it.startsWith("version=") }
-                    ?.substringAfter("=")
-                    ?.removePrefix("v")
-                    ?.trim() ?: "0.1.0"
-            } else {
-                "0.1.0"
-            }
+            val v = BuildConfig.VERSION_NAME
+            if (v.isNullOrBlank()) null else v.removePrefix("v").trim()
         } catch (e: Exception) {
-            "0.1.0"
+            null
         }
     }
     
