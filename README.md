@@ -1,5 +1,9 @@
 # 🛡️ InputBlocker
 
+![Build Status](https://github.com/Laviesss/InputBlocker/actions/workflows/ci.yml/badge.svg)
+![License](https://img.shields.io/github/license/Laviesss/InputBlocker)
+![Platform](https://img.shields.io/badge/platform-Android%20%7C%20Windows%20%7C%20Linux%20%7C%20macOS-blue)
+
 If your Android screen is failing and you're dealing with "ghost taps" (random phantom touches), InputBlocker is for you. 
 
 Most solutions just block off chunks of your screen, making it unusable. InputBlocker is different. It works at the system level to filter touches based on their physical properties—meaning you can often keep using your screen while the ghost taps are killed.
