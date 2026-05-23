@@ -20,6 +20,9 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: "Make Gradle wrapper executable"
+        run: chmod +x gradlew
+
       - name: "Run Tests & Lint"
         run: ./gradlew test lint --configuration-cache
 
