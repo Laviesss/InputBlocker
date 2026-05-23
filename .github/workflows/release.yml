@@ -250,7 +250,11 @@ jobs:
   release:
     name: "Publish Release"
     needs: [validate, build-pc-tool, build-android]
-    if: always() && needs.validate.result == 'success'
+    if: |
+      always() &&
+      needs.validate.result == 'success' &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
