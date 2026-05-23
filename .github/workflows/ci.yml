@@ -28,5 +28,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: lint-results
-          path: '**/build/reports/lint-results/'
+          path: '**/build/reports/lint-results*'
           retention-days: 7
