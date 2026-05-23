@@ -185,7 +185,7 @@ jobs:
   build-pc-tool:
     name: "Build PC Tool (${{ matrix.label }})"
     needs: [validate, test]
-    if: always() && needs.validate.result == 'success' && needs.test.result == 'success' && (github.event_name == 'push' || (matrix.label == 'windows' && github.event.inputs.build_windows == 'true') || (matrix.label == 'linux' && github.event.inputs.build_linux == 'true') || (matrix.label == 'macos' && github.event.inputs.build_macos == 'true'))
+    if: always() && needs.validate.result == 'success' && needs.test.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -210,14 +210,24 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: 'gradle'
+
       - name: "Build"
+        id: build
+        if: |
+          github.event_name == 'push' ||
+          (matrix.label == 'windows' && github.event.inputs.build_windows == 'true') ||
+          (matrix.label == 'linux'   && github.event.inputs.build_linux == 'true')   ||
+          (matrix.label == 'macos'   && github.event.inputs.build_macos == 'true')
         shell: bash
         run: |
           ./gradlew :pc-tool-kotlin:packageDistributionForCurrentOS \
             --configuration-cache \
             -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
             -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
-      - uses: actions/upload-artifact@v4
+
+      - name: "Upload Artifact"
+        if: steps.build.outcome == 'success'
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: pc-tool-kotlin/build/compose/binaries/${{ matrix.glob }}
