@@ -337,26 +337,31 @@ class OverlayService : Service() {
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
-            val service = serviceRef.get()
-            
             if (!enabled || regionsList.isEmpty()) return false
-            val nx = event.x / width; val ny = event.y / height
             
-                                if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
-                                    for (region in regionsList) if (region.isExclude && isPointInRegion(nx, ny, region)) return false
-                                    for (region in regionsList) {
-                                        if (!region.isExclude && isPointInRegion(nx, ny, region)) {
-                                            val pressure = event.pressure
-                                            val duration = event.eventTime - event.downTime
-                                            
-                                            if (pressure < region.minPressure || duration > region.maxDuration) {
-                                                val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
-                                                addBlockEntry(BlockLogActivity.BlockEntry(timeStr, "Blocked at (%.2f, %.2f)".format(nx, ny)))
-                                                return true
-                                            }
-                                        }
-                                    }
-                                }
+            val nx = event.x / width
+            val ny = event.y / height
+            
+            if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
+                // Whitelist check first
+                for (region in regionsList) {
+                    if (region.isExclude && isPointInRegion(nx, ny, region)) return false
+                }
+                
+                // Surgical blocking check
+                for (region in regionsList) {
+                    if (!region.isExclude && isPointInRegion(nx, ny, region)) {
+                        val pressure = event.pressure
+                        val duration = event.eventTime - event.downTime
+                        
+                        if (pressure < region.minPressure || duration > region.maxDuration) {
+                            val timeStr = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
+                            addBlockEntry(BlockLogActivity.BlockEntry(timeStr, "Blocked at (%.2f, %.2f)".format(nx, ny)))
+                            return true
+                        }
+                    }
+                }
+            }
             return false
         }
 

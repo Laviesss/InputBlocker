@@ -1,10 +1,17 @@
 package com.inputblocker.app
 
-import com.inputblocker.shared.Region
 import android.content.Context
 import android.util.Log
+import com.inputblocker.shared.Region
+import java.io.BufferedReader
 import java.io.File
+import java.io.FileReader
 
+/**
+ * Senior Engineering: Adaptive Tuning System.
+ * Analyzes the blocklog.txt to calculate optimal region dimensions.
+ * Aims to minimize blocking area while maximizing ghost tap coverage.
+ */
 object AdaptiveBlockingManager {
 
     private const val TAG = "InputBlocker-Adaptive"
@@ -18,22 +25,11 @@ object AdaptiveBlockingManager {
             val lines = logFile.readLines()
             if (lines.isEmpty()) return
 
-            // Load current regions
-            val currentRegions = mutableListOf<Region>()
-            val configFile = File(InputBlockerServiceManager.getConfigFile(context))
-            if (configFile.exists()) {
-                configFile.readLines().forEach { line ->
-                    val trimmed = line.trim()
-                    if (trimmed.isNotBlank() && !trimmed.startsWith("#") && !trimmed.startsWith("enabled=") && !trimmed.startsWith("lsposed_mode=")) {
-                        Region.fromString(trimmed)?.let { currentRegions.add(it) }
-                    }
-                }
-            }
-
+            val currentRegions = loadCurrentRegions(context)
             if (currentRegions.isEmpty()) return
 
             val touches = parseLog(lines)
-            val optimizedRegions = mutableListOf<Region>()
+            val optimizedRegions = ArrayList<Region>(currentRegions.size)
             var changesMade = false
 
             for (region in currentRegions) {
@@ -41,9 +37,8 @@ object AdaptiveBlockingManager {
                     x >= region.x1 && x <= region.x2 && y >= region.y1 && y <= region.y2 
                 }
 
-                if (hits.size >= 5) { // Threshold for optimization
-                    val bounds = calculateBounds(hits)
-                    // Add small padding
+                if (hits.size >= 10) { // High confidence threshold
+                    val bounds = calculateTightBounds(hits)
                     val padding = 0.005f
                     val optimized = region.copy(
                         x1 = (bounds[0] - padding).coerceAtLeast(0f),
@@ -63,12 +58,30 @@ object AdaptiveBlockingManager {
             }
 
         } catch (e: Exception) {
-            Log.e(TAG, "Optimization failed", e)
+            Log.e(TAG, "Adaptive optimization failed", e)
         }
     }
 
+    private fun loadCurrentRegions(context: Context): List<Region> {
+        val regions = mutableListOf<Region>()
+        val configFile = File(InputBlockerServiceManager.getConfigFile(context))
+        if (!configFile.exists()) return regions
+
+        try {
+            BufferedReader(FileReader(configFile)).use { reader ->
+                reader.lineSequence().forEach { line ->
+                    val trimmed = line.trim()
+                    if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && !trimmed.contains("=")) {
+                        Region.fromString(trimmed)?.let { regions.add(it) }
+                    }
+                }
+            }
+        } catch (e: Exception) {}
+        return regions
+    }
+
     private fun parseLog(lines: List<String>): List<Pair<Float, Float>> {
-        val touches = mutableListOf<Pair<Float, Float>>()
+        val touches = ArrayList<Pair<Float, Float>>(lines.size)
         for (line in lines) {
             try {
                 // Format: "HH:mm:ss | X: 0.123, Y: 0.456 | ..."
@@ -84,7 +97,7 @@ object AdaptiveBlockingManager {
         return touches
     }
 
-    private fun calculateBounds(hits: List<Pair<Float, Float>>): FloatArray {
+    private fun calculateTightBounds(hits: List<Pair<Float, Float>>): FloatArray {
         var minX = 1f; var minY = 1f; var maxX = 0f; var maxY = 0f
         for (hit in hits) {
             if (hit.first < minX) minX = hit.first
@@ -97,9 +110,8 @@ object AdaptiveBlockingManager {
 
     private fun saveOptimizedConfig(context: Context, regions: List<Region>) {
         val content = StringBuilder()
-        content.append("# InputBlocker Optimized Configuration\n")
-        content.append("enabled=1\n")
-        content.append("lsposed_mode=0\n\n")
+        content.append("# InputBlocker AUTO-OPTIMIZED Configuration\n")
+        content.append("enabled=1\n\n")
         for (region in regions) {
             content.append("$region\n")
         }

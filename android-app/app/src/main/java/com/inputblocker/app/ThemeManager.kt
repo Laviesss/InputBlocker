@@ -16,6 +16,11 @@ import com.google.android.material.card.MaterialCardView
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.android.material.tabs.TabLayout
 
+/**
+ * Senior Engineering: Unified Theme Management Engine.
+ * Handles dynamic propagation of System, Light, Dark, and AMOLED palettes.
+ * AMOLED mode enforces pure black (#000000) for OLED battery efficiency.
+ */
 object ThemeManager {
 
     const val THEME_SYSTEM = 0
@@ -45,15 +50,15 @@ object ThemeManager {
                 accent = ContextCompat.getColor(context, R.color.accent_blue)
             )
             THEME_AMOLED -> ThemeColors(
-                background = ContextCompat.getColor(context, R.color.amoled_background),
-                surface = ContextCompat.getColor(context, R.color.amoled_surface),
-                surfaceElevated = ContextCompat.getColor(context, R.color.amoled_surface_elevated),
-                textPrimary = ContextCompat.getColor(context, R.color.amoled_text_primary),
-                textSecondary = ContextCompat.getColor(context, R.color.amoled_text_secondary),
-                border = ContextCompat.getColor(context, R.color.amoled_border),
+                background = Color.BLACK,
+                surface = Color.parseColor("#121212"),
+                surfaceElevated = Color.parseColor("#1E1E1E"),
+                textPrimary = Color.WHITE,
+                textSecondary = Color.parseColor("#A0A0A0"),
+                border = Color.parseColor("#2C2C2C"),
                 accent = ContextCompat.getColor(context, R.color.accent_blue)
             )
-            else -> ThemeColors( // Default to Dark
+            else -> ThemeColors( // Default / Dark
                 background = ContextCompat.getColor(context, R.color.dark_background),
                 surface = ContextCompat.getColor(context, R.color.dark_surface),
                 surfaceElevated = ContextCompat.getColor(context, R.color.dark_surface_elevated),
@@ -74,10 +79,6 @@ object ThemeManager {
         AppCompatDelegate.setDefaultNightMode(mode)
         
         val colors = getThemeColors(activity, theme)
-        applyColorsToWindow(activity, colors)
-    }
-
-    private fun applyColorsToWindow(activity: Activity, colors: ThemeColors) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             activity.window.statusBarColor = colors.background
             activity.window.navigationBarColor = colors.background
@@ -85,6 +86,9 @@ object ThemeManager {
         activity.findViewById<View>(android.R.id.content)?.setBackgroundColor(colors.background)
     }
 
+    /**
+     * Recursively applies theme colors to the entire view hierarchy.
+     */
     fun applyThemeToViewHierarchy(view: View, colors: ThemeColors) {
         when (view) {
             is TabLayout -> {
@@ -97,49 +101,34 @@ object ThemeManager {
             }
             is MaterialCardView -> {
                 view.setCardBackgroundColor(colors.surface)
-                view.strokeColor = colors.border
+                view.strokeColor = ColorStateList.valueOf(colors.border)
             }
             is SwitchMaterial -> {
-                val thumbColors = ColorStateList(
-                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(colors.accent, colors.border)
+                val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+                val thumbColors = intArrayOf(colors.accent, colors.border)
+                val trackColors = intArrayOf(
+                    adjustAlpha(colors.accent, 0.3f),
+                    adjustAlpha(colors.border, 0.3f)
                 )
-                val trackColors = ColorStateList(
-                    arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
-                    intArrayOf(Color.argb(77, Color.red(colors.accent), Color.green(colors.accent), Color.blue(colors.accent)), colors.border)
-                )
-                view.thumbTintList = thumbColors
-                view.trackTintList = trackColors
+                view.thumbTintList = ColorStateList(states, thumbColors)
+                view.trackTintList = ColorStateList(states, trackColors)
             }
             is MaterialButton -> {
-                if (view.id == R.id.btn_theme || view.id == R.id.btn_action_safe || 
-                    view.id == R.id.btn_action_sync || view.id == R.id.btn_action_export ||
-                    view.id == R.id.btn_action_test || view.id == R.id.btn_view_log ||
-                    view.id.toString().contains("btn_action")) {
+                val id = view.id
+                if (id == R.id.btn_theme || id == R.id.btn_action_safe || id == R.id.btn_view_log) {
                     view.setTextColor(colors.accent)
-                } else if (view.id == R.id.btn_add_region || view.id == R.id.btn_undo || view.id == R.id.btn_cancel) {
+                } else if (id == R.id.btn_add_region || id == R.id.btn_undo || id == R.id.btn_cancel) {
                     view.backgroundTintList = ColorStateList.valueOf(colors.surfaceElevated)
                     view.setTextColor(colors.textPrimary)
-                    if (view is MaterialButton) view.strokeColor = ColorStateList.valueOf(colors.border)
-                } else if (view.id != R.id.btn_launch_setup && view.id != R.id.btn_auto_detect && 
-                           view.id != R.id.btn_save && view.id != R.id.btn_clear && view.id != R.id.btn_clear_all) {
-                     // Default button styling
+                    view.strokeColor = ColorStateList.valueOf(colors.border)
                 }
             }
             is TextView -> {
-                if (view.id == R.id.tv_status) {
-                    // Handled specially in MainActivity
-                } else if (view.id == R.id.tv_status_label || view.id == R.id.tv_instructions || view.id == R.id.tv_region_coords) {
+                val id = view.id
+                if (id == R.id.tv_status_label || id == R.id.tv_instructions || id == R.id.tv_region_coords) {
                     view.setTextColor(colors.textSecondary)
-                } else {
+                } else if (id != R.id.tv_status) {
                     view.setTextColor(colors.textPrimary)
-                }
-            }
-            is ViewGroup -> {
-                if (view.id == R.id.regions_list) {
-                    // Container, keep transparent
-                } else if (view is MaterialCardView) {
-                    // Handled above
                 }
             }
         }
@@ -149,5 +138,13 @@ object ThemeManager {
                 applyThemeToViewHierarchy(view.getChildAt(i), colors)
             }
         }
+    }
+
+    private fun adjustAlpha(color: Int, factor: Float): Int {
+        val alpha = Math.round(Color.alpha(color) * factor)
+        val red = Color.red(color)
+        val green = Color.green(color)
+        val blue = Color.blue(color)
+        return Color.argb(alpha, red, green, blue)
     }
 }

@@ -1,18 +1,14 @@
 plugins {
     kotlin("multiplatform")
-    id("com.android.library")
+    id("com.android.kotlin.multiplatform.library")
 }
 
 kotlin {
     jvmToolchain(17)
     jvm()
-    androidTarget {
-        publishLibraryVariants("release", "debug")
-        compilations.all {
-            kotlinOptions {
-                jvmTarget = "17"
-            }
-        }
+    android {
+        namespace = "com.inputblocker.shared"
+        compileSdk = 34
     }
 
     sourceSets {
@@ -23,15 +19,5 @@ kotlin {
         }
         val androidMain by getting
         val jvmMain by getting
-    }
-}
-
-android {
-    namespace = "com.inputblocker.shared"
-    compileSdk = 34
-
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
     }
 }

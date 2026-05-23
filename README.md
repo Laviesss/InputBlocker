@@ -51,10 +51,29 @@ You can find the latest releases on the [Releases Page](https://github.com/Lavie
 
 ---
 
-## 🧪 We're looking for Testers!
-InputBlocker is in active development. If you have a device with ghost taps and want to help us refine the filtering logic:
-- **How to help**: Install the module, try out different threshold settings, and let us know what works (or what crashes).
-- **Feedback**: Open an issue on GitHub with your device model and the results of your tests.
+## 🧪 Testers Guide
+
+InputBlocker is in active development. We need real-world data from devices with ghost taps to refine the filtering logic and ensure system stability.
+
+### 🎯 What to Test
+1. **Filter Tuning**: Use the PC Designer to find the "sweet spot" for `MinPressure` and `MaxDuration`. Does it kill the ghost taps without blocking your actual fingers?
+2. **Region Layering**: Create a large blocking zone and a smaller "Exclude Zone" inside it. Verify that touches in the exclude zone always pass through.
+3. **Emergency Reset**: Configure a custom button combo (e.g., Vol Down x3 $\rightarrow$ Vol Up x3). Trigger it to ensure the module disables itself instantly.
+4. **Profile Switching**: Set up different configs for different apps. Switch between them and verify the blocking regions change as expected.
+5. **Performance**: Note any perceptible input lag or unusual battery drain.
+
+### 📋 How to Report Issues
+When reporting a bug or sharing your findings, please include:
+- **Device Model & Android Version**.
+- **The Issue**: What happened? (e.g., "Filter too aggressive," "Module crashed on reboot").
+- **Logs**: Use the **Share Log** button in the app's log activity to export `blocklog.txt` and `latency.log`.
+- **Config**: Attach the `.conf` file you were using.
+
+### 🆘 Recovery
+If the screen becomes unusable or the device behaves unexpectedly:
+- **Emergency Gesture**: Use your configured button combo to disable the engine.
+- **Safe Mode**: If the module causes a boot loop or system instability, boot into Android Safe Mode to disable it via LSPosed.
+- **ADB**: Use `adb shell rm /data/local/tmp/inputblocker/crash_detected` if Safe Mode was triggered.
 
 ---
 

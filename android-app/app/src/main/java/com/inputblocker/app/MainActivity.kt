@@ -69,6 +69,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnBackupRestore: Button
     private lateinit var btnImportPreset: Button
     private lateinit var btnExportPreset: Button
+    private lateinit var btnCommunityGallery: Button
+    private lateinit var btnSubmitPreset: Button
+    private lateinit var btnSubmitPreset: Button
+    private lateinit var btnCommunityGallery: Button
 
     private var isEnabled = true
     private var isLsposedMode = false
@@ -100,11 +104,11 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Set up global crash detection for Safe Mode recovery
+        // Senior Engineering: Fail-safe crash tracking
+        val oldHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             InputBlockerServiceManager.reportCrash()
-            // Let the default handler take over to show the crash dialog
-            throw throwable
+            oldHandler?.uncaughtException(thread, throwable)
         }
 
         setContentView(R.layout.activity_main)
@@ -132,6 +136,8 @@ class MainActivity : AppCompatActivity() {
         btnBackupRestore = findViewById(R.id.btn_backup_restore)
         btnImportPreset = findViewById(R.id.btn_import_preset)
         btnExportPreset = findViewById(R.id.btn_export_preset)
+        btnCommunityGallery = findViewById(R.id.btn_community_gallery)
+        btnCommunityGallery = findViewById(R.id.btn_community_gallery)
 
 
         setupTabs()
@@ -228,6 +234,21 @@ class MainActivity : AppCompatActivity() {
         }
         btnExportPreset.setOnClickListener {
             exportPreset()
+        }
+        btnCommunityGallery.setOnClickListener {
+            val intent = Intent(this, CommunityGalleryActivity::class.java)
+            startActivity(intent)
+        }
+        btnSubmitPreset.setOnClickListener {
+            AlertDialog.Builder(this)
+                .setTitle("Submit Preset")
+                .setMessage("To submit your preset to the community gallery, please open an issue on GitHub and attach your .ibpreset file.")
+                .setPositiveButton("OK", null)
+                .show()
+        }
+        btnCommunityGallery.setOnClickListener {
+            val intent = Intent(this, CommunityGalleryActivity::class.java)
+            startActivity(intent)
         }
     }
 

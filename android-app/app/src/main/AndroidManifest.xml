@@ -27,6 +27,12 @@
             android:exported="false"
             android:theme="@style/Theme.InputBlocker" />
 
+        <!-- Community Gallery Activity -->
+        <activity
+            android:name=".CommunityGalleryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker" />
+
         <!-- Detection Review Activity -->
 
         <activity

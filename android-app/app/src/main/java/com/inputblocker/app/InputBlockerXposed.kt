@@ -18,51 +18,40 @@ import java.util.concurrent.TimeUnit
 class InputBlockerXposed : IXposedHookZygoteInit {
     companion object {
         private const val TAG = "InputBlocker-Xposed"
-        @Volatile private var cachedRegions: List<Region> = emptyList()
+        @Volatile private var cachedRegions = ArrayList<Region>()
         @Volatile private var cachedEnabled = true
+        @Volatile private var testModeActive = false
         private var lastLoadTime = 0L
-        private const val CACHE_TTL = 5000L // 5 seconds
+        private const val CACHE_TTL = 10000L // 10 seconds for standard config
         
-        private var cachedWindowManager: WindowManager? = null
         private var cachedWidth = 0
         private var cachedHeight = 0
         private var lastMetricsUpdate = 0L
-        private const val METRICS_TTL = 30000L // 30 seconds
+        private const val METRICS_TTL = 60000L // 60 seconds
 
-        // --- Async Logging System ---
-        private val logQueue = LinkedBlockingQueue<String>(1000)
-        private val logExecutor = ThreadPoolExecutor(
-            1, 1, 0L, TimeUnit.MILLISECONDS,
-            LinkedBlockingQueue<Runnable>(1000),
-            ThreadPoolExecutor.DiscardOldestPolicy()
-        )
+        // Crash Protection: Write a flag if we fail in the hot path
+        private val CRASH_FLAG_PATH = "/data/adb/modules/inputblocker/config/crash_detected"
 
-        init {
-            // Start the background logger thread
-            logExecutor.execute {
+        // --- Async Logging System (Only in system_server) ---
+        private val logQueue = LinkedBlockingQueue<String>(500)
+        private var loggerStarted = false
+
+        private fun startLogger() {
+            if (loggerStarted) return
+            loggerStarted = true
+            Thread({
                 while (true) {
                     try {
-                        val logEntry = logQueue.take()
-                        if (logEntry.startsWith("LATENCY:")) {
-                            writeLog("/data/adb/modules/inputblocker/config/latency.log", logEntry.substring(8))
-                        } else if (logEntry.startsWith("BLOCK:")) {
-                            writeLog("/data/adb/modules/inputblocker/config/blocklog.txt", logEntry.substring(6))
+                        val entry = logQueue.take()
+                        val parts = entry.split("|", limit = 2)
+                        if (parts.size == 2) {
+                            val file = File(parts[0])
+                            file.appendText("${parts[1]}\n")
+                            if (file.length() > 204800) file.delete() // 200KB rotation
                         }
-                    } catch (e: InterruptedException) {
-                        break
-                    } catch (e: Exception) {
-                        // Silently fail to avoid crashing the system server
-                    }
+                    } catch (e: Exception) {}
                 }
-            }
-        }
-
-        private fun writeLog(path: String, content: String) {
-            try {
-                val file = File(path)
-                file.appendText("$content\n")
-                if (file.length() > 102400) file.delete()
-            } catch (e: Exception) {}
+            }, "InputBlocker-Logger").start()
         }
     }
 
@@ -77,58 +66,58 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                 android.os.IBinder::class.java,
                 object : de.robv.android.xposed.XC_MethodHook() {
                     override fun beforeHookedMethod(param: MethodHookParam) {
-                        updateConfigIfNeeded()
-                        
-                        // Use index access for performance; dispatchMotionLocked(IBinder, MotionEvent, ...)
-                        // Usually MotionEvent is at index 1 or 2 depending on Android version
-                        val motionEvent = param.args.getOrNull(1) as? MotionEvent 
-                            ?: param.args.find { it is MotionEvent } as? MotionEvent 
-                            ?: return
-                        
-                        val now = System.currentTimeMillis()
-                        val startNano = System.nanoTime()
-                        updateMetricsIfNeeded(now)
-                        
-                        if (cachedWidth <= 0 || cachedHeight <= 0) return
-                        
-                        val nx = motionEvent.x / cachedWidth
-                        val ny = motionEvent.y / cachedHeight
-                        
-                        if (!cachedEnabled) {
-                            logLatency(System.nanoTime() - startNano)
-                            return
-                        }
-                        
-                        // Test Mode
-                        if (File("/data/adb/modules/inputblocker/config/test_mode").exists()) {
-                            logLatency(System.nanoTime() - startNano)
-                            param.setResult(null)
-                            return
-                        }
-                        
-                        // Region Processing
-                        val currentRegions = cachedRegions
-                        
-                        // 1. Exclude Zones first
-                        for (region in currentRegions) {
-                            if (region.isExclude && isInsideRegion(nx, ny, region)) {
+                        try {
+                            val now = System.currentTimeMillis()
+                            updateConfigIfNeeded(now)
+                            
+                            if (!cachedEnabled) return
+
+                            // Use index access for performance; dispatchMotionLocked(IBinder, MotionEvent, ...)
+                            val motionEvent = param.args.getOrNull(1) as? MotionEvent ?: return
+                            
+                            val startNano = System.nanoTime()
+                            updateMetricsIfNeeded(now)
+                            
+                            if (cachedWidth <= 0 || cachedHeight <= 0) return
+                            
+                            val nx = motionEvent.x / cachedWidth
+                            val ny = motionEvent.y / cachedHeight
+                            
+                            if (testModeActive) {
                                 logLatency(System.nanoTime() - startNano)
+                                param.setResult(null)
                                 return
                             }
-                        }
-                        
-                        // 2. Blocking Zones
-                        for (region in currentRegions) {
-                            if (!region.isExclude && isInsideRegion(nx, ny, region)) {
-                                if (shouldBlockSurgically(motionEvent, region)) {
-                                    logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
+                            
+                            val regions = cachedRegions
+                            val size = regions.size
+                            
+                            // 1. Priority: Exclude Zones (Whitelist)
+                            for (i in 0 until size) {
+                                val region = regions[i]
+                                if (region.isExclude && isInsideRegion(nx, ny, region)) {
                                     logLatency(System.nanoTime() - startNano)
-                                    param.setResult(null) 
                                     return
                                 }
                             }
+                            
+                            // 2. Surgical Blocking Zones
+                            for (i in 0 until size) {
+                                val region = regions[i]
+                                if (!region.isExclude && isInsideRegion(nx, ny, region)) {
+                                    if (shouldBlockSurgically(motionEvent, region)) {
+                                        logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
+                                        logLatency(System.nanoTime() - startNano)
+                                        param.setResult(null) 
+                                        return
+                                    }
+                                }
+                            }
+                            logLatency(System.nanoTime() - startNano)
+                        } catch (t: Throwable) {
+                            // Senior Engineering: Fail-safe crash detection
+                            handleHookCrash(t)
                         }
-                        logLatency(System.nanoTime() - startNano)
                     }
                 }
             )
@@ -196,36 +185,37 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     }
 
     private fun logLatency(nanos: Long) {
-        logQueue.offer("LATENCY:$nanos")
+        logQueue.offer("/data/adb/modules/inputblocker/config/latency.log|$nanos")
+        startLogger()
     }
 
     private fun logBlockedTouch(nx: Float, ny: Float, pressure: Float, duration: Long, region: Region) {
-        logLiveEvent("BLOCK", nx, ny)
         val timestamp = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(java.util.Date())
         val entry = "$timestamp | X: ${"%.3f".format(nx)}, Y: ${"%.3f".format(ny)} | P: ${"%.3f".format(pressure)}, D: ${duration}ms | Region: [${region.x1}, ${region.y1}, ${region.x2}, ${region.y2}]"
-        logQueue.offer("BLOCK:$entry")
+        logQueue.offer("/data/adb/modules/inputblocker/config/blocklog.txt|$entry")
+        startLogger()
     }
 
-    private fun getCurrentPackage(): String? {
-        return try {
-            val activityThreadClass = XposedHelpers.findClass("android.app.ActivityThread", null)
-            val app = XposedHelpers.callStaticMethod(activityThreadClass, "currentApplication") as? Application
-            app?.packageName
-        } catch (e: Exception) {
-            null
-        }
+    private fun handleHookCrash(t: Throwable) {
+        XposedBridge.log("$TAG CRITICAL CRASH: ${t.message}")
+        try {
+            File(CRASH_FLAG_PATH).writeText("1")
+        } catch (e: Exception) {}
     }
 
-    private fun updateConfigIfNeeded() {
-        val now = System.currentTimeMillis()
+    private fun updateConfigIfNeeded(now: Long) {
         if (now - lastLoadTime < CACHE_TTL) return
 
         try {
-            if (File("/data/adb/modules/inputblocker/config/kill_switch").exists()) {
+            // Centralized throttled I/O
+            val killSwitch = File("/data/adb/modules/inputblocker/config/kill_switch")
+            if (killSwitch.exists()) {
                 cachedEnabled = false
                 lastLoadTime = now
                 return
             }
+
+            testModeActive = File("/data/adb/modules/inputblocker/config/test_mode").exists()
 
             val pkg = getCurrentPackage()
             val configPath = if (pkg != null && File("/data/adb/modules/inputblocker/config/profiles/$pkg.conf").exists()) {
@@ -235,9 +225,12 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             }
             
             val file = File(configPath)
-            if (!file.exists()) return
+            if (!file.exists()) {
+                lastLoadTime = now
+                return
+            }
             
-            val newRegions = mutableListOf<Region>()
+            val newRegions = ArrayList<Region>()
             var newEnabled = true
 
             BufferedReader(FileReader(file)).use { reader ->

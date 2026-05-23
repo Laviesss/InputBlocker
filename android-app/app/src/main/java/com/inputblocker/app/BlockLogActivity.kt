@@ -1,5 +1,7 @@
 package com.inputblocker.app
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.LinearLayout
@@ -7,7 +9,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import java.io.File
+import java.io.FileOutputStream
 import java.io.Serializable
 import java.util.*
 
@@ -15,6 +19,7 @@ class BlockLogActivity : AppCompatActivity() {
 
     private lateinit var logContainer: LinearLayout
     private lateinit var btnClearLog: Button
+    private lateinit var btnShareLog: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -36,8 +41,14 @@ class BlockLogActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 32)
         }
 
+        val buttonLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(0, 0, 0, 16)
+        }
+
         btnClearLog = Button(this).apply {
             text = "Clear Log"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener {
                 try {
                     val logFile = File(InputBlockerServiceManager.getModulePath(this@BlockLogActivity) + "/config/blocklog.txt")
@@ -52,17 +63,62 @@ class BlockLogActivity : AppCompatActivity() {
             }
         }
 
+        btnShareLog = Button(this).apply {
+            text = "Share Log"
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setOnClickListener {
+                shareLogFile()
+            }
+        }
+
+        buttonLayout.addView(btnClearLog)
+        buttonLayout.addView(btnShareLog)
+
         logContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 16, 0, 0)
         }
 
         root.addView(title)
-        root.addView(btnClearLog)
+        root.addView(buttonLayout)
         root.addView(logContainer)
 
         setContentView(root)
         refreshLog()
+    }
+
+    private fun shareLogFile() {
+        try {
+            val rootLogFile = File(InputBlockerServiceManager.getModulePath(this) + "/config/blocklog.txt")
+            if (!rootLogFile.exists()) {
+                Toast.makeText(this, "No log file found to share", Toast.LENGTH_SHORT).show()
+                return
+            }
+
+            // Copy root log to app's internal cache so FileProvider can share it
+            val cacheFile = File(cacheDir, "blocklog_export.txt")
+            rootLogFile.inputStream().use { input ->
+                FileOutputStream(cacheFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            val contentUri = FileProvider.getUriForFile(
+                this,
+                "${packageName}.fileprovider",
+                cacheFile
+            )
+
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_STREAM, contentUri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share Block Log"))
+
+        } catch (e: Exception) {
+            Toast.makeText(this, "Failed to share log: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun refreshLog() {

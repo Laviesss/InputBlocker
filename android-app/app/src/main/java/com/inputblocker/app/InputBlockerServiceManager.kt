@@ -13,7 +13,8 @@ object InputBlockerServiceManager {
     private const val TAG = "InputBlocker-Services"
     
     const val NORMAL_SHUTDOWN_FLAG = "/data/local/tmp/inputblocker/normal_shutdown"
-    const val CRASH_FLAG = "/data/local/tmp/inputblocker/crash_detected"
+    // Synced with Xposed module crash path
+    const val CRASH_FLAG = "/data/adb/modules/inputblocker/config/crash_detected"
     
     private var cachedModulePath: String? = null
     
