@@ -48,7 +48,9 @@ The build will **fail** if version flags are missing.
 
 After a successful `buildAll`, artifacts are located here:
 - **Android APK**: `android-app/app/build/outputs/apk/release/app-release.apk`
-- **PC Tool EXE**: `pc-tool-kotlin/build/compose/binaries/InputBlockerSetup.exe`
+- **PC Tool EXE**: `pc-tool-kotlin/build/compose/binaries/main/exe/InputBlockerSetup-<version>.exe`
+- **PC Tool DEB**: `pc-tool-kotlin/build/compose/binaries/main/deb/inputblockersetup_<version>_amd64.deb`
+- **PC Tool DMG**: `pc-tool-kotlin/build/compose/binaries/main/dmg/InputBlockerSetup-<version>.dmg`
 - **Module ZIP**: `build/distributions/inputblocker.zip`
 
 ---

@@ -47,7 +47,7 @@ A visual editor for your PC. Use it to:
 ## 📥 Download
 You can find the latest releases on the [Releases Page](https://github.com/Laviesss/InputBlocker/releases).
 - **Android users**: Download the `.zip` file and flash it via your root manager.
-- **PC users**: Download the `.exe` (Windows), `.AppImage` (Linux), or `.dmg` (macOS) to use the Designer.
+- **PC users**: Download the `.exe` (Windows), `.deb` (Linux), or `.dmg` (macOS) to use the Designer.
 
 ---
 
