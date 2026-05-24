@@ -1,7 +1,7 @@
 {
-  "version": "v0.1.0",
-  "versionCode": 100,
-  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/latest/download/InputBlocker.zip",
+  "version": "v{{VERSION_NAME}}",
+  "versionCode": {{VERSION_CODE}},
+  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v{{VERSION_NAME}}/InputBlocker-v{{VERSION_NAME}}.zip",
   "changelog": "https://github.com/Laviesss/InputBlocker/releases",
   "support": ["Magisk", "KernelSU", "APatch"],
   "minApi": 23

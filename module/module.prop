@@ -1,7 +1,7 @@
 id=inputblocker
 name=InputBlocker
-version=v0.1.0
-versionCode=100
+version=v{{VERSION_NAME}}
+versionCode={{VERSION_CODE}}
 author=Laviesss
 description=Ghost-tap filtering using pressure/duration analysis and multi-shape blocking regions.
 minMagisk=20400
