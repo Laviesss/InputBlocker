@@ -38,12 +38,17 @@ on:
         default: true
         type: boolean
       build_linux:
-        description: 'Build PC Tool – Linux (.AppImage)'
+        description: 'Build PC Tool – Linux (.deb)'
         required: false
         default: true
         type: boolean
       build_macos:
         description: 'Build PC Tool – macOS (.dmg)'
+        required: false
+        default: true
+        type: boolean
+      sign_apk:
+        description: 'Sign the APK (requires keystore secrets)'
         required: false
         default: true
         type: boolean
@@ -60,10 +65,10 @@ concurrency:
 jobs:
 
   # ============================================================
-  # 1. VALIDATE & PREPARE
+  # 1. VALIDATE VERSION & GENERATE NOTES
   # ============================================================
-  validate-release:
-    name: "Validate Version & Prepare Release Notes"
+  validate:
+    name: "Validate Version & Generate Notes"
     runs-on: ubuntu-latest
     outputs:
       version_name:  ${{ steps.resolve-version.outputs.VERSION_NAME }}
@@ -174,11 +179,11 @@ jobs:
 
 
   # ============================================================
-  # 2. UNIT TESTS
+  # 2. RUN UNIT TESTS
   # ============================================================
-  run-unit-tests:
-    name: "Run Unit Tests"
-    needs: validate-release
+  test:
+    name: "Unit Tests"
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: "Checkout Code"
@@ -195,7 +200,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: "Execute Unit Tests"
-        run: ./gradlew test --configuration-cache
+        run: ./gradlew test --configuration-cache -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
 
       - name: "Upload Test Reports"
         if: always()
@@ -207,15 +212,15 @@ jobs:
 
 
   # ============================================================
-  # 3. BUILD PC TOOL (Windows / Linux / macOS matrix)
+  # 3. BUILD PC (Windows / Linux / macOS matrix)
   # ============================================================
-  build-pc-tool:
-    name: "Build PC Tool – ${{ matrix.label }}"
-    needs: [validate-release, run-unit-tests]
+  build-pc:
+    name: "Build PC – ${{ matrix.label }}"
+    needs: [validate, test]
     if: |
       always() &&
-      needs.validate-release.result == 'success' &&
-      needs.run-unit-tests.result == 'success'
+      needs.validate.result == 'success' &&
+      needs.test.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -227,7 +232,7 @@ jobs:
           - os: ubuntu-latest
             label: Linux
             artifact_name: pc-tool-linux
-            file_glob: "*.AppImage"
+            file_glob: "*.deb"
           - os: macos-latest
             label: macOS
             artifact_name: pc-tool-macos
@@ -258,27 +263,36 @@ jobs:
         run: |
           ./gradlew buildPC \
             --configuration-cache \
-            -PVERSION_NAME="${{ needs.validate-release.outputs.version_name }}" \
-            -PVERSION_CODE=${{ needs.validate-release.outputs.version_code }}
+            -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
+            -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
+
+      - name: "Stage ${{ matrix.label }} Artifact"
+        if: steps.build-pc.outcome == 'success'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path staging -Force
+          $files = @(Get-ChildItem -Path "pc-tool-kotlin/build/compose/binaries" -Recurse -Filter "${{ matrix.file_glob }}")
+          if ($files.Count -eq 0) { throw "No file matching ${{ matrix.file_glob }} found in pc-tool-kotlin/build/compose/binaries" }
+          Copy-Item -Path $files[0].FullName -Destination staging/
 
       - name: "Upload ${{ matrix.label }} Artifact"
         if: steps.build-pc.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: pc-tool-kotlin/build/compose/binaries/${{ matrix.file_glob }}
+          path: staging/*
 
 
   # ============================================================
-  # 4. BUILD ANDROID APK & ROOT MODULE ZIP
+  # 4. BUILD ANDROID APK & MODULE
   # ============================================================
   build-android:
-    name: "Build Android APK + Root Module"
-    needs: [validate-release, run-unit-tests]
+    name: "Build Android APK & Module"
+    needs: [validate, test]
     if: |
       always() &&
-      needs.validate-release.result == 'success' &&
-      needs.run-unit-tests.result == 'success' &&
+      needs.validate.result == 'success' &&
+      needs.test.result == 'success' &&
       (github.event_name == 'push' || github.event.inputs.build_android == 'true')
     runs-on: ubuntu-latest
     steps:
@@ -295,54 +309,71 @@ jobs:
       - name: "Make Gradlew Executable"
         run: chmod +x gradlew
 
-      - name: "Prepare APK Signing (if secrets available)"
-        id: signing-prep
+      - name: "Resolve signing config"
+        id: signing-config
         shell: bash
         run: |
-          MISSING=""
-          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then MISSING="KEYSTORE_BASE64"; fi
-          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ]; then MISSING="$MISSING KEYSTORE_PASSWORD"; fi
-          if [ -z "${{ secrets.KEY_ALIAS }}" ]; then MISSING="$MISSING KEY_ALIAS"; fi
-          if [ -z "${{ secrets.KEY_PASSWORD }}" ]; then MISSING="$MISSING KEY_PASSWORD"; fi
-
-          if [ -n "$MISSING" ]; then
-            echo "::error::APK signing is required for a release, but these secrets are missing: $MISSING"
-            exit 1
+          DO_SIGN="false"
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event.inputs.sign_apk }}" = "true" ]; then
+            DO_SIGN="true"
           fi
 
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
-          echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
+          if [ "$DO_SIGN" = "true" ]; then
+            if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+              echo "::error::APK signing enabled but KEYSTORE_BASE64 secret is missing"
+              exit 1
+            fi
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+            echo "SIGN_APK=true" >> $GITHUB_ENV
+            echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
+          else
+            echo "SIGN_APK=false" >> $GITHUB_ENV
+          fi
 
-      - name: "Build Android APK & Root Module ZIP (signed)"
+      - name: "Build Android APK & Root Module"
+        shell: bash
         run: |
-          ./gradlew buildAndroid buildModule \
-            --configuration-cache \
-            -PVERSION_NAME="${{ needs.validate-release.outputs.version_name }}" \
-            -PVERSION_CODE=${{ needs.validate-release.outputs.version_code }} \
-            -PSIGN_APK=true \
-            -PMYAPP_RELEASE_STORE_FILE=${{ env.KEYSTORE_FILE }} \
-            -PMYAPP_RELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
-            -PMYAPP_RELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
-            -PMYAPP_RELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
+          if [ "$SIGN_APK" = "true" ]; then
+            ./gradlew buildAndroid buildModule \
+              --configuration-cache \
+              -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
+              -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
+              -PSIGN_APK=true \
+              -PMYAPP_RELEASE_STORE_FILE=$KEYSTORE_FILE \
+              -PMYAPP_RELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
+              -PMYAPP_RELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
+              -PMYAPP_RELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
+          else
+            ./gradlew buildAndroid buildModule \
+              --configuration-cache \
+              -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
+              -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
+              -PSIGN_APK=false
+          fi
+
+      - name: "Stage Android Artifacts"
+        shell: bash
+        run: |
+          mkdir -p android-staging
+          cp android-app/app/build/outputs/apk/release/app-release.apk android-staging/
+          cp build/distributions/inputblocker.zip android-staging/
 
       - name: "Upload Android Artifacts"
         uses: actions/upload-artifact@v4
         with:
           name: android-artifacts
-          path: |
-            android-app/app/build/outputs/apk/release/app-release.apk
-            build/distributions/inputblocker.zip
+          path: android-staging/*
 
 
   # ============================================================
-  # 5. PUBLISH GITHUB RELEASE & DEPLOY update.json
+  # 5. PUBLISH RELEASE & DEPLOY update.json
   # ============================================================
-  publish-release:
-    name: "Publish Release & Deploy Update"
-    needs: [validate-release, build-pc-tool, build-android]
+  release:
+    name: "Publish Release & Deploy update.json"
+    needs: [validate, build-pc, build-android]
     if: |
       always() &&
-      needs.validate-release.result == 'success' &&
+      needs.validate.result == 'success' &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-latest
@@ -358,7 +389,7 @@ jobs:
       - name: "Organise & Rename Artifacts for Release"
         shell: pwsh
         run: |
-          $v = "${{ needs.validate-release.outputs.version_name }}"
+          $v = "${{ needs.validate.outputs.version_name }}"
           $do_android = "${{ github.event.inputs.build_android }}" -ne 'false'
           $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'false'
           $do_linux   = "${{ github.event.inputs.build_linux }}"   -ne 'false'
@@ -378,8 +409,8 @@ jobs:
             if ($exe) { Copy-Item $exe.FullName "release-assets/InputBlockerSetup-v$v.exe" }
           }
           if ($do_linux) {
-            $app = Get-ChildItem "raw-artifacts/pc-tool-linux/*.AppImage" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($app) { Copy-Item $app.FullName "release-assets/InputBlockerSetup-v$v.AppImage" }
+            $app = Get-ChildItem "raw-artifacts/pc-tool-linux/*.deb" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($app) { Copy-Item $app.FullName "release-assets/InputBlockerSetup-v$v.deb" }
           }
           if ($do_macos) {
             $dmg = Get-ChildItem "raw-artifacts/pc-tool-macos/*.dmg" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -389,7 +420,7 @@ jobs:
       - name: "Verify Mandatory Artifacts Present"
         shell: pwsh
         run: |
-          $v = "${{ needs.validate-release.outputs.version_name }}"
+          $v = "${{ needs.validate.outputs.version_name }}"
           $do_android = "${{ github.event.inputs.build_android }}" -ne 'false'
           $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'false'
           $is_push = "${{ github.event_name }}" -eq "push"
@@ -413,37 +444,40 @@ jobs:
           }
 
       - name: "Verify APK Signature"
-        if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
+        if: |
+          (github.event_name == 'push' || github.event.inputs.sign_apk == 'true') &&
+          (github.event_name == 'push' || github.event.inputs.build_android == 'true')
         shell: bash
         run: |
+          APK="release-assets/InputBlocker-v${{ needs.validate.outputs.version_name }}.apk"
+          if [ ! -f "$APK" ]; then echo "No APK to verify, skipping."; exit 0; fi
           BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
-          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify \
-            "release-assets/InputBlocker-v${{ needs.validate-release.outputs.version_name }}.apk"
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" verify "$APK"
 
       - name: "Verify ZIP Integrity"
         if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
         shell: bash
         run: |
-          unzip -t "release-assets/InputBlocker-v${{ needs.validate-release.outputs.version_name }}.zip"
+          unzip -t "release-assets/InputBlocker-v${{ needs.validate.outputs.version_name }}.zip"
 
       - name: "Generate SHA-256 Checksums"
         shell: bash
         run: |
           cd release-assets
-          sha256sum * > "checksums-v${{ needs.validate-release.outputs.version_name }}.txt"
+          sha256sum * > "checksums-v${{ needs.validate.outputs.version_name }}.txt"
 
       - name: "Upload Final Release Assets (for inspection)"
         uses: actions/upload-artifact@v4
         with:
-          name: release-assets-v${{ needs.validate-release.outputs.version_name }}
+          name: release-assets-v${{ needs.validate.outputs.version_name }}
           path: release-assets/*
 
       - name: "Create GitHub Release"
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.validate-release.outputs.tag_name }}
-          name: "Release ${{ needs.validate-release.outputs.tag_name }}"
-          body: ${{ needs.validate-release.outputs.release_notes }}
+          tag_name: ${{ needs.validate.outputs.tag_name }}
+          name: "Release ${{ needs.validate.outputs.tag_name }}"
+          body: ${{ needs.validate.outputs.release_notes }}
           draft: ${{ github.event.inputs.draft || 'false' }}
           prerelease: ${{ github.event.inputs.prerelease || 'false' }}
           files: release-assets/*
@@ -454,8 +488,8 @@ jobs:
         if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
         shell: bash
         run: |
-          V="${{ needs.validate-release.outputs.version_name }}"
-          C="${{ needs.validate-release.outputs.version_code }}"
+          V="${{ needs.validate.outputs.version_name }}"
+          C="${{ needs.validate.outputs.version_code }}"
           REPO="${{ github.repository }}"
           APK_SHA=$(sha256sum "release-assets/InputBlocker-v$V.apk" | awk '{print $1}')
           ZIP_SHA=$(sha256sum "release-assets/InputBlocker-v$V.zip" | awk '{print $1}')
@@ -466,7 +500,7 @@ jobs:
             "versionCode": $C,
             "apkUrl": "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.apk",
             "zipUrl": "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.zip",
-            "changelog": "${{ needs.validate-release.outputs.release_notes }}",
+            "changelog": "${{ needs.validate.outputs.release_notes }}",
             "apkSha256": "$APK_SHA",
             "zipSha256": "$ZIP_SHA"
           }
@@ -479,7 +513,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./pages-deploy
           keep_files: true
-          commit_message: "Deploy update.json for v${{ needs.validate-release.outputs.version_name }}"
+          commit_message: "Deploy update.json for v${{ needs.validate.outputs.version_name }}"
 
       - name: "Create Bug Report on Pipeline Failure"
         if: failure()
@@ -489,7 +523,7 @@ jobs:
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: "Release pipeline failed – v${{ needs.validate-release.outputs.version_name }}",
+              title: "Release pipeline failed – v${{ needs.validate.outputs.version_name }}",
               body: `Pipeline run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}`,
               labels: ["bug", "release"]
             })

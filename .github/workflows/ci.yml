@@ -24,7 +24,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: "Run Tests & Lint"
-        run: ./gradlew test lint --configuration-cache
+        run: ./gradlew test lint --configuration-cache -PVERSION_NAME=0.0.0 -PVERSION_CODE=1
 
       - name: "Upload Lint Results"
         if: always()
