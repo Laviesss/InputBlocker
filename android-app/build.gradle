@@ -10,9 +10,5 @@ buildscript {
     }
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+// Repository resolution is delegated to settings.gradle.kts (dependencyResolutionManagement).
+// No allprojects.repositories block here.
