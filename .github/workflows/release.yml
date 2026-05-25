@@ -200,7 +200,7 @@ jobs:
         run: chmod +x gradlew
 
       - name: "Execute Unit Tests"
-        run: ./gradlew test --configuration-cache -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
+        run: ./gradlew test -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
 
       - name: "Upload Test Reports"
         if: always()
@@ -262,7 +262,6 @@ jobs:
         shell: bash
         run: |
           ./gradlew buildPC \
-            --configuration-cache \
             -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
             -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
 
@@ -335,7 +334,6 @@ jobs:
         run: |
           if [ "$SIGN_APK" = "true" ]; then
             ./gradlew buildAndroid buildModule \
-              --configuration-cache \
               -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
               -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
               -PSIGN_APK=true \
@@ -345,7 +343,6 @@ jobs:
               -PMYAPP_RELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
           else
             ./gradlew buildAndroid buildModule \
-              --configuration-cache \
               -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
               -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
               -PSIGN_APK=false
