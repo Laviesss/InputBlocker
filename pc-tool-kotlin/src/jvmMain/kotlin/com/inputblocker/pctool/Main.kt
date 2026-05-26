@@ -627,8 +627,9 @@ fun App() {
 }
 
 fun main() {
-    // Write any uncaught exceptions to a log file so we can diagnose crashes
-    val crashLog = java.io.File("inputblocker_crash.log")
+    // Write any uncaught exceptions to a crash_log folder so we can diagnose crashes
+    val crashDir = java.io.File(System.getProperty("user.home"), "crash_log").also { it.mkdirs() }
+    val crashLog = java.io.File(crashDir, "inputblocker_crash.log")
     val tee = System.out // keep original stdout
     Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
         crashLog.writeText("""=== CRASH on thread: ${thread.name} ===
