@@ -33,7 +33,7 @@ class CommunityGalleryActivity : AppCompatActivity() {
         val title = TextView(this).apply {
             text = "Community Presets"
             textSize = 24f
-            textStyle = android.graphics.Typeface.BOLD
+            setTypeface(null, android.graphics.Typeface.BOLD)
             val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE).getInt("theme", ThemeManager.THEME_SYSTEM)
             val colors = ThemeManager.getThemeColors(this@CommunityGalleryActivity, currentTheme)
             setTextColor(colors.textPrimary)
@@ -103,7 +103,7 @@ class CommunityGalleryActivity : AppCompatActivity() {
         val modelText = TextView(this).apply {
             text = "📱 ${preset.deviceModel}"
             textSize = 18f
-            textStyle = android.graphics.Typeface.BOLD
+            setTypeface(null, android.graphics.Typeface.BOLD)
             setTextColor(colors.textPrimary)
         }
 
@@ -114,15 +114,14 @@ class CommunityGalleryActivity : AppCompatActivity() {
             setPadding(0, 8, 0, 16)
         }
 
-        val importBtn = MaterialButton(this).apply {
-            text = "IMPORT (${preset.regionCount} regions)"
-            backgroundTintList = android.content.res.ColorStateList.valueOf(colors.accent)
-            setTextColor(android.graphics.Color.WHITE)
-            setOnClickListener { 
-                importBtn.isEnabled = false
-                importBtn.text = "IMPORTING..."
-                doImport(preset) 
-            }
+        val importBtn = MaterialButton(this)
+        importBtn.text = "IMPORT (${preset.regionCount} regions)"
+        importBtn.backgroundTintList = android.content.res.ColorStateList.valueOf(colors.accent)
+        importBtn.setTextColor(android.graphics.Color.WHITE)
+        importBtn.setOnClickListener {
+            importBtn.isEnabled = false
+            importBtn.text = "IMPORTING..."
+            doImport(preset)
         }
 
         layout.addView(modelText)

@@ -71,8 +71,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnExportPreset: Button
     private lateinit var btnCommunityGallery: Button
     private lateinit var btnSubmitPreset: Button
-    private lateinit var btnSubmitPreset: Button
-    private lateinit var btnCommunityGallery: Button
 
     private var isEnabled = true
     private var isLsposedMode = false
@@ -137,8 +135,7 @@ class MainActivity : AppCompatActivity() {
         btnImportPreset = findViewById(R.id.btn_import_preset)
         btnExportPreset = findViewById(R.id.btn_export_preset)
         btnCommunityGallery = findViewById(R.id.btn_community_gallery)
-        btnCommunityGallery = findViewById(R.id.btn_community_gallery)
-
+        btnSubmitPreset = findViewById(R.id.btn_submit_preset)
 
         setupTabs()
         setupControlListeners()
@@ -245,10 +242,6 @@ class MainActivity : AppCompatActivity() {
                 .setMessage("To submit your preset to the community gallery, please open an issue on GitHub and attach your .ibpreset file.")
                 .setPositiveButton("OK", null)
                 .show()
-        }
-        btnCommunityGallery.setOnClickListener {
-            val intent = Intent(this, CommunityGalleryActivity::class.java)
-            startActivity(intent)
         }
     }
 

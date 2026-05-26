@@ -120,7 +120,7 @@ object ThemeManager {
                 } else if (id == R.id.btn_add_region || id == R.id.btn_undo || id == R.id.btn_cancel) {
                     view.backgroundTintList = ColorStateList.valueOf(colors.surfaceElevated)
                     view.setTextColor(colors.textPrimary)
-                    view.strokeColor = ColorStateList.valueOf(colors.border)
+                    view.setStrokeColor(ColorStateList.valueOf(colors.border))
                 }
             }
             is TextView -> {

@@ -5,6 +5,10 @@ plugins {
 android {
     compileSdk = 34
     namespace = "com.inputblocker.app"
+
+    buildFeatures {
+        buildConfig = true
+    }
     
     defaultConfig {
         applicationId = "com.inputblocker.app"

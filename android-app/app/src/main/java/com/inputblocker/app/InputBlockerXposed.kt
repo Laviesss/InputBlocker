@@ -28,6 +28,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private var cachedHeight = 0
         private var lastMetricsUpdate = 0L
         private const val METRICS_TTL = 60000L // 60 seconds
+        private var cachedWindowManager: WindowManager? = null
 
         // Crash Protection: Write a flag if we fail in the hot path
         private val CRASH_FLAG_PATH = "/data/adb/modules/inputblocker/config/crash_detected"
@@ -217,7 +218,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
 
             testModeActive = File("/data/adb/modules/inputblocker/config/test_mode").exists()
 
-            val pkg = getCurrentPackage()
+            val pkg = currentPackageName
             val configPath = if (pkg != null && File("/data/adb/modules/inputblocker/config/profiles/$pkg.conf").exists()) {
                 "/data/adb/modules/inputblocker/config/profiles/$pkg.conf"
             } else {
@@ -250,4 +251,15 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             XposedBridge.log("$TAG: Error loading config: ${e.message}")
         }
     }
+
+    private val currentPackageName: String?
+        get() = try {
+            val activityThread = XposedHelpers.callStaticMethod(
+                XposedHelpers.findClass("android.app.ActivityThread", null),
+                "currentActivityThread"
+            )
+            XposedHelpers.callMethod(activityThread, "currentPackageName") as? String
+        } catch (_: Exception) {
+            null
+        }
 }

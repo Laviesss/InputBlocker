@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.Region
 import kotlin.math.pow
 import kotlin.math.sqrt
 
