@@ -229,23 +229,26 @@ jobs:
             label: Windows
             artifact_name: pc-tool-windows
             file_glob: "*.exe"
+            java_version: '17'
           - os: ubuntu-latest
             label: Linux
             artifact_name: pc-tool-linux
             file_glob: "*.deb"
+            java_version: '17'
           - os: macos-latest
             label: macOS
             artifact_name: pc-tool-macos
             file_glob: "*.dmg"
+            java_version: '21'
     runs-on: ${{ matrix.os }}
     steps:
       - name: "Checkout Code"
         uses: actions/checkout@v4
 
-      - name: "Set up Java 17"
+      - name: "Set up Java ${{ matrix.java_version }}"
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: ${{ matrix.java_version }}
           distribution: 'temurin'
           cache: 'gradle'
 

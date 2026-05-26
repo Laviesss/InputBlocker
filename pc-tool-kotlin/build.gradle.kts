@@ -23,6 +23,9 @@ compose.desktop {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
             packageName = "InputBlockerSetup"
             packageVersion = project.property("VERSION_NAME").toString()
+            macOS {
+                bundleID = "com.inputblocker.pctool"
+            }
         }
     }
 }
