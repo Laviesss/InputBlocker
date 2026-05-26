@@ -2,6 +2,9 @@ plugins {
     id 'com.android.application'
 }
 
+tasks.register("prepareKotlinBuildScriptModel") {}
+tasks.register("prepareKotlinIdeaImport") {}
+
 android {
     compileSdk = 34
     namespace = "com.inputblocker.app"
@@ -37,6 +40,8 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+
+
     
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

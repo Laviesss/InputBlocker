@@ -1,14 +1,7 @@
-// Root build.gradle
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-    dependencies {
-        classpath 'com.android.tools.build:gradle:8.2.0'
-        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
-    }
-}
+// This project is part of the InputBlockerKMP multi-module project.
+// Plugin versions are managed in the root build.gradle.kts.
+// Note: Since AGP 9.0, the 'org.jetbrains.kotlin.android' plugin is no longer required
+// as Kotlin support is built into the Android Gradle Plugin.
 
-// Repository resolution is delegated to settings.gradle.kts (dependencyResolutionManagement).
-// No allprojects.repositories block here.
+tasks.register("prepareKotlinBuildScriptModel") {}
+tasks.register("prepareKotlinIdeaImport") {}
