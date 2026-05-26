@@ -101,7 +101,7 @@ object ThemeManager {
             }
             is MaterialCardView -> {
                 view.setCardBackgroundColor(colors.surface)
-                view.strokeColor = ColorStateList.valueOf(colors.border)
+                view.setStrokeColor(ColorStateList.valueOf(colors.border))
             }
             is SwitchMaterial -> {
                 val states = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
