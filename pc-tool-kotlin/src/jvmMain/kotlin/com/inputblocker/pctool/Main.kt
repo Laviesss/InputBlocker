@@ -626,12 +626,36 @@ fun App() {
     }
 }
 
-fun main() = application {
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "InputBlocker Designer",
-        state = rememberWindowState(width = 800.dp, height = 900.dp)
-    ) {
-        App()
+fun main() {
+    // Write any uncaught exceptions to a log file so we can diagnose crashes
+    val crashLog = java.io.File("inputblocker_crash.log")
+    val tee = System.out // keep original stdout
+    Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+        crashLog.writeText("""=== CRASH on thread: ${thread.name} ===
+Time: ${java.util.Date()}
+${throwable.stacktraceToString()}
+""")
+        tee.println("FATAL: ${throwable.message}")
+        throwable.printStackTrace(tee)
+        tee.println("Crash written to: ${crashLog.absolutePath}")
     }
+
+    application {
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "InputBlocker Designer",
+            state = rememberWindowState(width = 800.dp, height = 900.dp)
+        ) {
+            App()
+        }
+    }
+}
+
+// Kotlin stdlib doesn't expose stacktraceToString in older versions
+private fun Throwable.stacktraceToString(): String {
+    val sw = java.io.StringWriter()
+    val pw = java.io.PrintWriter(sw)
+    printStackTrace(pw)
+    pw.flush()
+    return sw.toString()
 }

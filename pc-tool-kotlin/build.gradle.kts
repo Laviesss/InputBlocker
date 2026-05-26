@@ -1,3 +1,5 @@
+import java.util.Calendar
+
 plugins {
     kotlin("multiplatform")
     id("org.jetbrains.compose")
@@ -24,7 +26,7 @@ compose.desktop {
             packageName = "InputBlocker"
             description = "PC Designer for InputBlocker - Configure ghost tap filtering regions"
             vendor = "Laviesss"
-            copyright = "Copyright (c) ${java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)} Laviesss"
+            copyright = "Copyright (c) ${Calendar.getInstance().get(Calendar.YEAR)} Laviesss"
             packageVersion = project.property("VERSION_NAME").toString().let { raw ->
                 val isMacOS = System.getProperty("os.name").lowercase().contains("mac")
                 // macOS jpackage rejects versions where the first segment is 0
