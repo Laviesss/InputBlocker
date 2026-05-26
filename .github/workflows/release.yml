@@ -268,21 +268,6 @@ jobs:
             -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
             -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
 
-      - name: "Dump jpackage logs (debug)"
-        if: always() && matrix.label == 'macOS'
-        shell: bash
-        run: |
-          echo "=== jpackage args ==="
-          cat pc-tool-kotlin/build/compose/tmp/createDistributable.args.txt 2>/dev/null || echo "(no args file)"
-          echo "=== jpackage error logs ==="
-          for f in pc-tool-kotlin/build/compose/logs/createDistributable/jpackage-*-err.txt; do
-            [ -f "$f" ] && echo "--- $f ---" && cat "$f"
-          done
-          echo "=== jpackage output logs ==="
-          for f in pc-tool-kotlin/build/compose/logs/createDistributable/jpackage-*-out.txt; do
-            [ -f "$f" ] && echo "--- $f ---" && cat "$f"
-          done
-
       - name: "Stage ${{ matrix.label }} Artifact"
         if: steps.build-pc.outcome == 'success'
         shell: pwsh
