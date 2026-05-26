@@ -629,7 +629,7 @@ fun App() {
 fun main() = application {
     Window(
         onCloseRequest = ::exitApplication,
-        title = "InputBlocker Setup - Kotlin Edition",
+        title = "InputBlocker Designer",
         state = rememberWindowState(width = 800.dp, height = 900.dp)
     ) {
         App()
