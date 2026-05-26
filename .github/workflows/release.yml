@@ -352,7 +352,16 @@ jobs:
         shell: bash
         run: |
           mkdir -p android-staging
-          cp android-app/app/build/outputs/apk/release/app-release.apk android-staging/
+          APK="android-app/app/build/outputs/apk/release/app-release.apk"
+          if [ ! -f "$APK" ]; then
+            APK="android-app/app/build/outputs/apk/release/app-release-unsigned.apk"
+          fi
+          if [ ! -f "$APK" ]; then
+            echo "::error::No APK found in android-app/app/build/outputs/apk/release/"
+            ls -la android-app/app/build/outputs/apk/release/ 2>/dev/null || echo "(directory may be empty)"
+            exit 1
+          fi
+          cp "$APK" android-staging/app-release.apk
           cp build/distributions/inputblocker.zip android-staging/
 
       - name: "Upload Android Artifacts"
