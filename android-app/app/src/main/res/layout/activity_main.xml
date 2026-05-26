@@ -508,14 +508,6 @@
                             android:layout_height="wrap_content"
                             android:gravity="start|center_vertical"
                             android:text="📤 Submit Preset" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btn_community_gallery"
-                            style="@style/Widget.MaterialComponents.Button.TextButton"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:gravity="start|center_vertical"
-                            android:text="🌐 Community Gallery" />
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
