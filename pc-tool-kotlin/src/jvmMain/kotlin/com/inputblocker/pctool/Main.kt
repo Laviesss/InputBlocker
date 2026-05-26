@@ -1,3 +1,4 @@
+import androidx.compose.foundation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,10 +19,17 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.inputblocker.shared.GhostTap
+import com.inputblocker.shared.ClusterUtils
 import com.inputblocker.shared.Region
+import com.inputblocker.pctool.ADBHelper
+import com.inputblocker.pctool.PresetManager
+import com.inputblocker.pctool.Preset
+import com.inputblocker.pctool.LiveEvent
 
 // Theme Colors
 val BgDark = Color(0xFF121212)
@@ -360,11 +368,6 @@ fun App() {
                     }
                 }
             }
-        }
-    }
-}
-
-                    }
 
                     if (selectedRegionIndex != null) {
                                  val selectedRegion = regions[selectedRegionIndex!!]
@@ -392,20 +395,20 @@ fun App() {
                                                   if (clusters.isNotEmpty()) {
                                                       val mainCluster = clusters.maxByOrNull { it.size }!!
                                                       
-                                                      // Update Region Bounds
-                                                      val newBounds = ClusterUtils.calculateBoundingBox(mainCluster)
-                                                      selectedRegion.x1 = newBounds.x1
-                                                      selectedRegion.y1 = newBounds.y1
-                                                      selectedRegion.x2 = newBounds.x2
-                                                      selectedRegion.y2 = newBounds.y2
-                                                      
-                                                      // Update Thresholds
-                                                      val (suggestedP, suggestedD) = ClusterUtils.suggestThresholds(mainCluster)
-                                                      selectedRegion.minPressure = suggestedP
-                                                      selectedRegion.maxDuration = suggestedD
-                                                      
-                                                      regions = regions.toList()
-                                                      status = "Auto-tuned based on ${mainCluster.size} taps"
+                                                       // Update Region Bounds & Thresholds
+                                                       val newBounds = ClusterUtils.calculateBoundingBox(mainCluster)
+                                                       val (suggestedP, suggestedD) = ClusterUtils.suggestThresholds(mainCluster)
+                                                       regions = regions.toMutableList().apply {
+                                                           this[selectedRegionIndex!!] = selectedRegion.copy(
+                                                               x1 = newBounds.x1,
+                                                               y1 = newBounds.y1,
+                                                               x2 = newBounds.x2,
+                                                               y2 = newBounds.y2,
+                                                               minPressure = suggestedP,
+                                                               maxDuration = suggestedD
+                                                           )
+                                                       }.toList()
+                                                       status = "Auto-tuned based on ${mainCluster.size} taps"
                                                   } else {
                                                       status = "Too few taps for clustering"
                                                   }
@@ -601,8 +604,8 @@ fun App() {
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                adbHelper?.let {
-                                    val success = it.pushConfig(regions, blockingEnabled, crashProtection)
+                                adbHelper?.let { helper ->
+                                    val success = helper.pushConfig(regions, blockingEnabled, crashProtection)
                                     status = if (success) "Config pushed!" else "Push failed"
                                 }
                             }, 
@@ -621,14 +624,14 @@ fun App() {
             }
         }
     }
+}
 
-    fun main() = application {
-        Window(
-            onCloseRequest = ::exitApplication,
-            title = "InputBlocker Setup - Kotlin Edition",
-            state = rememberWindowState(width = 800.dp, height = 900.dp)
-        ) {
-            App()
-        }
+fun main() = application {
+    Window(
+        onCloseRequest = ::exitApplication,
+        title = "InputBlocker Setup - Kotlin Edition",
+        state = rememberWindowState(width = 800.dp, height = 900.dp)
+    ) {
+        App()
     }
 }

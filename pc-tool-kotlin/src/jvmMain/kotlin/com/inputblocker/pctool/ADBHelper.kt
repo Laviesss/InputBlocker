@@ -115,22 +115,6 @@ class ADBHelper : AutoCloseable {
         return connected
     }
 
-    fun runProcess(fileName: String, arguments: String, timeoutMs: Int = 10000): String {
-        return try {
-            val process = ProcessBuilder(fileName.split(" "), arguments.split(" "))
-                .redirectErrorStream(true)
-                .start()
-            
-            val reader = process.inputStream.bufferedReader()
-            val output = reader.readText()
-            process.waitFor()
-            output
-        } catch (e: Exception) {
-            println("Error running process $fileName: ${e.message}")
-            ""
-        }
-    }
-
     // Overload for simple arguments
     fun runProcess(fileName: String, args: String): String {
         val fullCmd = mutableListOf<String>()
@@ -312,3 +296,10 @@ class ADBHelper : AutoCloseable {
         connected = false
     }
 }
+
+data class LiveEvent(
+    val type: String,
+    val x: Float,
+    val y: Float,
+    val timestamp: Long
+)
