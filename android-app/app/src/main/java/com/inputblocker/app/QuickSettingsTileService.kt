@@ -1,10 +1,13 @@
 package com.inputblocker.app
 
 import android.content.Intent
+import android.os.Build
 import android.service.quicksettings.Tile
 import android.service.quicksettings.TileService
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 
+@RequiresApi(Build.VERSION_CODES.N)
 class QuickSettingsTileService : TileService() {
 
     override fun onStartListening() {
@@ -26,7 +29,9 @@ class QuickSettingsTileService : TileService() {
         val cmd = if (newStatus) "enabled=1" else "enabled=0"
         InputBlockerServiceManager.runRootCommand("sed -i 's/^enabled=.*/$cmd/' $configPath")
         
-        sendBroadcast(Intent("com.inputblocker.RELOAD"))
+        val intent = Intent("com.inputblocker.RELOAD")
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
         
         Toast.makeText(this, "Blocking ${if (newStatus) "Enabled" else "Disabled"}", Toast.LENGTH_SHORT).show()
     }

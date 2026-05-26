@@ -235,6 +235,7 @@ class DetectionReviewActivity : Activity() {
             InputBlockerServiceManager.saveConfig(this, "default", content.toString())
             
             val intent = Intent("com.inputblocker.RELOAD")
+            intent.setPackage(packageName)
             sendBroadcast(intent)
             
             Toast.makeText(this, "Regions applied successfully!", Toast.LENGTH_SHORT).show()

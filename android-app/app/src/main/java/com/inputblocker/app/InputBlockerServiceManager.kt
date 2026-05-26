@@ -2,11 +2,11 @@ package com.inputblocker.app
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.util.Log
 import java.io.File
 import java.io.BufferedReader
 import java.io.InputStreamReader
-import java.util.concurrent.TimeUnit
 
 object InputBlockerServiceManager {
     
@@ -23,7 +23,15 @@ object InputBlockerServiceManager {
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
             val reader = BufferedReader(InputStreamReader(process.inputStream))
             val output = reader.readText()
-            process.waitFor(5, TimeUnit.SECONDS)
+            val startTime = System.currentTimeMillis()
+            val timeout = 5000L
+            var exitCode: Int? = null
+            while (System.currentTimeMillis() - startTime < timeout && exitCode == null) {
+                try { exitCode = process.exitValue() } catch (_: IllegalThreadStateException) {
+                    Thread.sleep(100)
+                }
+            }
+            if (exitCode == null) process.destroy()
             output
         } catch (e: Exception) {
             Log.e(TAG, "Root command failed: $command", e)
@@ -84,7 +92,11 @@ object InputBlockerServiceManager {
         }
         
         val overlayIntent = Intent(context, OverlayService::class.java)
-        context.startForegroundService(overlayIntent)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(overlayIntent)
+        } else {
+            context.startService(overlayIntent)
+        }
         
         val volumeIntent = Intent(context, VolumeButtonListenerService::class.java)
         context.startService(volumeIntent)

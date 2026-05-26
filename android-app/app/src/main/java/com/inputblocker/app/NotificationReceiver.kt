@@ -28,14 +28,20 @@ class NotificationReceiver : BroadcastReceiver() {
                 
                 val cmd = if (newStatus) "enabled=1" else "enabled=0"
                 InputBlockerServiceManager.runRootCommand("sed -i 's/^enabled=.*/$cmd/' $configPath")
-                context.sendBroadcast(Intent("com.inputblocker.RELOAD"))
+                val reloadIntent = Intent("com.inputblocker.RELOAD")
+                reloadIntent.setPackage(context.packageName)
+                context.sendBroadcast(reloadIntent)
             }
             ACTION_SAFE_MODE -> {
                 InputBlockerServiceManager.enableSafeMode(context)
-                context.sendBroadcast(Intent("com.inputblocker.RELOAD"))
+                val reloadIntent = Intent("com.inputblocker.RELOAD")
+                reloadIntent.setPackage(context.packageName)
+                context.sendBroadcast(reloadIntent)
             }
             ACTION_SYNC -> {
-                context.sendBroadcast(Intent("com.inputblocker.RELOAD"))
+                val reloadIntent = Intent("com.inputblocker.RELOAD")
+                reloadIntent.setPackage(context.packageName)
+                context.sendBroadcast(reloadIntent)
             }
         }
     }

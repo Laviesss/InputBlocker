@@ -64,6 +64,7 @@ class VolumeButtonListenerService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(volumeReceiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
             registerReceiver(volumeReceiver, filter)
         }
         
@@ -116,7 +117,9 @@ class VolumeButtonListenerService : Service() {
         
         // Feedback
         vibrate()
-        sendBroadcast(Intent("com.inputblocker.DISABLE"))
+        val intent = Intent("com.inputblocker.DISABLE")
+        intent.setPackage(packageName)
+        sendBroadcast(intent)
         Toast.makeText(this, "BLOCKING DISABLED: Emergency sequence detected", Toast.LENGTH_LONG).show()
     }
 
