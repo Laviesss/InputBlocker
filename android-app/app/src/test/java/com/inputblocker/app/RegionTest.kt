@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.Region
 import org.junit.Test
 import org.junit.Assert.*
 
