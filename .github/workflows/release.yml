@@ -52,6 +52,11 @@ on:
         required: false
         default: true
         type: boolean
+      force_version:
+        description: 'Override – skip version code regression check (use to re‑deploy)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -134,6 +139,7 @@ jobs:
           fi
 
       - name: "Check Version Code Regression"
+        if: github.event.inputs.force_version != 'true'
         shell: bash
         run: |
           NEW_CODE=${{ steps.resolve-version.outputs.VERSION_CODE }}
@@ -321,35 +327,39 @@ jobs:
           fi
 
           if [ "$DO_SIGN" = "true" ]; then
-            if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-              echo "::error::APK signing enabled but KEYSTORE_BASE64 secret is missing"
+            if [ -z "${{ secrets.SIGNING_KEY }}" ]; then
+              echo "::error::APK signing enabled but SIGNING_KEY secret is missing"
               exit 1
             fi
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.keystore
+            echo "${{ secrets.SIGNING_KEY }}" | base64 -d > release.keystore
             echo "SIGN_APK=true" >> $GITHUB_ENV
             echo "KEYSTORE_FILE=release.keystore" >> $GITHUB_ENV
           else
             echo "SIGN_APK=false" >> $GITHUB_ENV
           fi
 
-      - name: "Build Android APK & Root Module"
+      - name: "Build Android APK & Root Module (unsigned)"
         shell: bash
         run: |
-          if [ "$SIGN_APK" = "true" ]; then
-            ./gradlew buildAndroid buildModule \
-              -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
-              -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
-              -PSIGN_APK=true \
-              -PMYAPP_RELEASE_STORE_FILE=$KEYSTORE_FILE \
-              -PMYAPP_RELEASE_STORE_PASSWORD="${{ secrets.KEYSTORE_PASSWORD }}" \
-              -PMYAPP_RELEASE_KEY_ALIAS="${{ secrets.KEY_ALIAS }}" \
-              -PMYAPP_RELEASE_KEY_PASSWORD="${{ secrets.KEY_PASSWORD }}"
-          else
-            ./gradlew buildAndroid buildModule \
-              -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
-              -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
-              -PSIGN_APK=false
-          fi
+          ./gradlew buildAndroid buildModule \
+            -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
+            -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
+            -PSIGN_APK=false
+
+      - name: "Sign APK with apksigner"
+        if: env.SIGN_APK == 'true'
+        shell: bash
+        run: |
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)
+          UNSIGNED="android-app/app/build/outputs/apk/release/app-release-unsigned.apk"
+          SIGNED="android-app/app/build/outputs/apk/release/app-release.apk"
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
+            --ks release.keystore \
+            --ks-pass "pass:${{ secrets.KEY_STORE_PASSWORD }}" \
+            --ks-key-alias "${{ secrets.ALIAS }}" \
+            --key-pass "pass:${{ secrets.KEY_PASSWORD }}" \
+            --out "$SIGNED" \
+            "$UNSIGNED"
 
       - name: "Stage Android Artifacts"
         shell: bash
