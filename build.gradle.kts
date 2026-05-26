@@ -59,7 +59,7 @@ tasks.register<Zip>("buildModule") {
 
 tasks.register("buildAll") {
     group = "build"
-    description = "Builds the entire ecosystem: APK, EXE, and Module ZIP"
+    description = "Builds the entire ecosystem: APK, PC Tool (EXE/MSI), and Module ZIP"
     dependsOn("buildAndroid", "buildPC", "buildModule")
 }
 
@@ -71,7 +71,7 @@ tasks.register("buildAndroid") {
 
 tasks.register("buildPC") {
     group = "build"
-    description = "Builds the PC Tool EXE"
+    description = "Builds the PC Tool (Windows EXE/MSI, Linux DEB, macOS DMG)"
     dependsOn(":pc-tool-kotlin:packageDistributionForCurrentOS")
 }
 

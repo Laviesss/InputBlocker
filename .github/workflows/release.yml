@@ -33,10 +33,15 @@ on:
         default: true
         type: boolean
       build_windows:
-        description: 'Build PC Tool – Windows (.exe)'
+        description: 'Build PC Tool – Windows format'
         required: false
-        default: true
-        type: boolean
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - exe
+          - msi
+          - none
       build_linux:
         description: 'Build PC Tool – Linux (.deb)'
         required: false
@@ -261,27 +266,52 @@ jobs:
       - name: "Make Gradlew Executable"
         run: chmod +x gradlew
 
+      - name: "Export winFormat for Gradle"
+        id: win-format
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "WIN_FORMAT=both" >> $GITHUB_OUTPUT
+          elif [ "${{ matrix.label }}" = "Windows" ]; then
+            echo "WIN_FORMAT=${{ github.event.inputs.build_windows }}" >> $GITHUB_OUTPUT
+          else
+            echo "WIN_FORMAT=both" >> $GITHUB_OUTPUT
+          fi
+
       - name: "Build ${{ matrix.label }} Distribution"
         id: build-pc
         if: |
           github.event_name == 'push' ||
-          (matrix.label == 'Windows' && github.event.inputs.build_windows == 'true') ||
+          (matrix.label == 'Windows' && github.event.inputs.build_windows != 'none') ||
           (matrix.label == 'Linux'   && github.event.inputs.build_linux == 'true')   ||
           (matrix.label == 'macOS'   && github.event.inputs.build_macos == 'true')
         shell: bash
         run: |
           ./gradlew buildPC \
             -PVERSION_NAME="${{ needs.validate.outputs.version_name }}" \
-            -PVERSION_CODE=${{ needs.validate.outputs.version_code }}
+            -PVERSION_CODE=${{ needs.validate.outputs.version_code }} \
+            -PwinFormat=${{ steps.win-format.outputs.WIN_FORMAT }}
 
       - name: "Stage ${{ matrix.label }} Artifact"
         if: steps.build-pc.outcome == 'success'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path staging -Force
-          $files = @(Get-ChildItem -Path "pc-tool-kotlin/build/compose/binaries" -Recurse -Filter "${{ matrix.file_glob }}")
-          if ($files.Count -eq 0) { throw "No file matching ${{ matrix.file_glob }} found in pc-tool-kotlin/build/compose/binaries" }
-          Copy-Item -Path $files[0].FullName -Destination staging/
+          $winFormat = "${{ steps.win-format.outputs.WIN_FORMAT }}"
+          $fileGlob  = "${{ matrix.file_glob }}"
+          # Skip *.exe glob when building msi-only (no .exe produced)
+          if (($fileGlob -eq "*.exe") -and ($winFormat -eq "msi")) {
+            Write-Host "Skipping *.exe glob (msi-only Windows build)" -ForegroundColor Yellow
+          } else {
+            $files = @(Get-ChildItem -Path "pc-tool-kotlin/build/compose/binaries" -Recurse -Filter $fileGlob)
+            if ($files.Count -eq 0) { throw "No file matching $fileGlob found in pc-tool-kotlin/build/compose/binaries" }
+            foreach ($f in $files) { Copy-Item -Path $f.FullName -Destination staging/ }
+          }
+          # On Windows we may also have a .msi (needed for exe-only or dual-format)
+          if ("${{ matrix.label }}" -eq "Windows" -and $winFormat -ne "exe") {
+            $msiFiles = @(Get-ChildItem -Path "pc-tool-kotlin/build/compose/binaries" -Recurse -Filter "*.msi" -ErrorAction SilentlyContinue)
+            foreach ($f in $msiFiles) { Copy-Item -Path $f.FullName -Destination staging/ }
+          }
 
       - name: "Upload ${{ matrix.label }} Artifact"
         if: steps.build-pc.outcome == 'success'
@@ -410,7 +440,7 @@ jobs:
         run: |
           $v = "${{ needs.validate.outputs.version_name }}"
           $do_android = "${{ github.event.inputs.build_android }}" -ne 'false'
-          $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'false'
+          $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'none'
           $do_linux   = "${{ github.event.inputs.build_linux }}"   -ne 'false'
           $do_macos   = "${{ github.event.inputs.build_macos }}"   -ne 'false'
           if ("${{ github.event_name }}" -eq "push") {
@@ -424,8 +454,16 @@ jobs:
             Copy-Item "raw-artifacts/android-artifacts/inputblocker.zip" "release-assets/InputBlocker-v$v.zip"
           }
           if ($do_windows) {
-            $exe = Get-ChildItem "raw-artifacts/pc-tool-windows/*.exe" | Select-Object -First 1
-            if ($exe) { Copy-Item $exe.FullName "release-assets/InputBlockerSetup-v$v.exe" }
+            $win_format = "${{ github.event.inputs.build_windows }}"
+            if ("${{ github.event_name }}" -eq "push") { $win_format = "both" }
+            if ($win_format -eq 'both' -or $win_format -eq 'exe') {
+              $exe = Get-ChildItem "raw-artifacts/pc-tool-windows/*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($exe) { Copy-Item $exe.FullName "release-assets/InputBlockerSetup-v$v.exe" }
+            }
+            if ($win_format -eq 'both' -or $win_format -eq 'msi') {
+              $msi = Get-ChildItem "raw-artifacts/pc-tool-windows/*.msi" -ErrorAction SilentlyContinue | Select-Object -First 1
+              if ($msi) { Copy-Item $msi.FullName "release-assets/InputBlockerSetup-v$v.msi" }
+            }
           }
           if ($do_linux) {
             $app = Get-ChildItem "raw-artifacts/pc-tool-linux/*.deb" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -441,16 +479,20 @@ jobs:
         run: |
           $v = "${{ needs.validate.outputs.version_name }}"
           $do_android = "${{ github.event.inputs.build_android }}" -ne 'false'
-          $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'false'
+          $do_windows = "${{ github.event.inputs.build_windows }}" -ne 'none'
           $is_push = "${{ github.event_name }}" -eq "push"
+          if ($is_push) { $do_windows = $true }
 
           $required = @()
           if ($do_android -or $is_push) {
             $required += "release-assets/InputBlocker-v$v.apk"
             $required += "release-assets/InputBlocker-v$v.zip"
           }
-          if ($do_windows -or $is_push) {
-            $required += "release-assets/InputBlockerSetup-v$v.exe"
+          if ($do_windows) {
+            $win_format = "${{ github.event.inputs.build_windows }}"
+            if ($is_push) { $win_format = "both" }
+            if ($win_format -eq 'both' -or $win_format -eq 'exe') { $required += "release-assets/InputBlockerSetup-v$v.exe" }
+            if ($win_format -eq 'both' -or $win_format -eq 'msi') { $required += "release-assets/InputBlockerSetup-v$v.msi" }
           }
           if ($required.Count -eq 0) {
             throw "No artifacts selected for build – nothing to release."

@@ -1,4 +1,5 @@
 import java.util.Calendar
+import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
     kotlin("multiplatform")
@@ -22,7 +23,14 @@ compose.desktop {
     application {
         mainClass = "com.inputblocker.pctool.MainKt"
         nativeDistributions {
-            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Exe, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
+            val winFormat = project.findProperty("winFormat")?.toString()?.lowercase() ?: "both"
+            val windowsTargets = when (winFormat) {
+                "exe" -> listOf(TargetFormat.Exe)
+                "msi" -> listOf(TargetFormat.Msi)
+                else  -> listOf(TargetFormat.Exe, TargetFormat.Msi)
+            }
+            val otherTargets = listOf(TargetFormat.Deb, TargetFormat.Dmg)
+            targetFormats(*(windowsTargets + otherTargets).toTypedArray())
             packageName = "InputBlocker"
             description = "PC Designer for InputBlocker - Configure ghost tap filtering regions"
             vendor = "Laviesss"
