@@ -17,7 +17,7 @@ import java.util.concurrent.TimeUnit
 
 class InputBlockerXposed : IXposedHookZygoteInit {
     companion object {
-        private const val TAG = "InputBlocker-Xposed"
+        private const val TAG = "InputBlocker-Hook"
         @Volatile private var cachedRegions = ArrayList<Region>()
         @Volatile private var cachedEnabled = true
         @Volatile private var testModeActive = false
@@ -57,7 +57,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     }
 
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
-        XposedBridge.log("InputBlocker Xposed module initialized")
+        XposedBridge.log("InputBlocker hook module initialized (Legacy Xposed API / Vector)")
         
         try {
             XposedHelpers.findAndHookMethod(

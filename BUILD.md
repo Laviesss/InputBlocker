@@ -67,7 +67,7 @@ If Gradle cannot locate the Android SDK, create a `local.properties` file in the
 ---
 
 ## 📂 Project Structure
-- `/android-app`: Android companion app and Xposed module.
+- `/android-app`: Android companion app and Vector/LSPosed hook module.
 - `/shared`: KMP core (Region logic, coordinate normalization).
 - `/pc-tool-kotlin`: Compose for Desktop visual designer.
 - `/module`: Root module files and scripts.

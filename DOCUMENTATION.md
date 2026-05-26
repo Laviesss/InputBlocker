@@ -43,11 +43,11 @@ A visual interface used to define blocking regions and tune filter thresholds. I
 ### 2. The Shared Core (KMP)
 A Kotlin Multiplatform module that ensures the mathematical definition of a `Region` (center, radius, bounds) is identical across both the PC and Android platforms.
 
-### 3. The Engine (Xposed Module)
-The enforcement layer. It hooks the Android system server to intercept touch events before they are dispatched to any application.
+### 3. The Engine (Vector/LSPosed Hook Module)
+The enforcement layer. It hooks the Android system server to intercept touch events before they are dispatched to any application. Built against the legacy Xposed API (`de.robv.android.xposed`), which is fully compatible with the Vector (formerly LSPosed) framework at runtime.
 
 **Data Flow**:
-`PC Tool` $\rightarrow$ `ADB Push` $\rightarrow$ `/config/profiles/default.conf` $\rightarrow$ `Xposed Engine` $\rightarrow$ `Touch Filter` $\rightarrow$ `Android OS`
+`PC Tool` $\rightarrow$ `ADB Push` $\rightarrow$ `/config/profiles/default.conf` $\rightarrow$ `Vector Hook Engine` $\rightarrow$ `Touch Filter` $\rightarrow$ `Android OS`
 
 ---
 

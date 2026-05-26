@@ -1,6 +1,7 @@
 [
   {
     "package": "android",
-    "name": "System Framework"
+    "name": "System Framework",
+    "description": "Required — InputBlocker hooks InputDispatcher in system_server to filter ghost taps at the OS level."
   }
 ]

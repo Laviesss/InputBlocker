@@ -138,13 +138,13 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-        <!-- Xposed Module Metadata -->
+        <!-- Module Metadata (Vector/LSPosed + Legacy Xposed compatible) -->
         <meta-data
             android:name="xposedmodule"
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="InputBlocker system-level touch blocking" />
+            android:value="InputBlocker — system-level ghost-tap filtering via Vector (LSPosed)" />
         <meta-data
             android:name="xposedminversion"
             android:value="82" />

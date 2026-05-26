@@ -18,7 +18,7 @@ object ProfileManager {
     fun applyProfile(packageName: String?) {
         val path = getProfilePath(packageName)
         Log.d("ProfileManager", "Applying profile: $path")
-        // The Xposed module already handles the loading based on package,
+        // The hook module (Vector/LSPosed) already handles loading based on package,
         // but we can trigger a manual reload here if needed.
     }
 }
