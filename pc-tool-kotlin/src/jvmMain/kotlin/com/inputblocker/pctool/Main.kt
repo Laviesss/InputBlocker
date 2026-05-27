@@ -470,35 +470,36 @@ fun App() {
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
                     
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
+Row(
+                        horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        val btnWidth = 120.dp
                         Button(onClick = {
                             adbHelper?.let {
                                 regions = it.getCurrentConfig()
                                 status = "Refreshed config"
                             }
-                        }, modifier = Modifier.width(90.dp)) { Text("Refresh") }
-                        Spacer(Modifier.width(8.dp))
+                        }, modifier = Modifier.width(btnWidth)) { Text("Refresh") }
+                        Spacer(Modifier.width(4.dp))
                         Button(onClick = {
                             if (regions.isNotEmpty()) {
                                 regions = regions.dropLast(1)
                                 selectedRegionIndex = null
                                 status = "Undo last region"
                             }
-                        }, modifier = Modifier.width(90.dp)) { Text("Undo") }
-                        Spacer(Modifier.width(8.dp))
+                        }, modifier = Modifier.width(btnWidth)) { Text("Undo") }
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 regions = emptyList()
                                 selectedRegionIndex = null
                                 status = "Cleared all regions"
                             }, 
-                            modifier = Modifier.width(90.dp),
+                            modifier = Modifier.width(btnWidth),
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFFC62828))
                         ) { Text("Clear All") }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 try {
@@ -511,9 +512,9 @@ fun App() {
                                 } catch (e: Exception) {
                                     status = "Save failed: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(110.dp)
+                            }, modifier = Modifier.width(btnWidth)
                         ) { Text("Save Profile") }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 try {
@@ -534,9 +535,9 @@ fun App() {
                                 } catch (e: Exception) {
                                     status = "Load failed: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(110.dp)
+                            }, modifier = Modifier.width(btnWidth)
                         ) { Text("Load Profile") }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 adbHelper?.let {
@@ -545,10 +546,9 @@ fun App() {
                                     showHeatmap = true
                                     status = "Analyzed ${taps.size} ghost taps"
                                 }
-                            }, modifier = Modifier.width(120.dp)
-                        ) { Text("Analyze Logs") }
-
-                        Spacer(Modifier.width(8.dp))
+                            }, modifier = Modifier.width(btnWidth)
+                        ) { Text("Analyze") }
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 try {
@@ -572,15 +572,15 @@ fun App() {
                                 } catch (e: Exception) {
                                     status = "Export error: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(110.dp)
-                        ) { Text("Export Preset") }
-                        Spacer(Modifier.width(8.dp))
+                            }, modifier = Modifier.width(btnWidth)
+                        ) { Text("Export") }
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 showGallery = true
-                            }, modifier = Modifier.width(110.dp)
+                            }, modifier = Modifier.width(btnWidth)
                         ) { Text("Gallery") }
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 try {
@@ -601,9 +601,9 @@ fun App() {
                                 } catch (e: Exception) {
                                     status = "Import error: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(110.dp)
-                        ) { Text("Import Preset") }
-                        Spacer(Modifier.width(8.dp))
+                            }, modifier = Modifier.width(btnWidth)
+                        ) { Text("Import") }
+                        Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 adbHelper?.let { helper ->
@@ -611,10 +611,11 @@ fun App() {
                                     status = if (success) "Config pushed!" else "Push failed"
                                 }
                             }, 
-                            modifier = Modifier.width(110.dp),
+                            modifier = Modifier.width(btnWidth),
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF2E7D32))
-                        ) { Text("Push to Device") }
+                        ) { Text("Push") }
                     }
+
                     
                     Text(
                         "Ready",
