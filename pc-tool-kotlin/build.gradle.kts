@@ -22,6 +22,7 @@ kotlin {
 compose.desktop {
     application {
         mainClass = "com.inputblocker.pctool.MainKt"
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             val winFormat = project.findProperty("winFormat")?.toString()?.lowercase() ?: "both"
             val windowsTargets = when (winFormat) {
@@ -49,8 +50,8 @@ compose.desktop {
                 dirChooser = true
                 // Install per-user (no admin required by default)
                 perUserInstall = true
-                // Show a console window so we can see crash output / stack traces
-                console = true
+                // Production: no console window (crash logs go to crash_logs/ folder)
+                console = false
             }
             macOS {
                 bundleID = "com.inputblocker.pctool"

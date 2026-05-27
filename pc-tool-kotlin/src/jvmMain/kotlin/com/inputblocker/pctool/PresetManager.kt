@@ -26,8 +26,7 @@ object PresetManager {
             
             file.writeText(content.toString())
             true
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
             false
         }
     }
@@ -55,8 +54,7 @@ object PresetManager {
                 }
             }
             Preset(name, enabled, safeMode, regions)
-        } catch (e: Exception) {
-            e.printStackTrace()
+        } catch (_: Exception) {
             null
         }
     }

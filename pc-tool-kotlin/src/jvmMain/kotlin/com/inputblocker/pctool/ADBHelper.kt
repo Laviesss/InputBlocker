@@ -109,7 +109,7 @@ class ADBHelper : AutoCloseable {
                 if (state.trim().equals("device", ignoreCase = true)) {
                     return true
                 }
-            } catch (e: Exception) { }
+            } catch (_: Exception) { /* device not reachable, will reconnect */ }
         }
         connect()
         return connected
