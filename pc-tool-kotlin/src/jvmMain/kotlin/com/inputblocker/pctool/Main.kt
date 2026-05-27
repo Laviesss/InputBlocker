@@ -475,12 +475,13 @@ Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         val btnWidth = 120.dp
+                        val btnHeight = 40.dp
                         Button(onClick = {
                             adbHelper?.let {
                                 regions = it.getCurrentConfig()
                                 status = "Refreshed config"
                             }
-                        }, modifier = Modifier.width(btnWidth)) { Text("Refresh") }
+                        }, modifier = Modifier.width(btnWidth).height(btnHeight).height(btnHeight)) { Text("Refresh") }
                         Spacer(Modifier.width(4.dp))
                         Button(onClick = {
                             if (regions.isNotEmpty()) {
@@ -488,7 +489,7 @@ Row(
                                 selectedRegionIndex = null
                                 status = "Undo last region"
                             }
-                        }, modifier = Modifier.width(btnWidth)) { Text("Undo") }
+                        }, modifier = Modifier.width(btnWidth).height(btnHeight).height(btnHeight)) { Text("Undo") }
                         Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
@@ -496,7 +497,7 @@ Row(
                                 selectedRegionIndex = null
                                 status = "Cleared all regions"
                             }, 
-                            modifier = Modifier.width(btnWidth),
+                            modifier = Modifier.width(btnWidth).height(btnHeight),
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFFC62828))
                         ) { Text("Clear All") }
                         Spacer(Modifier.width(4.dp))
@@ -512,7 +513,7 @@ Row(
                                 } catch (e: Exception) {
                                     status = "Save failed: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(btnWidth)
+                            }, modifier = Modifier.width(btnWidth).height(btnHeight)
                         ) { Text("Save Profile") }
                         Spacer(Modifier.width(4.dp))
                         Button(
@@ -535,7 +536,7 @@ Row(
                                 } catch (e: Exception) {
                                     status = "Load failed: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(btnWidth)
+                            }, modifier = Modifier.width(btnWidth).height(btnHeight)
                         ) { Text("Load Profile") }
                         Spacer(Modifier.width(4.dp))
                         Button(
@@ -546,7 +547,7 @@ Row(
                                     showHeatmap = true
                                     status = "Analyzed ${taps.size} ghost taps"
                                 }
-                            }, modifier = Modifier.width(btnWidth)
+                            }, modifier = Modifier.width(btnWidth).height(btnHeight)
                         ) { Text("Analyze") }
                         Spacer(Modifier.width(4.dp))
                         Button(
@@ -572,13 +573,13 @@ Row(
                                 } catch (e: Exception) {
                                     status = "Export error: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(btnWidth)
+                            }, modifier = Modifier.width(btnWidth).height(btnHeight)
                         ) { Text("Export") }
                         Spacer(Modifier.width(4.dp))
                         Button(
                             onClick = {
                                 showGallery = true
-                            }, modifier = Modifier.width(btnWidth)
+                            }, modifier = Modifier.width(btnWidth).height(btnHeight)
                         ) { Text("Gallery") }
                         Spacer(Modifier.width(4.dp))
                         Button(
@@ -601,7 +602,7 @@ Row(
                                 } catch (e: Exception) {
                                     status = "Import error: ${e.message}"
                                 }
-                            }, modifier = Modifier.width(btnWidth)
+                            }, modifier = Modifier.width(btnWidth).height(btnHeight)
                         ) { Text("Import") }
                         Spacer(Modifier.width(4.dp))
                         Button(
@@ -611,7 +612,7 @@ Row(
                                     status = if (success) "Config pushed!" else "Push failed"
                                 }
                             }, 
-                            modifier = Modifier.width(btnWidth),
+                            modifier = Modifier.width(btnWidth).height(btnHeight),
                             colors = ButtonDefaults.buttonColors(backgroundColor = Color(0xFF2E7D32))
                         ) { Text("Push") }
                     }
