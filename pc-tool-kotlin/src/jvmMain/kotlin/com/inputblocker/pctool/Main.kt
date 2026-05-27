@@ -627,9 +627,23 @@ fun App() {
 }
 
 fun main() {
-    // Write any uncaught exceptions to a crash_logs folder next to the app installation
-    val appPath = java.io.File(java.lang.ProcessHandle.current().info().command().orElse("."))
-    val installDir = appPath.parentFile ?: java.io.File(".")
+    // Resolve the installation directory so crash_logs goes next to the EXE, not inside the JRE
+    val installDir = try {
+        // Use an anonymous object's class to locate the app jar at runtime.
+        // In a jpackage'd app this lives at {installDir}/app/pc-tool-kotlin-jvm-*.jar
+        val jarUrl = (object {}).javaClass.protectionDomain.codeSource.location
+        val jarFile = java.io.File(jarUrl.toURI())
+        if (jarFile.name.endsWith(".jar")) {
+            // Navigate: .../app/some.jar → .../app/ → {installDir}
+            jarFile.parentFile?.parentFile ?: java.io.File(".")
+        } else {
+            // Development mode – class files, use CWD
+            java.io.File(".")
+        }
+    } catch (_: Exception) {
+        // Ultimate fallback
+        java.io.File(".")
+    }
     val crashDir = java.io.File(installDir, "crash_logs").also { it.mkdirs() }
     val crashLog = java.io.File(crashDir, "inputblocker_crash.log")
     val tee = System.out // keep original stdout
