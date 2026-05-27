@@ -1,3 +1,5 @@
+package com.inputblocker.pctool
+
 import androidx.compose.foundation.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
