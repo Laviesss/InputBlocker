@@ -48,9 +48,17 @@ tasks.register<Zip>("buildModule") {
         into("/")
     }
     
+    // Place renamed APK in common/ for the installer check
     from("android-app/app/build/outputs/apk/release/") {
-        include("*.apk")
-        into("/")
+        include("app-release.apk", "app-release-unsigned.apk")
+        rename { "InputBlocker.apk" }
+        into("common")
+    }
+    // Also place in system/app so the overlay auto-installs on boot
+    from("android-app/app/build/outputs/apk/release/") {
+        include("app-release.apk", "app-release-unsigned.apk")
+        rename { "InputBlocker.apk" }
+        into("system/app/InputBlocker")
     }
     
     archiveFileName.set("inputblocker.zip")
