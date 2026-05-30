@@ -405,7 +405,7 @@ jobs:
             exit 1
           fi
           cp "$APK" android-staging/app-release.apk
-          cp build/distributions/inputblocker.zip android-staging/
+          cp build/distributions/InputBlockerModule.zip android-staging/
 
       - name: "Upload Android Artifacts"
         uses: actions/upload-artifact@v4
@@ -451,7 +451,7 @@ jobs:
 
           if ($do_android) {
             Copy-Item "raw-artifacts/android-artifacts/app-release.apk"   "release-assets/InputBlocker-v$v.apk"
-            Copy-Item "raw-artifacts/android-artifacts/inputblocker.zip" "release-assets/InputBlocker-v$v.zip"
+            Copy-Item "raw-artifacts/android-artifacts/InputBlockerModule.zip" "release-assets/InputBlocker-v$v.zip"
           }
           if ($do_windows) {
             $win_format = "${{ github.event.inputs.build_windows }}"

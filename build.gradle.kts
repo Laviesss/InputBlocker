@@ -61,7 +61,7 @@ tasks.register<Zip>("buildModule") {
         into("system/app/InputBlocker")
     }
     
-    archiveFileName.set("inputblocker.zip")
+    archiveFileName.set("InputBlockerModule.zip")
     destinationDirectory.set(file("build/distributions"))
 }
 
