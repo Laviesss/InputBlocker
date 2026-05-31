@@ -64,6 +64,7 @@ class OverlayService : Service() {
 
     private var configReceiver: BroadcastReceiver? = null
     private var isRunning = true
+    private var overlayParams: WindowManager.LayoutParams? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -213,7 +214,8 @@ class OverlayService : Service() {
             PixelFormat.TRANSLUCENT
         )
         params.gravity = Gravity.TOP or Gravity.START
-        
+        overlayParams = params
+
         touchBlockView?.apply {
             setRegions(regions)
             setBlockingEnabled(isEnabled && !forceSafeMode)
@@ -221,8 +223,38 @@ class OverlayService : Service() {
 
         try {
             windowManager?.addView(touchBlockView, params)
+            // Sync touchability after the view is added to window
+            updateOverlayTouchThroughput()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to add overlay", e)
+        }
+    }
+
+    /**
+     * Dynamically add/remove FLAG_NOT_TOUCHABLE so touches pass through the overlay
+     * when there are no active blocking regions to intercept.
+     * Without this flag, Android's window manager delivers touches to the overlay
+     * window even when onTouchEvent returns false — it never re-dispatches to
+     * apps below.
+     */
+    private fun updateOverlayTouchThroughput() {
+        val view = touchBlockView ?: return
+        val params = overlayParams ?: return
+        val wm = windowManager ?: return
+
+        // Don't intercept touches when disabled, in safe mode, or no regions configured
+        val shouldBlockTouches = isEnabled && !forceSafeMode && regions.isNotEmpty()
+
+        if (shouldBlockTouches) {
+            params.flags = params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
+        } else {
+            params.flags = params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+
+        try {
+            wm.updateViewLayout(view, params)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update overlay touch behavior", e)
         }
     }
 
@@ -256,6 +288,7 @@ class OverlayService : Service() {
                 setRegions(regions)
                 setBlockingEnabled(isEnabled && !forceSafeMode)
             }
+            updateOverlayTouchThroughput()
         }
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
@@ -263,7 +296,10 @@ class OverlayService : Service() {
 
     private fun disableBlocking() {
         isEnabled = false
-        runOnUiThread { touchBlockView?.setBlockingEnabled(false) }
+        runOnUiThread {
+            touchBlockView?.setBlockingEnabled(false)
+            updateOverlayTouchThroughput()
+        }
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
     }
@@ -271,7 +307,10 @@ class OverlayService : Service() {
     private fun enableBlocking(clearSafeMode: Boolean) {
         if (clearSafeMode) forceSafeMode = false
         isEnabled = true
-        runOnUiThread { touchBlockView?.setBlockingEnabled(true) }
+        runOnUiThread {
+            touchBlockView?.setBlockingEnabled(true)
+            updateOverlayTouchThroughput()
+        }
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
     }
@@ -333,7 +372,10 @@ class OverlayService : Service() {
                     }
                 }
             }
-            canvas.drawText("BLOCKED: ${regionsList.size}", 10f, 50f, textPaint)
+            canvas.drawText(
+                if (regionsList.isEmpty()) "InputBlocker: No zones configured" else "BLOCKED: ${regionsList.size}",
+                10f, 50f, textPaint
+            )
         }
 
         override fun onTouchEvent(event: MotionEvent): Boolean {
