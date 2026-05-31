@@ -1,1 +1,40 @@
-{"version": "0.1.0", "versionCode": 100}
+{
+  "version": "0.1.0",
+  "versionCode": 100,
+  "apkUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v0.1.0/InputBlocker-v0.1.0.apk",
+  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v0.1.0/InputBlocker-v0.1.0.zip",
+  "changelog": "This is an early test release of InputBlocker v0.1.0. I am unable to test this build myself, so please report any issues you encounter.
+
+📌 What's new:
+- Overlay service no longer blocks all touches when no blocking zones are configured (fixes boot lockout issue)
+- Module APK is now placed at correct paths inside the ZIP for proper installation
+- Module ZIP renamed to InputBlockerModule.zip for clarity
+- PC Tool: All buttons now have uniform width and height
+- PC Tool: Console window disabled for production builds
+- PC Tool: Skiko restricted-method warning suppressed
+
+📱 Module testing:
+Flash the InputBlockerModule.zip in your root manager and verify the companion app installs and the overlay starts. Configure some zones via the PC tool and push them to the device.
+
+💻 PC Tool testing:
+Download the Windows/Linux/macOS build and verify the UI renders correctly. Try drawing zones, pushing configs via ADB, and analyzing logs.
+
+🐛 Please report:
+- Installation failures (module not flashing, app not installing)
+- Overlay not starting or behaving incorrectly
+- PC Tool crashes or UI glitches
+- Any boot loops or instability
+
+All feedback is appreciated as I cannot test these builds myself. Thank you!
+
+---
+### Requirements
+| | |
+|---|---|
+| **Root** | Magisk / KernelSU / APatch / SuperSU |
+| **Framework** | LSPosed (recommended) |
+| **Android** | 6.0+ (API 23) |
+| **Version Code** | 100 |",
+  "apkSha256": "0292573872f085d117e3af8d0f3e3eb7c69a05797c960777b663fcf4ff01611e",
+  "zipSha256": "e48832fc0fa16252b520b09df12fe74c310468063d7b6cc33ea900fdd50ebe2c"
+}
