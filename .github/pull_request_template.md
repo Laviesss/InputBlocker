@@ -1,12 +1,28 @@
 ## Description
+
 Briefly describe the changes introduced by this PR.
 
 ## Related Issue
-Fixes # (issue number)
+
+Fixes #(issue-number)
+
+## Type of Change
+
+- [ ] Bug fix
+- [ ] New feature
+- [ ] Documentation update
+- [ ] Refactoring / code quality
+- [ ] CI / build system
 
 ## Checklist
-- [ ] Tested on a physical Android device.
-- [ ] Documentation updated (README, DOCUMENTATION, etc.).
+
+- [ ] Tested on a **physical Android device** (emulators cannot reproduce ghost taps).
 - [ ] No unsigned APKs or debug builds committed.
-- [ ] SemVer version bump noted in CHANGELOG.md.
-- [ ] No "AI slop" or redundant code added.
+- [ ] Documentation updated (README, DOCUMENTATION, BUILD — as applicable).
+- [ ] Version bump noted in `CHANGELOG.md` if user-facing behavior changed.
+- [ ] No `as Any` casts, `@Suppress` annotations, or empty `catch` blocks added to production code.
+- [ ] Code follows established project patterns.
+
+## Testing Notes
+
+Describe how you tested these changes (device, Android version, root manager, steps performed).
