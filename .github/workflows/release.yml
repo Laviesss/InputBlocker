@@ -555,17 +555,27 @@ jobs:
           APK_SHA=$(sha256sum "release-assets/InputBlocker-v$V.apk" | awk '{print $1}')
           ZIP_SHA=$(sha256sum "release-assets/InputBlocker-v$V.zip" | awk '{print $1}')
           mkdir -p pages-deploy
-          cat > pages-deploy/update.json <<EOF
-          {
-            "version": "$V",
-            "versionCode": $C,
-            "apkUrl": "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.apk",
-            "zipUrl": "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.zip",
-            "changelog": "${{ needs.validate.outputs.release_notes }}",
-            "apkSha256": "$APK_SHA",
-            "zipSha256": "$ZIP_SHA"
-          }
-          EOF
+          # Write changelog to a temp file so jq can read it verbatim
+          cat > /tmp/changelog.md <<'CHANGELOG_EOF'
+${{ needs.validate.outputs.release_notes }}
+CHANGELOG_EOF
+          jq -n \
+            --arg version "$V" \
+            --argjson versionCode "$C" \
+            --arg apkUrl "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.apk" \
+            --arg zipUrl "https://github.com/$REPO/releases/download/v$V/InputBlocker-v$V.zip" \
+            --rawfile changelog /tmp/changelog.md \
+            --arg apkSha256 "$APK_SHA" \
+            --arg zipSha256 "$ZIP_SHA" \
+            '{
+              "version": $version,
+              "versionCode": $versionCode,
+              "apkUrl": $apkUrl,
+              "zipUrl": $zipUrl,
+              "changelog": $changelog,
+              "apkSha256": $apkSha256,
+              "zipSha256": $zipSha256
+            }' > pages-deploy/update.json
 
       - name: "Publish update.json via GitHub Pages"
         if: github.event_name == 'push' || github.event.inputs.build_android == 'true'
