@@ -76,7 +76,9 @@ object AdaptiveBlockingManager {
                     }
                 }
             }
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load current regions: ${e.message}")
+        }
         return regions
     }
 
@@ -92,7 +94,9 @@ object AdaptiveBlockingManager {
                     val y = coordStr.substringAfter("Y: ").toFloat()
                     touches.add(Pair(x, y))
                 }
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to parse log line: ${e.message}")
+            }
         }
         return touches
     }

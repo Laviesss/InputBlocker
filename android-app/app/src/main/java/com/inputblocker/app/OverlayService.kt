@@ -154,7 +154,7 @@ class OverlayService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("InputBlocker")
             .setContentText(statusText)
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Toggle", togglePendingIntent)
@@ -329,7 +329,9 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
-        configReceiver?.let { try { unregisterReceiver(it) } catch (e: Exception) {} }
+        configReceiver?.let { try { unregisterReceiver(it) } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering config receiver", e)
+        } }
         touchBlockView?.let { windowManager?.removeView(it) }
     }
 

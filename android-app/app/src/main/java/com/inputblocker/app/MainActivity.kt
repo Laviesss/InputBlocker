@@ -206,13 +206,26 @@ class MainActivity : AppCompatActivity() {
             toggleSafeMode()
         }
         btnActionSync.setOnClickListener {
-            Toast.makeText(this, "Syncing with device...", Toast.LENGTH_SHORT).show()
+            loadConfig()
+            updateUI()
+            Toast.makeText(this, "Configuration synced from device.", Toast.LENGTH_SHORT).show()
         }
         btnActionExport.setOnClickListener {
             exportCurrentConfig()
         }
         btnActionTest.setOnClickListener {
-            Toast.makeText(this, "Running test mode...", Toast.LENGTH_SHORT).show()
+            val testFlag = File(InputBlockerServiceManager.getModulePath(this) + "/config/test_mode")
+            if (testFlag.exists()) {
+                testFlag.delete()
+                Toast.makeText(this, "Test mode deactivated.", Toast.LENGTH_SHORT).show()
+            } else {
+                try { testFlag.createNewFile() } catch (e: Exception) {}
+                Toast.makeText(this, "Test mode active: All touches will be blocked for 60s.", Toast.LENGTH_LONG).show()
+                // Auto-cleanup after 60s
+                android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                    if (testFlag.exists()) testFlag.delete()
+                }, 60000)
+            }
         }
         btnViewLog.setOnClickListener {
             val intent = Intent(this, BlockLogActivity::class.java)
@@ -227,10 +240,10 @@ class MainActivity : AppCompatActivity() {
             showBackupDialog()
         }
         btnImportPreset.setOnClickListener {
-            importPreset()
+            showImportPresetDialog()
         }
         btnExportPreset.setOnClickListener {
-            exportPreset()
+            showExportPresetDialog()
         }
         btnCommunityGallery.setOnClickListener {
             val intent = Intent(this, CommunityGalleryActivity::class.java)
@@ -333,7 +346,7 @@ class MainActivity : AppCompatActivity() {
         val version = BuildConfig.VERSION_NAME
         AlertDialog.Builder(this)
             .setTitle("About InputBlocker")
-            .setMessage("InputBlocker v$version\n\nBlock ghost taps and unwanted touch inputs.\n\nCreated by Laviesss")
+            .setMessage("InputBlocker v$version\n\nBlock ghost taps and unwanted touch inputs.\n\nCreated by Laviesss\n\n\u2022 Testing phase: All builds show v0.1.0 regardless of changes.\n\u2022 Report issues on GitHub for prompt attention.")
             .setPositiveButton("OK", null)
             .show()
     }
@@ -495,16 +508,22 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Auto-detection sequence with hardcoded delays for device wake/unlock.
+     * CAUTION: These sleeps (500ms/2000ms/1000ms) are tuned for typical devices.
+     * Slow or heavily-loaded devices may need increased values.
+     * Modify the Thread.sleep() calls if detection fails on your hardware.
+     */
     private fun startAutoDetection() {
         Thread {
             try {
                 Log.i("MainActivity", "Starting Auto-Detection sequence...")
                 InputBlockerServiceManager.runRootCommand("settings put secure lockscreen.disabled 1")
-                Thread.sleep(500)
-                InputBlockerServiceManager.runRootCommand("input keyevent 26")
-                Thread.sleep(2000)
-                InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP")
-                Thread.sleep(1000)
+                Thread.sleep(500)   // Wait for lockscreen setting to apply
+                InputBlockerServiceManager.runRootCommand("input keyevent 26")       // Screen off
+                Thread.sleep(2000)  // Wait for display to fully power down
+                InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP")  // Wake
+                Thread.sleep(1000)  // Wait for screen to become responsive
                 runOnUiThread {
                     val intent = Intent(this, SensingActivity::class.java)
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -623,85 +642,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun optimizeRegions() {
-        try {
-            val logFile = File(InputBlockerServiceManager.getModulePath(this) + "/config/blocklog.txt")
-            if (!logFile.exists()) {
-                Toast.makeText(this, "No block log found. Please use the app while blocking is active first.", Toast.LENGTH_LONG).show()
-                return
-            }
-
-            val lines = logFile.readLines()
-            if (lines.isEmpty()) {
-                Toast.makeText(this, "Block log is empty.", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            var optimizedCount = 0
-            val newRegions = regions.map { region ->
-                val hits = lines.filter { line ->
-                    try {
-                        // Format: "HH:mm:ss | X: 0.123, Y: 0.456 | Region: [x1, y1, x2, y2]"
-                        val parts = line.split(" | ")
-                        if (parts.size < 2) return@filter false
-                        
-                        val coords = parts[1].split(", ")
-                        val x = coords[0].substringAfter("X: ").toFloat()
-                        val y = coords[1].substringAfter("Y: ").toFloat()
-                        
-                        x >= region.x1 && x <= region.x2 && y >= region.y1 && y <= region.y2
-                    } catch (e: Exception) {
-                        false
-                    }
-                }
-
-                if (hits.size >= 10) {
-                    var minX = 1.0f
-                    var maxX = 0.0f
-                    var minY = 1.0f
-                    var maxY = 0.0f
-                    
-                    hits.forEach { line ->
-                        try {
-                            val coords = line.split(" | ")[1].split(", ")
-                            val x = coords[0].substringAfter("X: ").toFloat()
-                            val y = coords[1].substringAfter("Y: ").toFloat()
-                            if (x < minX) minX = x
-                            if (x > maxX) maxX = x
-                            if (y < minY) minY = y
-                            if (y > maxY) maxY = y
-                        } catch (e: Exception) {}
-                    }
-                    
-                    val padding = 0.005f
-                    optimizedCount++
-                    Region(
-                        (minX - padding).coerceAtLeast(0.0f),
-                        (minY - padding).coerceAtLeast(0.0f),
-                        (maxX + padding).coerceAtMost(1.0f),
-                        (maxY + padding).coerceAtMost(1.0f)
-                    )
-                } else {
-                    region
-                }
-            }.toMutableList()
-
-            regions.clear()
-            regions.addAll(newRegions)
-            saveConfig()
-            updateUI()
-            
-            Toast.makeText(this, "Optimization complete: $optimizedCount regions shrunk based on usage.", Toast.LENGTH_LONG).show()
-            
-            // Optional: Clear log after optimization to start fresh
-            // logFile.delete()
-            
-        } catch (e: Exception) {
-            Log.e("MainActivity", "Optimization failed", e)
-            Toast.makeText(this, "Optimization failed: ${e.message}", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private fun showBackupDialog() {
         AlertDialog.Builder(this)
             .setTitle("Backup & Restore")
@@ -725,7 +665,7 @@ class MainActivity : AppCompatActivity() {
         // For this module, we'll search for the most recent backup in the backup folder.
         try {
             val backupDir = File("/storage/emulated/0/InputBlocker/backups")
-            val latestBackup = backupDir.listFiles { _, name -> name.startsWith("backup_") && name.endsWith(".txt") }
+            val latestBackup = backupDir.listFiles { _, name -> name.startsWith("backup_") && name.endsWith(".tar.gz") }
                 ?.maxByOrNull { it.lastModified() }
 
             if (latestBackup == null) {
@@ -752,9 +692,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun exportPreset() {
+    private fun showExportPresetDialog() {
+        val input = EditText(this).apply { hint = "Preset name (e.g. gaming, social)" }
+        AlertDialog.Builder(this)
+            .setTitle("Export Preset")
+            .setMessage("Enter a name for this preset:")
+            .setView(input)
+            .setPositiveButton("Export") { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isEmpty()) {
+                    Toast.makeText(this, "Name cannot be empty", Toast.LENGTH_SHORT).show()
+                    return@setPositiveButton
+                }
+                exportPreset(name)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    private fun exportPreset(name: String = "my_preset") {
         try {
-            val presetFile = File("/storage/emulated/0/InputBlocker/presets/my_preset.ibpreset")
+            val presetFile = File("/storage/emulated/0/InputBlocker/presets/${name}.ibpreset")
             presetFile.parentFile?.mkdirs()
             
             val content = StringBuilder()
@@ -767,17 +725,39 @@ class MainActivity : AppCompatActivity() {
             }
             
             presetFile.writeText(content.toString())
-            Toast.makeText(this, "Preset exported to /InputBlocker/presets/my_preset.ibpreset", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Preset exported to /InputBlocker/presets/${name}.ibpreset", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Export failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun importPreset() {
+    private fun showImportPresetDialog() {
         try {
-            val presetFile = File("/storage/emulated/0/InputBlocker/presets/my_preset.ibpreset")
+            val presetDir = File("/storage/emulated/0/InputBlocker/presets")
+            val presets = presetDir.listFiles { _, name -> name.endsWith(".ibpreset") }
+            
+            if (presets.isNullOrEmpty()) {
+                Toast.makeText(this, "No preset files found in /InputBlocker/presets/", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            val names = presets.map { it.name.removeSuffix(".ibpreset") }.toTypedArray()
+            AlertDialog.Builder(this)
+                .setTitle("Import Preset")
+                .setItems(names) { _, which ->
+                    importPreset(presets[which])
+                }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Error loading presets: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun importPreset(presetFile: File) {
+        try {
             if (!presetFile.exists()) {
-                Toast.makeText(this, "No preset file found at /InputBlocker/presets/my_preset.ibpreset", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Preset file not found.", Toast.LENGTH_SHORT).show()
                 return
             }
 

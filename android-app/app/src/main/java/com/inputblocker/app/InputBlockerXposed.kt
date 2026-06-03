@@ -20,6 +20,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private const val TAG = "InputBlocker-Hook"
         @Volatile private var cachedRegions = ArrayList<Region>()
         @Volatile private var cachedEnabled = true
+        @Volatile private var cachedLsposedMode = true
         @Volatile private var testModeActive = false
         private var lastLoadTime = 0L
         private const val CACHE_TTL = 10000L // 10 seconds for standard config
@@ -50,7 +51,9 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             file.appendText("${parts[1]}\n")
                             if (file.length() > 204800) file.delete() // 200KB rotation
                         }
-                    } catch (e: Exception) {}
+                    } catch (e: Exception) {
+                            android.util.Log.w(TAG, "Logger thread error: ${e.message}")
+                        }
                 }
             }, "InputBlocker-Logger").start()
         }
@@ -72,6 +75,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             updateConfigIfNeeded(now)
                             
                             if (!cachedEnabled) return
+                            if (!cachedLsposedMode) return // LSPosed mode disabled — OverlayService handles blocking
 
                             // Use index access for performance; dispatchMotionLocked(IBinder, MotionEvent, ...)
                             val motionEvent = param.args.getOrNull(1) as? MotionEvent ?: return
@@ -175,14 +179,16 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                 lastMetricsUpdate = now
             }
         } catch (e: Exception) {
-            // Silently fail to avoid spamming logs on every touch if system is busy
+            android.util.Log.w(TAG, "Failed to update display metrics: ${e.message}")
         }
     }
 
     private fun logLiveEvent(type: String, nx: Float, ny: Float) {
         try {
             android.util.Log.i("InputBlockerLive", "$type|$nx|$ny")
-        } catch (e: Exception) { }
+        } catch (e: Exception) {
+            XposedBridge.log("$TAG: logLiveEvent failed: ${e.message}")
+        }
     }
 
     private fun logLatency(nanos: Long) {
@@ -201,7 +207,9 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         XposedBridge.log("$TAG CRITICAL CRASH: ${t.message}")
         try {
             File(CRASH_FLAG_PATH).writeText("1")
-        } catch (e: Exception) {}
+        } catch (e: Exception) {
+            XposedBridge.log("$TAG: Failed to write crash flag: ${e.message}")
+        }
     }
 
     private fun updateConfigIfNeeded(now: Long) {
@@ -233,19 +241,22 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             
             val newRegions = ArrayList<Region>()
             var newEnabled = true
+            var newLsposedMode = true
 
             BufferedReader(FileReader(file)).use { reader ->
                 reader.lineSequence().forEach { line ->
                     val trimmed = line.trim()
-                    if (trimmed.startsWith("enabled=")) {
-                        newEnabled = trimmed.substring(8) == "1"
-                    } else if (trimmed.isNotEmpty() && !trimmed.startsWith("#")) {
-                        Region.fromString(trimmed)?.let { newRegions.add(it) }
+                    when {
+                        trimmed.startsWith("enabled=") -> newEnabled = trimmed.substring(8) == "1"
+                        trimmed.startsWith("lsposed_mode=") -> newLsposedMode = trimmed.substring(13) == "1"
+                        trimmed.isNotEmpty() && !trimmed.startsWith("#") ->
+                            Region.fromString(trimmed)?.let { newRegions.add(it) }
                     }
                 }
             }
             cachedRegions = newRegions
             cachedEnabled = newEnabled
+            cachedLsposedMode = newLsposedMode
             lastLoadTime = now
         } catch (e: Exception) {
             XposedBridge.log("$TAG: Error loading config: ${e.message}")
