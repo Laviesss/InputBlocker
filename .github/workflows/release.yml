@@ -219,23 +219,7 @@ jobs:
             }
           }
 
-          $footer = @"
-
----
-### 📥 Requirements
-| | |
-|---|---|
-| **Root** | Magisk / KernelSU / APatch / SuperSU |
-| **Framework** | LSPosed (recommended) – or Overlay Mode (no framework) |
-| **Android** | 6.0+ (API 23) |
-| **Version Code** | $c |
-
-### 🆘 Support
-- **Issues**: https://github.com/${{ github.repository }}/issues
-- **Security**: https://github.com/${{ github.repository }}/security/advisories
-- **Documentation**: https://github.com/${{ github.repository }}#readme
-"@
-          $body += $footer
+          $body += "`n`n___`n### 📥 Requirements`n| | |`n|---|---|`n| **Root** | Magisk / KernelSU / APatch / SuperSU |`n| **Framework** | LSPosed (recommended) – or Overlay Mode (no framework) |`n| **Android** | 6.0+ (API 23) |`n| **Version Code** | $c |`n`n### 🆘 Support`n- **Issues**: https://github.com/${{ github.repository }}/issues`n- **Security**: https://github.com/${{ github.repository }}/security/advisories`n- **Documentation**: https://github.com/${{ github.repository }}#readme"
 
           echo "BODY<<EOF" >> $env:GITHUB_OUTPUT
           echo $body >> $env:GITHUB_OUTPUT
@@ -609,9 +593,7 @@ jobs:
           ZIP_SHA=$(sha256sum "release-assets/InputBlocker-v$V.zip" | awk '{print $1}')
           mkdir -p pages-deploy
           # Write changelog to a temp file so jq can read it verbatim
-          cat > /tmp/changelog.md <<'CHANGELOG_EOF'
-${{ needs.validate.outputs.release_notes }}
-CHANGELOG_EOF
+          echo "${{ needs.validate.outputs.release_notes }}" > /tmp/changelog.md
           jq -n \
             --arg version "$V" \
             --argjson versionCode "$C" \
