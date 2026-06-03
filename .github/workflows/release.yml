@@ -167,22 +167,10 @@ jobs:
           $c = "${{ steps.resolve-version.outputs.VERSION_CODE }}"
           $manual = "${{ github.event.inputs.release_notes }}"
 
-          # ── Testing phase banner ──────────────────────────────
-          $testingBanner = @"
-> **⚠️ TESTING PHASE**
-> InputBlocker is in active testing. All pre-release builds use version `0.1.0`
-> regardless of changes included. This ensures consistent distribution while
-> core functionality is validated. Visit [the project](https://github.com/${{ github.repository }})
-> for the latest stable release.
->
-> **Changes listed below are relative to the last pre-release.**
-
-"@
-
-          $body = $testingBanner
+          $body = ""
 
           if (-not [string]::IsNullOrWhiteSpace($manual)) {
-            $body += $manual
+            $body = $manual
           } else {
             $prev = git describe --tags --abbrev=0 HEAD^ 2>$null
             if ($prev) {
