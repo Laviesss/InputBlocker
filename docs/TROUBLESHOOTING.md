@@ -71,7 +71,7 @@ You should see: `Hook registered: dispatchMotionLocked`
 ```bash
 adb shell cat /data/adb/modules/inputblocker/config/profiles/default.conf
 ```
-Check if `minPressure` is set too high (e.g., > 0.3 blocks many real taps).
+Check if `minPressure` is set too high (e.g., > 0.3 blocks many real taps — Android's "pressure" reflects contact patch size, so real fingers typically produce 0.15–1.0).
 
 ---
 
@@ -87,7 +87,7 @@ Check if `minPressure` is set too high (e.g., > 0.3 blocks many real taps).
 | No blocking zones defined | `cat default.conf` shows no regions? | Run auto-detection or add zones |
 | Wrong package profile | Is foreground app profile loaded? | Check `logcat \| grep InputBlocker:Profile` |
 | Regions too small | Ghost taps outside defined zones | Enlarge zones or add coverage |
-| Pressure threshold too low | `minPressure < 0.05` | Set to 0.15 |
+| Contact area threshold too low | `minPressure < 0.05` | Set to 0.15 |
 | Duration threshold too low | `maxDuration < 100ms` | Set to 300ms |
 
 **Verify hook is live:**

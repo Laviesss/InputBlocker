@@ -24,7 +24,7 @@ InputBlocker is a system-level utility that mitigates **ghost taps** (phantom to
 
 Hardware failure in touch panels often manifests as "ghost taps" — electrical noise that the system interprets as touch events. These events typically share three characteristics:
 
-1. **Low Pressure** — They lack the physical force of a human finger.
+1. **Small Contact Area** — Ghost taps from electrical noise produce a tiny capacitive contact patch, reported as low "pressure" by `MotionEvent.getPressure()`.
 2. **Abnormal Duration** — They are often near-instantaneous spikes or unnaturally long static holds.
 3. **Localization** — They tend to cluster in specific "dead zones" on the panel.
 
@@ -33,15 +33,16 @@ Hardware failure in touch panels often manifests as "ghost taps" — electrical 
 Rather than blocking an entire screen region unconditionally, InputBlocker applies a **conditional filter**:
 
 - **Standard Blocking** — All input in the region is dropped unconditionally.
-- **Filtered Blocking** — Input is dropped **only if** it matches hardware noise criteria (pressure below threshold OR duration exceeds threshold). This preserves screen usability in the affected area.
+- **Filtered Blocking** — Input is dropped **only if** it matches hardware noise criteria (contact area below threshold OR duration exceeds threshold). This preserves screen usability in the affected area.
 
 ### The Formula
 
 ```
-Block = (Pressure < MinPressure) OR (Duration > MaxDuration)
-```
+Block = (ContactArea < MinPressure) OR (Duration > MaxDuration)
 
-- **`MinPressure`**: Filters out low-pressure electrical noise.
+> **Note:** On capacitive screens `MotionEvent.getPressure()` reflects **touch contact area** (patch size), not physical force. The `minPressure` config parameter name follows Android's API naming.
+
+- **`MinPressure`**: Filters out ghost taps with very small capacitive contact area.
 - **`MaxDuration`**: Filters out "stuck" pixels simulating a long-press.
 
 ---

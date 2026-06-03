@@ -114,7 +114,7 @@ InputBlocker filters touches at the OS input level based on physical properties 
 | Feature | Description |
 |---|---|
 | **System-level filtering** | Hooks `InputDispatcher.dispatchMotionLocked` in `system_server` — touches blocked before apps see them |
-| **Surgical blocking** | Filter by pressure (ghost taps have low pressure) + duration (stuck pixels long-press) |
+| **Surgical blocking** | Filter by touch contact area (ghost taps have tiny contact patches, reported as low "pressure" by Android) + duration (stuck pixels long-press) |
 | **Shape support** | Rectangle, Circle, and Ellipse regions — not just squares |
 | **Exclude zones** | Create "holes" in blocked regions for buttons you need |
 | **Per-app profiles** | Different blocking configs for different applications |
@@ -162,14 +162,16 @@ Ghost taps from failing digitizers have three telltale characteristics:
 
 | Signal | Ghost Tap | Real Finger |
 |---|---|---|
-| **Pressure** | Very low (< 0.10) | Normal (0.15 – 1.00) |
+| **Contact Area** | Tiny electrical spike → very low "pressure" (< 0.10) | Full finger pad → normal "pressure" (0.15 – 1.00) |
 | **Duration** | Instant spike OR stuck hold | Brief, natural tap |
 | **Location** | Clusters in dead zones | Anywhere on screen |
+
+> **Note on "Pressure":** Capacitive touchscreens don't measure physical force. Android's `MotionEvent.getPressure()` reports **touch contact area** — how many capacitive nodes the finger covers. A larger contact patch = higher value. Electrical noise from a failing digitizer produces a minimal contact signature, so the value is very low. This still makes it an effective filter signal.
 
 ### The Filter Formula
 
 ```
-BLOCK if (Pressure < MinPressure) OR (Duration > MaxDuration)
+BLOCK if (ContactArea < MinPressure) OR (Duration > MaxDuration)
 ```
 
 ```
@@ -189,8 +191,8 @@ BLOCK if (Pressure < MinPressure) OR (Duration > MaxDuration)
                 │ YES
                 ▼
         ┌───────────────┐
-        │ Pressure <     │
-        │ threshold?     │──YES──> BLOCK (ghost)
+        │ Contact area   │
+        │ < threshold?   │──YES──> BLOCK (ghost)
         │ OR             │
         │ Duration >     │
         │ max?           │

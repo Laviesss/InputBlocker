@@ -155,8 +155,10 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         val pressure = event.pressure
         val duration = event.eventTime - event.downTime
         
-        // Block if pressure is low OR if the tap duration exceeds the region's specified threshold
-        // (Ghost taps often have very low pressure or abnormally long durations)
+        // Block if touch contact area is small OR if duration exceeds the threshold.
+        // On capacitive screens MotionEvent.pressure reflects contact area (TouchMajor/
+        // TouchMinor), not physical force. Ghost taps from failing digitizers produce
+        // a tiny electrical contact patch, so the pressure value is near-zero.
         return pressure < region.minPressure || duration > region.maxDuration
     }
 

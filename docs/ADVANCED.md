@@ -32,7 +32,7 @@ lsposed_mode=1
 | **type** | `0`, `1`, `2` | `0` = rectangle, `1` = circle, `2` = ellipse |
 | **x1, y1** | `0.0` – `1.0` | Top-left corner (normalized) |
 | **x2, y2** | `0.0` – `1.0` | Bottom-right corner (normalized) |
-| **minPressure** | `0.0` – `1.0` | Touch pressure threshold — ghosts below this are blocked |
+| **minPressure** | `0.0` – `1.0` | Touch contact area threshold — ghosts with smaller contact patches (lower "pressure") are blocked. On capacitive screens Android's "pressure" is actually contact patch size, not physical force. |
 | **maxDuration** | ms | Touch duration threshold — touches longer than this are blocked (`0` = disabled) |
 
 ### Example: Block a right-side strip, exclude a button in it

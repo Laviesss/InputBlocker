@@ -68,7 +68,7 @@ Or open the InputBlocker companion app — it should show "Module active" on the
 3. Launch the PC Designer
 4. Click **Connect ADB** — your device screen appears in the preview
 5. Draw block zones over areas where ghost taps occur
-6. Tune pressure and duration thresholds per zone
+6. Tune contact area (minPressure) and duration thresholds per zone
 7. Click **Push Config** to send the config to your device
 
 ### Method 3: Manual Config (For Advanced Users)

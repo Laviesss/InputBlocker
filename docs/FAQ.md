@@ -24,14 +24,14 @@ A: Yes — the companion app has "Overlay Mode" which uses a WindowManager overl
 ## Functionality
 
 **Q: How does InputBlocker differ from just blocking a screen region?**  
-A: Simple screen blocking is binary — the entire region is either dead or alive. InputBlocker adds two extra dimensions: **pressure filtering** (ghost taps have very low pressure) and **duration filtering** (stuck pixels produce unnaturally long holds). This means real finger touches in a "blocked" zone still work if they have normal pressure/duration.
+A: Simple screen blocking is binary — the entire region is either dead or alive. InputBlocker adds two extra dimensions: **contact area filtering** (ghost taps have tiny capacitive patches reported as low "pressure" by Android) and **duration filtering** (stuck pixels produce unnaturally long holds). This means real finger touches in a "blocked" zone still work if they have normal contact area and duration.
 
 **Q: Can I have different configs for different apps?**  
 A: Yes. Place a config named `<package_name>.conf` in the `profiles/` directory. The engine polls the foreground app every 2 seconds and loads the matching profile. If none matches, `default.conf` is used.
 
 **Q: What's the difference between a block zone and an exclude zone?**  
 A: 
-- **Block zone**: Touches here are filtered (blocked if pressure/duration conditions match)
+- **Block zone**: Touches here are filtered (blocked if contact area/duration conditions match)
 - **Exclude zone**: A "hole" inside a block zone — touches here always pass through
 
 Exclude zones let you block a large area while keeping specific UI elements (like a keyboard or a button) fully functional.

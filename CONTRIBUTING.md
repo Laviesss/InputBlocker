@@ -66,7 +66,7 @@ InputBlocker works at the system input level, so testing requires:
 
 | Area | What to Check |
 |---|---|
-| **Filter tuning** | Does `minPressure` or `maxDuration` block ghost taps without affecting real touches? |
+| **Filter tuning** | Do the contact area (`minPressure`) and duration (`maxDuration`) thresholds block ghosts without affecting real touches? |
 | **Emergency reset** | Trigger the gesture combo. Does blocking disable immediately? |
 | **Profile switching** | Do per-app configs load correctly when you switch apps? |
 | **Performance** | Is there any perceptible input lag or unusual battery drain? |
