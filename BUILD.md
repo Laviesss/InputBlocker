@@ -1,16 +1,14 @@
 # Build Instructions
 
-InputBlocker is a monorepo containing the Android Engine (Xposed/LSPosed hook), the PC Designer (Kotlin/Compose Desktop), and a shared Kotlin Multiplatform (KMP) core.
-
----
+InputBlocker is a monorepo. It contains the Android Engine (Xposed/LSPosed hook), the PC Designer (Kotlin/Compose Desktop), and a shared Kotlin Multiplatform (KMP) core.
 
 ## Requirements
 
 | Dependency | Version | Notes |
 |---|---|---|
-| **JDK** | 17 | Required. Use Eclipse Temurin or equivalent. |
-| **Android SDK** | API 34 (compile/target), API 23 (min) | Set via `ANDROID_HOME` or `local.properties`. |
-| **Gradle** | 8.x | Wrapper included — no manual install needed. |
+| **JDK** | 17 | Required. Use Eclipse Temurin or a similar distribution. |
+| **Android SDK** | API 34 (compile/target), API 23 (min) | Set this through `ANDROID_HOME` or `local.properties`. |
+| **Gradle** | 8.x | The wrapper is included, so you don't need a manual install. |
 
 ### Environment Setup
 
@@ -26,18 +24,16 @@ $env:JAVA_HOME = "C:\path\to\jdk17"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 ```
 
-If the Android SDK is not autodetected, create a `local.properties` at the project root:
+If the Android SDK isn't found automatically, create a `local.properties` file at the project root:
 ```
 sdk.dir=C:\\Users\\YourUser\\AppData\\Local\\Android\\Sdk
 ```
-
----
 
 ## Building
 
 ### 🔹 Build All Artifacts (Recommended)
 
-Produces the APK, PC tool binaries, and module ZIP in a single pass:
+This produces the APK, PC tool binaries, and module ZIP in one go.
 
 **Windows (PowerShell):**
 ```powershell
@@ -51,30 +47,45 @@ Produces the APK, PC tool binaries, and module ZIP in a single pass:
 
 ### 🔹 Individual Builds
 
-Build only the component you need:
+Build only the part you need:
 
 | Command | Artifact |
 |---|---|
 | `buildAndroid` | Android APK |
 | `buildPC` | PC Designer EXE / DEB / DMG |
-| `buildModule` | Root module ZIP (requires prior Android build) |
+| `buildModule` | Root module ZIP (needs a prior Android build) |
 
 ```bash
 ./gradlew buildAndroid -PVERSION_NAME="1.0.0" -PVERSION_CODE=10
 ```
 
-### Version Parameters
+### 🔹 Docker Build (CI Reproducibility)
 
-Both version flags are **required** — the build will fail without them:
+If you want a clean, reproducible environment, use the provided Dockerfile. This ensures your build matches the CI pipeline exactly.
+
+```bash
+docker build -t inputblocker-builder .
+docker run --rm -v $(pwd):/home/gradle/project -w /home/gradle/project inputblocker-builder ./gradlew buildAll -PVERSION_NAME="0.1.0" -PVERSION_CODE=1
+```
+
+## Version Parameters
+
+Both version flags are required. The build will fail if you don't include them.
 
 | Flag | Type | Example | Purpose |
 |---|---|---|---|
-| `-PVERSION_NAME` | String | `"1.0.0"` | User-visible version string |
-| `-PVERSION_CODE` | Int | `10` | Internal integer for update tracking |
+| `-PVERSION_NAME` | String | `"1.0.0"` | The version string users see. |
+| `-PVERSION_CODE` | Int | `10` | Internal integer for tracking updates. |
 
-> **Note on testing phase:** During the active testing phase, the `VERSION_NAME` will remain `0.1.0` regardless of changes. This ensures consistent distribution until core functionality is validated. See the release workflow for automatic version assignment via CI/CD.
+During the testing phase, `VERSION_NAME` stays at `0.1.0` regardless of changes. This keeps distribution consistent until we validate core features. Our CI/CD workflow handles automatic version assignment for official releases.
 
----
+## Verifying Your Build
+
+Once the build finishes, you should verify the artifacts before deployment.
+
+1. **Check Signatures**: Ensure the APK is signed. You can use `apksigner verify --print-certs path/to/app.apk`.
+2. **Checksums**: Compare the generated SHA-256 hashes with previous builds if you're doing a regression check.
+3. **Device Test**: Install the APK on a rooted device. Verify the module loads correctly in LSPosed.
 
 ## Output Locations
 
@@ -86,37 +97,6 @@ Both version flags are **required** — the build will fail without them:
 | **PC Tool (DMG)** | `pc-tool-kotlin/build/compose/binaries/main/dmg/InputBlockerSetup-<version>.dmg` |
 | **Module ZIP** | `build/distributions/inputblocker.zip` |
 
----
-
-## CI/CD Pipeline
-
-The project uses GitHub Actions for automated builds. The release workflow (`release.yml`) handles:
-
-- Version validation (name format, code monotonicity)
-- Android APK signing and SHA-256 checksumming
-- Module ZIP packaging
-- PC tool cross-platform compilation
-- GitHub Release creation with auto-generated changelog
-- `update.json` deployment to GitHub Pages for in-app updater
-
-Manual workflow runs accept `force_version=true` to bypass the version-code-regression check during testing.
-
----
-
-## Project Structure
-
-```
-├── android-app/          # Android companion app + LSPosed/Vector hook module
-│   ├── app/
-│   └── module/
-├── shared/               # KMP shared core (Region data model, normalization)
-├── pc-tool-kotlin/       # Compose Desktop PC Designer
-├── module/               # Root module shell scripts and files
-└── build-scripts/        # Shell/batch build helper scripts
-```
-
----
-
 ## Troubleshooting
 
 ### Java Version Mismatch
@@ -124,17 +104,43 @@ Manual workflow runs accept `force_version=true` to bypass the version-code-regr
 ```
 Unsupported class file major version 67
 ```
-
-Your environment is not using JDK 17. Verify:
-```bash
-java -version  # must show 17.x
-echo $JAVA_HOME
-```
+This means your environment isn't using JDK 17. Check your version with `java -version` and make sure `JAVA_HOME` points to the right path.
 
 ### SDK Not Found
 
-If Gradle cannot locate the Android SDK, ensure `local.properties` exists at the project root with the correct SDK path.
+If Gradle can't find the Android SDK, double check your `local.properties` file. Ensure the path is correct and uses proper escaping for your OS.
 
-### Build Fails with "Version flags are required"
+### Gradle Daemon Issues
 
-Always pass `-PVERSION_NAME` and `-PVERSION_CODE` to any Gradle build task.
+If the build hangs or behaves strangely, try stopping the daemon:
+```bash
+./gradlew --stop
+```
+Then run your build command again.
+
+### Version Flags Missing
+
+If you see "Version flags are required," you forgot to pass `-PVERSION_NAME` and `-PVERSION_CODE`. These are mandatory for every build task.
+
+## CI/CD Pipeline
+
+We use GitHub Actions for automated builds. The release workflow handles:
+
+- Version validation.
+- Android APK signing and SHA-256 checksumming.
+- Module ZIP packaging.
+- PC tool cross-platform compilation.
+- GitHub Release creation.
+- Deployment of `update.json` for the in-app updater.
+
+## Project Structure
+
+```
+├── android-app/          # Android app and LSPosed/Vector hook module
+│   ├── app/
+│   └── module/
+├── shared/               # KMP shared core
+├── pc-tool-kotlin/       # Compose Desktop PC Designer
+├── module/               # Root module shell scripts
+└── build-scripts/        # Build helper scripts
+```
