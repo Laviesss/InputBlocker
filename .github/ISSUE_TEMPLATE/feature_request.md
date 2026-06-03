@@ -7,21 +7,25 @@ assignees: ""
 ---
 
 ## Problem Statement
-Is your feature request related to a problem? Please describe clearly.
-
-**Example:** *I'm always frustrated when [...] because [...]*
+What problem are you trying to solve? Please describe it clearly.
 
 ## Proposed Solution
-Describe what you'd like to happen. Be specific about the behavior and how it should work.
+Describe the feature you would like to see. Be specific about how it should work and how the user would interact with it.
+
+## Why This Matters to You
+How does this feature improve your experience with InputBlocker? Does it solve a specific pain point or enable a new use case?
+
+## Priority Assessment
+How important is this feature to you?
+- [ ] **Must-have**: I cannot use the app effectively without this.
+- [ ] **Should-have**: This would significantly improve my workflow.
+- [ ] **Nice-to-have**: This is a minor improvement or a "cool" addition.
 
 ## Alternative Approaches
-What alternatives have you considered?
+Have you considered any workarounds or other ways to achieve this?
 
-- **Option 1**: [description]
-- **Option 2**: [description]
-
-## Use Case
-How would this feature be used? Who benefits from it?
+## Community Input
+If you have seen similar features in other apps or modules, please link them here. Mockups or sketches are also very helpful.
 
 ## Additional Context
-Add any screenshots, mockups, or references to similar features in other projects.
+Add any other information or screenshots that might be relevant.

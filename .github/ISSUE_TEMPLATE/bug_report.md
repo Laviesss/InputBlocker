@@ -10,31 +10,42 @@ assignees: ""
 A clear and concise description of what the bug is.
 
 ## Device Information
-- **Device Model**: (e.g., Pixel 6, Galaxy S22)
-- **Android Version**: (e.g., 13, 14)
-- **Root Manager**: (e.g., Magisk v27.0, KernelSU, APatch)
-- **LSPosed / Vector Version**: (e.g., v1.9.2)
-- **InputBlocker Version**: (e.g., 0.1.0 build #123)
+Please check all that apply:
+- [ ] **Device Model**: (e.g., Pixel 6, Galaxy S22)
+- [ ] **Android Version**: (e.g., 13, 14)
+- [ ] **Root Manager**: (e.g., Magisk v27.0, KernelSU, APatch)
+- [ ] **LSPosed / Vector Version**: (e.g., v1.9.2)
+- [ ] **InputBlocker Version**: (e.g., 0.1.0 build #123)
+
+## Mode Selection
+Which mode are you using?
+- [ ] **LSPosed Hook Mode** (System-level filtering)
+- [ ] **Overlay Mode** (Accessibility-based filtering)
+
+## Reproducibility
+- **Is this reproducible?** (Yes / No / Sometimes)
+- **If yes, how often?** (Every time / Once a day / etc.)
 
 ## Steps to Reproduce
-1. Go to '...'
-2. Tap on '....'
-3. Scroll down to '....'
+1. Open InputBlocker
+2. Enable '...'
+3. Perform '....'
 4. Observe the issue
 
 ## Expected Behavior
-What did you expect to happen instead?
+What did you expect to happen?
 
 ## Actual Behavior
 What actually happened?
 
 ## Logs & Attachments
-- **Block log**: Use the companion app's **Share Log** button to export `blocklog.txt`.
-- **Latency log**: Share `latency.log` if performance issues are suspected.
-- **Config file**: Attach the `.conf` file you were using.
-- **logcat**: If possible, include relevant `logcat` output filtered by `InputBlocker`.
+Please provide the following to help us debug:
+1. **Block log**: Open the companion app, tap **Share Log**, and attach `blocklog.txt`.
+2. **Config file**: Attach your current `.conf` filter profile.
+3. **Screenshots/Video**: Upload a screen recording showing the issue (enable "Show Taps" in Developer Options if possible).
+4. **Logcat**: If you are comfortable with ADB, provide a logcat filtered by `InputBlocker`.
 
 ## Additional Context
-- Is this a new issue or a regression?
-- Did it work in a previous version?
-- Any other observations?
+- Is this a new issue or did it start after an update?
+- Does disabling the module fix the issue immediately?
+- Any other relevant observations?
