@@ -30,7 +30,16 @@ else
     
     APK_PATH="$MODDIR/common/InputBlocker.apk"
     if [ -f "$APK_PATH" ]; then
-        echo "Attempting to install companion app..."
+        # Verify APK is a valid zip file before attempting install
+        APK_MIME=$(file "$APK_PATH" 2>/dev/null)
+        echo "$APK_MIME" | grep -qi "zip" && APK_VALID=1 || APK_VALID=0
+        if [ "$APK_VALID" -eq 0 ]; then
+            echo "ERROR: APK file appears corrupted (not a valid ZIP)."
+            echo "Please reinstall the module."
+            sys_log "APK corrupt: not a valid ZIP"
+            exit 1
+        fi
+        echo "APK integrity check passed. Installing..."
         if pm install -r "$APK_PATH" > /dev/null 2>&1; then
             echo "Installation successful! Launching app..."
             am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
