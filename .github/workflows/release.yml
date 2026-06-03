@@ -134,6 +134,11 @@ jobs:
       - name: "Guard Against Duplicate Releases"
         shell: bash
         run: |
+          FORCE="${{ github.event.inputs.force_version }}"
+          if [ "$FORCE" = "true" ]; then
+            echo "force_version=true — skipping duplicate release guard."
+            exit 0
+          fi
           TAG="${{ steps.resolve-version.outputs.TAG_NAME }}"
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
