@@ -167,22 +167,87 @@ jobs:
           $c = "${{ steps.resolve-version.outputs.VERSION_CODE }}"
           $manual = "${{ github.event.inputs.release_notes }}"
 
+          # ── Testing phase banner ──────────────────────────────
+          $testingBanner = @"
+> **⚠️ TESTING PHASE**
+> InputBlocker is in active testing. All pre-release builds use version `0.1.0`
+> regardless of changes included. This ensures consistent distribution while
+> core functionality is validated. Visit [the project](https://github.com/${{ github.repository }})
+> for the latest stable release.
+>
+> **Changes listed below are relative to the last pre-release.**
+
+"@
+
+          $body = $testingBanner
+
           if (-not [string]::IsNullOrWhiteSpace($manual)) {
-            $body = $manual
+            $body += $manual
           } else {
             $prev = git describe --tags --abbrev=0 HEAD^ 2>$null
             if ($prev) {
-              $log = git log "$prev..HEAD" --pretty=format:"- %s" --no-merges
-              $header = "## What's Changed (since $prev)"
+              # Group commits by conventional-commit type for readability
+              $lines = @()
+              $currentType = ""
+
+              git log "$prev..HEAD" --pretty=format:"%s" --no-merges | ForEach-Object {
+                $msg = $_
+                if ($msg -match '^(feat|fix|docs|refactor|chore|ci|test|style|perf|build|revert)(\([^)]+\))?:\s*(.*)') {
+                  $type = $matches[1]
+                  $scope = $matches[2]
+                  $desc = $matches[3]
+                  if ($type -ne $currentType) {
+                    $currentType = $type
+                    $typeLabel = @{
+                      'feat'     = '🚀 Features'
+                      'fix'      = '🐛 Bug Fixes'
+                      'docs'     = '📚 Documentation'
+                      'refactor' = '♻️ Refactoring'
+                      'chore'    = '🧹 Chores'
+                      'ci'       = '⚙️ CI/CD'
+                      'test'    = '🧪 Tests'
+                      'style'   = '💄 Styling'
+                      'perf'    = '⚡ Performance'
+                      'build'   = '🏗️ Build'
+                      'revert'  = '⏪ Reverts'
+                    }
+                    $lines += "`n### $($typeLabel[$type])"
+                  }
+                  $lines += "- $desc $scope"
+                } else {
+                  $lines += "- $msg"
+                }
+              }
+              if ($lines.Count -gt 0) {
+                $body += "## What's Changed (since $prev)`n"
+                $body += ($lines -join "`n")
+              } else {
+                $body += "## What's Changed`n"
+                $body += "- Maintenance and stability improvements."
+              }
             } else {
-              $log = git log --pretty=format:"- %s" --no-merges -20
-              $header = "## What's Changed"
+              $log = git log --pretty=format:"- %s" --no-merges -30
+              $body += "## Initial Release`n$log"
             }
-            $body = "$header`n$log"
           }
 
-          $footer = "`n`n---`n### Requirements`n| | |`n|---|---|`n| **Root** | Magisk / KernelSU / APatch / SuperSU |`n| **Framework** | LSPosed (recommended) |`n| **Android** | 6.0+ (API 23) |`n| **Version Code** | $c |"
-          $body = $body + $footer
+          $footer = @"
+
+---
+### 📥 Requirements
+| | |
+|---|---|
+| **Root** | Magisk / KernelSU / APatch / SuperSU |
+| **Framework** | LSPosed (recommended) – or Overlay Mode (no framework) |
+| **Android** | 6.0+ (API 23) |
+| **Version Code** | $c |
+
+### 🆘 Support
+- **Issues**: https://github.com/${{ github.repository }}/issues
+- **Security**: https://github.com/${{ github.repository }}/security/advisories
+- **Documentation**: https://github.com/${{ github.repository }}#readme
+"@
+          $body += $footer
 
           echo "BODY<<EOF" >> $env:GITHUB_OUTPUT
           echo $body >> $env:GITHUB_OUTPUT
