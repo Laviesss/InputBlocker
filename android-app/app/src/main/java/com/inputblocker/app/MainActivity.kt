@@ -2,6 +2,7 @@ package com.inputblocker.app
 
 import android.Manifest
 import android.app.AlertDialog
+import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
@@ -9,8 +10,13 @@ import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.provider.Settings
 import android.util.Log
+import android.view.HapticFeedbackConstants
 import android.view.Menu
 import android.view.MenuItem
 import android.view.View
@@ -43,6 +49,7 @@ class MainActivity : AppCompatActivity() {
         private const val THEME_LIGHT = 1
         private const val THEME_DARK = 2
         private const val THEME_AMOLED = 3
+        private const val REQUEST_PROFILE = 1001
     }
 
     private lateinit var switchEnabled: SwitchMaterial
@@ -66,6 +73,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnActionExport: Button
     private lateinit var btnActionTest: Button
     private lateinit var btnViewLog: Button
+    private lateinit var btnActionPause: Button
+    private lateinit var btnViewCrashLog: Button
+    private lateinit var btnViewProfiles: Button
     private lateinit var btnOptimizeRegions: Button
     private lateinit var btnBackupRestore: Button
     private lateinit var btnImportPreset: Button
@@ -73,9 +83,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnCommunityGallery: Button
     private lateinit var btnSubmitPreset: Button
 
+    // Block counter display
+    private lateinit var tvBlockCount: TextView
+
     private var isEnabled = true
     private var isLsposedMode = false
     private var isAccessibilityMode = false
+    private var isPaused = false
+    private var blockCount = 0
     private val regions = mutableListOf<Region>()
     private var currentTheme = THEME_SYSTEM
 
@@ -133,6 +148,10 @@ class MainActivity : AppCompatActivity() {
         btnActionExport = findViewById(R.id.btn_action_export)
         btnActionTest = findViewById(R.id.btn_action_test)
         btnViewLog = findViewById(R.id.btn_view_log)
+        btnActionPause = findViewById(R.id.btn_action_pause)
+        btnViewCrashLog = findViewById(R.id.btn_view_crash_log)
+        btnViewProfiles = findViewById(R.id.btn_view_profiles)
+        tvBlockCount = findViewById(R.id.tv_block_count)
         btnOptimizeRegions = findViewById(R.id.btn_optimize_regions)
         btnBackupRestore = findViewById(R.id.btn_backup_restore)
         btnImportPreset = findViewById(R.id.btn_import_preset)
@@ -147,9 +166,12 @@ class MainActivity : AppCompatActivity() {
         
         loadPrefs()
         loadConfig()
+        requestBatteryOptimizationExemption()
+        checkSafeModeAndWarn()
         updateUI()
         applyTheme()
         applyThemeToViews()
+        showOnboardingIfNeeded()
         checkForUpdates()
         
         handleQuickActionIntent(intent)
@@ -175,7 +197,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupControlListeners() {
-        switchEnabled.setOnCheckedChangeListener { _, isChecked ->
+        switchEnabled.setOnCheckedChangeListener { view, isChecked ->
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             if (isChecked) {
                 InputBlockerServiceManager.clearEmergencyReset(this)
             }
@@ -185,7 +208,8 @@ class MainActivity : AppCompatActivity() {
             updateUI()
         }
         
-        findViewById<SwitchMaterial>(R.id.switch_blocking_method).setOnCheckedChangeListener { _, isChecked ->
+        findViewById<SwitchMaterial>(R.id.switch_blocking_method).setOnCheckedChangeListener { view, isChecked ->
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             isLsposedMode = isChecked
             saveLsposedPreference(isChecked)
             updateStatus()
@@ -197,7 +221,8 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        switchAccessibility.setOnCheckedChangeListener { _, isChecked ->
+        switchAccessibility.setOnCheckedChangeListener { view, isChecked ->
+            view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
             isAccessibilityMode = isChecked
             saveAccessibilityPreference(isChecked)
             updateStatus()
@@ -248,6 +273,17 @@ class MainActivity : AppCompatActivity() {
             val intent = Intent(this, BlockLogActivity::class.java)
             startActivity(intent)
         }
+        btnActionPause.setOnClickListener {
+            togglePause()
+        }
+        btnViewCrashLog.setOnClickListener {
+            val intent = Intent(this, CrashLogActivity::class.java)
+            startActivity(intent)
+        }
+        btnViewProfiles.setOnClickListener {
+            val intent = Intent(this, ProfileListActivity::class.java)
+            startActivityForResult(intent, REQUEST_PROFILE)
+        }
         btnOptimizeRegions.setOnClickListener {
             Toast.makeText(this, "Applying adaptive optimization...", Toast.LENGTH_SHORT).show()
             AdaptiveBlockingManager.analyzeAndOptimize(this)
@@ -278,6 +314,36 @@ class MainActivity : AppCompatActivity() {
     private fun toggleSafeMode() {
         InputBlockerServiceManager.enableSafeMode(this)
         Toast.makeText(this, "Safe Mode Enabled: All blocking suspended", Toast.LENGTH_LONG).show()
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Onboarding Wizard (3-slide first-run dialog)
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun showOnboardingIfNeeded() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        if (prefs.getBoolean("onboarding_complete", false)) return
+
+        AlertDialog.Builder(this)
+            .setTitle("👋 Welcome to InputBlocker")
+            .setMessage(
+                "Step 1: What is InputBlocker?\n" +
+                "InputBlocker blocks ghost taps and unwanted touch inputs on your device. " +
+                "Perfect for preventing accidental touches during gaming, videos, or calls.\n\n" +
+                "Step 2: How it Works\n" +
+                "• Draw blocked regions on screen (Visual Setup)\n" +
+                "• Toggle blocking on/off as needed\n" +
+                "• Choose between Overlay, LSPosed, or Accessibility mode\n\n" +
+                "Step 3: Getting Started\n" +
+                "1. Grant overlay permission when prompted\n" +
+                "2. Configure blocked regions via Visual Setup\n" +
+                "3. Enable blocking — that's it!\n\n" +
+                "For more help, check the FAQ in the menu."
+            )
+            .setPositiveButton("Got it!") { _, _ ->
+                prefs.edit().putBoolean("onboarding_complete", true).apply()
+            }
+            .show()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -404,6 +470,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadConfig()
+        checkSafeModeAndWarn()
+        loadBlockCount()
         updateUI()
         applyThemeToViews()
     }
@@ -828,6 +896,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun saveConfig() {
+        val validationError = validateConfig()
+        if (validationError != null) {
+            Toast.makeText(this, "Config validation failed: $validationError", Toast.LENGTH_LONG).show()
+            return
+        }
+
         val content = StringBuilder()
         content.append("# InputBlocker Configuration\n")
         content.append("enabled=${if (isEnabled) "1" else "0"}\n")
@@ -847,6 +921,7 @@ class MainActivity : AppCompatActivity() {
         lsposedSwitch.isChecked = isLsposedMode
         switchAccessibility.isChecked = isAccessibilityMode
         
+        tvBlockCount.text = "Blocks: $blockCount"
         updateStatus()
         updateRegionsList()
     }
@@ -855,8 +930,18 @@ class MainActivity : AppCompatActivity() {
         val isEnabledVal = switchEnabled.isChecked
         val colors = ThemeManager.getThemeColors(this, currentTheme)
         
-        tvStatus.text = if (isEnabledVal) "SYSTEM ACTIVE" else "ENGINE DISABLED"
-        tvStatus.setTextColor(if (isEnabledVal) ContextCompat.getColor(this, R.color.accent_green) else ContextCompat.getColor(this, R.color.accent_red))
+        tvStatus.text = when {
+            isPaused -> "PAUSED"
+            isEnabledVal -> "SYSTEM ACTIVE"
+            else -> "ENGINE DISABLED"
+        }
+        tvStatus.setTextColor(
+            when {
+                isPaused -> ContextCompat.getColor(this, R.color.accent_blue)
+                isEnabledVal -> ContextCompat.getColor(this, R.color.accent_green)
+                else -> ContextCompat.getColor(this, R.color.accent_red)
+            }
+        )
         findViewById<TextView>(R.id.tv_status_label)?.setTextColor(colors.textSecondary)
     }
 
@@ -883,6 +968,20 @@ class MainActivity : AppCompatActivity() {
         view.findViewById<TextView>(R.id.tv_region_coords).text = "(${region.x1}, ${region.y1}) - (${region.x2}, ${region.y2})"
         view.findViewById<TextView>(R.id.tv_region_size).text = "Size: ${region.x2 - region.x1}x${region.y2 - region.y1}"
         view.findViewById<android.view.View>(R.id.btn_remove_region).setOnClickListener { removeRegion(index) }
+
+        // Set region preview color
+        val previewBar = view.findViewById<android.view.View>(R.id.view_region_preview)
+        val previewColor = if (region.isExclude) {
+            android.graphics.Color.parseColor("#FF5252") // Red for excluded regions
+        } else {
+            when (region.type) {
+                1 -> android.graphics.Color.parseColor("#FF9800") // Orange for circle
+                2 -> android.graphics.Color.parseColor("#2196F3") // Blue for ellipse
+                else -> android.graphics.Color.parseColor("#4CAF50") // Green for rectangle
+            }
+        }
+        previewBar.setBackgroundColor(previewColor)
+
         regionsList.addView(view)
     }
 
@@ -961,6 +1060,150 @@ class MainActivity : AppCompatActivity() {
             THEME_DARK -> ContextCompat.getColor(this, R.color.dark_text_secondary)
             THEME_AMOLED -> ContextCompat.getColor(this, R.color.amoled_text_secondary)
             else -> ContextCompat.getColor(this, R.color.dark_text_secondary)
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Battery Optimization Exemption
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun requestBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
+                AlertDialog.Builder(this)
+                    .setTitle("Battery Optimization")
+                    .setMessage("InputBlocker needs to run in the background to block touches. " +
+                            "Please disable battery optimization for this app to prevent the system " +
+                            "from killing the service.")
+                    .setPositiveButton("Open Settings") { _, _ ->
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                    }
+                    .setNegativeButton("Later", null)
+                    .show()
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Safe Mode Detection
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun checkSafeModeAndWarn() {
+        // Check if force_safe_mode is set in config
+        val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
+        if (!configFile.exists()) return
+
+        try {
+            val lines = configFile.readLines()
+            val safeMode = lines.any { it.trim() == "force_safe_mode=1" }
+            if (safeMode) {
+                AlertDialog.Builder(this)
+                    .setTitle("Safe Mode Active")
+                    .setMessage("InputBlocker is in safe mode because a previous crash was detected. " +
+                            "Blocking is disabled. Would you like to exit safe mode and re-enable blocking?")
+                    .setPositiveButton("Exit Safe Mode") { _, _ ->
+                        InputBlockerServiceManager.runRootCommand(
+                            "sed -i '/force_safe_mode=/d' ${configFile.absolutePath}"
+                        )
+                        InputBlockerServiceManager.resetCrashCounter()
+                        loadConfig()
+                        updateUI()
+                        Toast.makeText(this, "Safe mode disabled. Blocking re-enabled.", Toast.LENGTH_SHORT).show()
+                    }
+                    .setNegativeButton("Stay in Safe Mode", null)
+                    .show()
+            }
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Error checking safe mode", e)
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Pause / Resume
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun togglePause() {
+        isPaused = !isPaused
+        val statusText = if (isPaused) "PAUSED" else "RESUMED"
+        Toast.makeText(this, "Blocking $statusText", Toast.LENGTH_SHORT).show()
+
+        // Send broadcast to running services
+        val action = if (isPaused) "com.inputblocker.PAUSE" else "com.inputblocker.RESUME"
+        sendBroadcast(Intent(action))
+
+        btnActionPause.text = if (isPaused) "RESUME" else "PAUSE"
+        updateUI()
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Block Counter
+    // ═══════════════════════════════════════════════════════════════
+
+    private fun loadBlockCount() {
+        try {
+            val logFile = File(InputBlockerServiceManager.getModulePath(this) + "/config/blocklog.txt")
+            if (logFile.exists()) {
+                val lines = logFile.readLines()
+                blockCount = lines.size
+            } else {
+                blockCount = 0
+            }
+        } catch (e: Exception) {
+            blockCount = 0
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Config Validation
+    // ═══════════════════════════════════════════════════════════════
+
+    /**
+     * Validates the current configuration before saving.
+     * Returns an error message if validation fails, or null if valid.
+     */
+    private fun validateConfig(): String? {
+        // Validate all region coordinates are within [0, 1] range
+        for ((index, region) in regions.withIndex()) {
+            if (region.x1 < 0f || region.x1 > 1f ||
+                region.y1 < 0f || region.y1 > 1f ||
+                region.x2 < 0f || region.x2 > 1f ||
+                region.y2 < 0f || region.y2 > 1f) {
+                return "Region #${index + 1} has coordinates outside valid range (0.0-1.0)"
+            }
+            // Validate rectangle regions have x1 < x2 and y1 < y2
+            if (region.type == 0 && (region.x1 >= region.x2 || region.y1 >= region.y2)) {
+                return "Region #${index + 1} has invalid dimensions (x1 must be < x2, y1 must be < y2)"
+            }
+            // Validate circle/ellipse radii are positive
+            if ((region.type == 1 || region.type == 2) && (region.x2 <= 0f || region.y2 <= 0f)) {
+                return "Region #${index + 1} has invalid radius (must be > 0)"
+            }
+        }
+        return null
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    //  Profile Selection Result
+    // ═══════════════════════════════════════════════════════════════
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == REQUEST_PROFILE && resultCode == RESULT_OK) {
+            val profileName = data?.getStringExtra("profile_name")
+            if (profileName != null) {
+                // Load the selected profile and apply it
+                InputBlockerServiceManager.runRootCommand(
+                    "cp ${InputBlockerServiceManager.getConfigFile(this, profileName)} " +
+                    "${InputBlockerServiceManager.getConfigFile(this, "default")}"
+                )
+                loadConfig()
+                updateUI()
+                Toast.makeText(this, "Loaded profile: $profileName", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 

@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".App"
@@ -30,6 +31,18 @@
         <!-- Community Gallery Activity -->
         <activity
             android:name=".CommunityGalleryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker" />
+
+        <!-- Crash Log Viewer Activity -->
+        <activity
+            android:name=".CrashLogActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker" />
+
+        <!-- Profile List Activity -->
+        <activity
+            android:name=".ProfileListActivity"
             android:exported="false"
             android:theme="@style/Theme.InputBlocker" />
 
