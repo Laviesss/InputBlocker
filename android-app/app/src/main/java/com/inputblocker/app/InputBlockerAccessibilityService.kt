@@ -93,13 +93,9 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         Log.i(TAG, "AccessibilityService connected")
         isRunning = true
 
-        // Acquire WindowManager — on API 33+ use createWindowManager()
-        // which automatically produces TYPE_ACCESSIBILITY_OVERLAY windows.
-        wm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            createWindowManager()
-        } else {
-            getSystemService(WINDOW_SERVICE) as WindowManager
-        }
+        // Acquire WindowManager — always via getSystemService.
+        // TYPE_ACCESSIBILITY_OVERLAY is available since API 16 (our minimum).
+        wm = getSystemService(WINDOW_SERVICE) as WindowManager
 
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification())
@@ -109,6 +105,10 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         loadConfig()
         updateOverlay()
         startPollLoop()
+    }
+
+    override fun onInterrupt() {
+        Log.d(TAG, "AccessibilityService interrupted")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
