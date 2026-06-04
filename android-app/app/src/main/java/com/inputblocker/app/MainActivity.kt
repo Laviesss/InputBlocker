@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var switchEnabled: SwitchMaterial
+    private lateinit var switchAccessibility: SwitchMaterial
     private lateinit var regionsList: LinearLayout
     private lateinit var tvStatus: TextView
     private lateinit var btnLaunchSetup: Button
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
 
     private var isEnabled = true
     private var isLsposedMode = false
+    private var isAccessibilityMode = false
     private val regions = mutableListOf<Region>()
     private var currentTheme = THEME_SYSTEM
 
@@ -117,6 +119,7 @@ class MainActivity : AppCompatActivity() {
         containerQuickActions = findViewById(R.id.container_quick_actions)
         
         switchEnabled = findViewById(R.id.switch_enabled)
+        switchAccessibility = findViewById(R.id.switch_accessibility_mode)
         regionsList = findViewById(R.id.regions_list)
         tvStatus = findViewById(R.id.tv_status)
         btnLaunchSetup = findViewById(R.id.btn_launch_setup)
@@ -191,6 +194,20 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "LSPosed Mode enabled. Please enable this module in LSPosed Manager.", Toast.LENGTH_LONG).show()
             } else {
                 Toast.makeText(this, "Overlay Mode enabled. The app will now use a system overlay to block touches.", Toast.LENGTH_LONG).show()
+            }
+        }
+
+        switchAccessibility.setOnCheckedChangeListener { _, isChecked ->
+            isAccessibilityMode = isChecked
+            saveAccessibilityPreference(isChecked)
+            updateStatus()
+
+            if (isChecked) {
+                // Save preference first, then guide user to enable in system settings
+                Toast.makeText(this, "Open Accessibility Settings to enable InputBlocker service.", Toast.LENGTH_LONG).show()
+                openAccessibilitySettings()
+            } else {
+                Toast.makeText(this, "Accessibility Mode disabled. The service will stay idle until re-enabled.", Toast.LENGTH_LONG).show()
             }
         }
         
@@ -370,7 +387,8 @@ class MainActivity : AppCompatActivity() {
                 val configContent = StringBuilder()
                 configContent.append("# InputBlocker App-Specific Profile for $pkg\n")
                 configContent.append("enabled=${if (isEnabled) "1" else "0"}\n")
-                configContent.append("lsposed_mode=${if (isLsposedMode) "1" else "0"}\n\n")
+                configContent.append("lsposed_mode=${if (isLsposedMode) "1" else "0"}\n")
+                configContent.append("accessibility_mode=${if (isAccessibilityMode) "1" else "0"}\n\n")
                 configContent.append("# Blocked regions:\n")
                 for (region in regions) {
                     configContent.append("$region\n")
@@ -612,6 +630,11 @@ class MainActivity : AppCompatActivity() {
         saveConfig()
     }
 
+    private fun saveAccessibilityPreference(enabled: Boolean) {
+        isAccessibilityMode = enabled
+        saveConfig()
+    }
+
     private fun loadConfig() {
         regions.clear()
 
@@ -631,6 +654,7 @@ class MainActivity : AppCompatActivity() {
                         trimmed.isEmpty() || trimmed.startsWith("#") -> return@forEach
                         trimmed.startsWith("enabled=") -> isEnabled = trimmed.substring(8) == "1"
                         trimmed.startsWith("lsposed_mode=") -> isLsposedMode = trimmed.substring(13) == "1"
+                        trimmed.startsWith("accessibility_mode=") -> isAccessibilityMode = trimmed.substring(19) == "1"
                         else -> {
                             Region.fromString(trimmed)?.let { regions.add(it) }
                         }
@@ -807,7 +831,8 @@ class MainActivity : AppCompatActivity() {
         val content = StringBuilder()
         content.append("# InputBlocker Configuration\n")
         content.append("enabled=${if (isEnabled) "1" else "0"}\n")
-        content.append("lsposed_mode=${if (isLsposedMode) "1" else "0"}\n\n")
+        content.append("lsposed_mode=${if (isLsposedMode) "1" else "0"}\n")
+        content.append("accessibility_mode=${if (isAccessibilityMode) "1" else "0"}\n\n")
         content.append("# Blocked regions:\n")
         for (region in regions) {
             content.append("$region\n")
@@ -820,6 +845,7 @@ class MainActivity : AppCompatActivity() {
         
         val lsposedSwitch = findViewById<SwitchMaterial>(R.id.switch_blocking_method)
         lsposedSwitch.isChecked = isLsposedMode
+        switchAccessibility.isChecked = isAccessibilityMode
         
         updateStatus()
         updateRegionsList()
@@ -935,6 +961,16 @@ class MainActivity : AppCompatActivity() {
             THEME_DARK -> ContextCompat.getColor(this, R.color.dark_text_secondary)
             THEME_AMOLED -> ContextCompat.getColor(this, R.color.amoled_text_secondary)
             else -> ContextCompat.getColor(this, R.color.dark_text_secondary)
+        }
+    }
+
+    private fun openAccessibilitySettings() {
+        try {
+            val intent = Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("MainActivity", "Failed to open accessibility settings", e)
+            Toast.makeText(this, "Please go to Settings → Accessibility → InputBlocker to enable the service.", Toast.LENGTH_LONG).show()
         }
     }
 }
