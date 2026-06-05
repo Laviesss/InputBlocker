@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
         // Senior Engineering: Fail-safe crash tracking
         val oldHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            InputBlockerServiceManager.reportCrash()
+            InputBlockerServiceManager.reportCrash(throwable)
             oldHandler?.uncaughtException(thread, throwable)
         }
 
@@ -1134,6 +1134,15 @@ class MainActivity : AppCompatActivity() {
         // Send broadcast to running services
         val action = if (isPaused) "com.inputblocker.PAUSE" else "com.inputblocker.RESUME"
         sendBroadcast(Intent(action))
+
+        // Sync paused state to config so LSPosed hook module also respects it
+        try {
+            val configPath = InputBlockerServiceManager.getConfigFile(this, "default")
+            InputBlockerServiceManager.runRootCommand("sed -i '/^paused=/d' $configPath")
+            if (isPaused) {
+                InputBlockerServiceManager.runRootCommand("echo 'paused=1' >> $configPath")
+            }
+        } catch (_: Exception) { }
 
         btnActionPause.text = if (isPaused) "RESUME" else "PAUSE"
         updateUI()

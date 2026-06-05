@@ -1,12 +1,14 @@
 package com.inputblocker.app
 
 import android.os.Bundle
-import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import java.io.File
 
 class CrashLogActivity : AppCompatActivity() {
@@ -17,27 +19,25 @@ class CrashLogActivity : AppCompatActivity() {
     }
 
     private lateinit var logContainer: LinearLayout
-    private lateinit var btnClear: Button
-    private lateinit var btnRefresh: Button
+    private lateinit var btnClear: MaterialButton
+    private lateinit var btnRefresh: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
+            .getInt("theme", ThemeManager.THEME_SYSTEM)
+        val colors = ThemeManager.getThemeColors(this@CrashLogActivity, currentTheme)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
-            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                .getInt("theme", ThemeManager.THEME_SYSTEM)
-            val colors = ThemeManager.getThemeColors(this@CrashLogActivity, currentTheme)
             setBackgroundColor(colors.background)
         }
 
         val title = TextView(this).apply {
             text = "Crash Log Viewer"
             textSize = 24f
-            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                .getInt("theme", ThemeManager.THEME_SYSTEM)
-            val colors = ThemeManager.getThemeColors(this@CrashLogActivity, currentTheme)
             setTextColor(colors.textPrimary)
             setPadding(0, 0, 0, 32)
         }
@@ -48,15 +48,16 @@ class CrashLogActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 16)
         }
 
-        btnRefresh = Button(this).apply {
+        btnRefresh = MaterialButton(this).apply {
             text = "Refresh"
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { refreshLog() }
         }
 
-        btnClear = Button(this).apply {
+        btnClear = MaterialButton(this).apply {
             text = "Clear All"
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            setTextColor(android.graphics.Color.RED)
             setOnClickListener {
                 try {
                     val crashDir = File(CRASH_LOG_DIR)
@@ -110,10 +111,25 @@ class CrashLogActivity : AppCompatActivity() {
                 ?.sortedByDescending { it.lastModified() }
                 ?: emptyList()
 
+            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
+                .getInt("theme", ThemeManager.THEME_SYSTEM)
+            val colors = ThemeManager.getThemeColors(this@CrashLogActivity, currentTheme)
+
             for (file in crashFiles) {
-                val card = LinearLayout(this).apply {
+                val card = MaterialCardView(this).apply {
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT
+                    ).also { it.setMargins(0, 0, 0, 12) }
+                    radius = 16f
+                    setContentPadding(16, 12, 16, 12)
+                    setCardBackgroundColor(colors.surface)
+                    strokeColor = colors.border
+                    strokeWidth = 1
+                }
+
+                val innerLayout = LinearLayout(this).apply {
                     orientation = LinearLayout.VERTICAL
-                    setPadding(0, 0, 0, 12)
                 }
 
                 val headerText = "${file.name}  —  ${java.text.SimpleDateFormat(
@@ -124,12 +140,8 @@ class CrashLogActivity : AppCompatActivity() {
                     text = headerText
                     textSize = 13f
                     setTypeface(null, android.graphics.Typeface.BOLD)
-                    val colors = ThemeManager.getThemeColors(
-                        this@CrashLogActivity,
-                        getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                            .getInt("theme", ThemeManager.THEME_SYSTEM)
-                    )
                     setTextColor(android.graphics.Color.parseColor("#FF5252"))
+                    setPadding(0, 0, 0, 8)
                 }
 
                 val content = try {
@@ -141,30 +153,17 @@ class CrashLogActivity : AppCompatActivity() {
                 val body = TextView(this).apply {
                     text = content
                     textSize = 11f
-                    setPadding(16, 8, 16, 8)
+                    setPadding(12, 8, 12, 8)
                     setBackgroundColor(android.graphics.Color.parseColor("#1A000000"))
-                    val colors = ThemeManager.getThemeColors(
-                        this@CrashLogActivity,
-                        getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                            .getInt("theme", ThemeManager.THEME_SYSTEM)
-                    )
                     setTextColor(colors.textSecondary)
                     setLineSpacing(4f, 1f)
                     setTypeface(android.graphics.Typeface.MONOSPACE)
                 }
 
-                card.addView(header)
-                card.addView(body)
+                innerLayout.addView(header)
+                innerLayout.addView(body)
+                card.addView(innerLayout)
                 logContainer.addView(card)
-
-                // Separator
-                val sep = TextView(this).apply {
-                    text = "──────────────────────────────────"
-                    textSize = 10f
-                    setTextColor(android.graphics.Color.parseColor("#40FFFFFF"))
-                    setPadding(0, 8, 0, 8)
-                }
-                logContainer.addView(sep)
             }
         } catch (e: Exception) {
             Toast.makeText(this, "Error reading crash logs: ${e.message}", Toast.LENGTH_SHORT).show()

@@ -3,43 +3,45 @@ package com.inputblocker.app
 import android.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import java.io.File
 
 class ProfileListActivity : AppCompatActivity() {
 
     companion object {
-        private const val PROFILES_DIR = "/data/adb/modules/inputblocker/config/profiles"
+        private const val PROFILES_DIR_SUFFIX = "/profiles"
     }
 
+    private val profilesDirPath: String
+        get() = InputBlockerServiceManager.getConfigDir(this) + PROFILES_DIR_SUFFIX
+
     private lateinit var profileContainer: LinearLayout
-    private lateinit var btnCreateProfile: Button
-    private lateinit var btnRefresh: Button
+    private lateinit var btnCreateProfile: MaterialButton
+    private lateinit var btnRefresh: MaterialButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
+            .getInt("theme", ThemeManager.THEME_SYSTEM)
+        val colors = ThemeManager.getThemeColors(this@ProfileListActivity, currentTheme)
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(32, 32, 32, 32)
-            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                .getInt("theme", ThemeManager.THEME_SYSTEM)
-            val colors = ThemeManager.getThemeColors(this@ProfileListActivity, currentTheme)
             setBackgroundColor(colors.background)
         }
 
         val title = TextView(this).apply {
             text = "App Profiles"
             textSize = 24f
-            val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                .getInt("theme", ThemeManager.THEME_SYSTEM)
-            val colors = ThemeManager.getThemeColors(this@ProfileListActivity, currentTheme)
             setTextColor(colors.textPrimary)
             setPadding(0, 0, 0, 32)
         }
@@ -49,9 +51,6 @@ class ProfileListActivity : AppCompatActivity() {
                     "When that app is in the foreground, InputBlocker switches to its profile."
             textSize = 13f
             setPadding(0, 0, 0, 24)
-            val colors = ThemeManager.getThemeColors(this@ProfileListActivity,
-                getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                    .getInt("theme", ThemeManager.THEME_SYSTEM))
             setTextColor(colors.textSecondary)
         }
 
@@ -61,13 +60,13 @@ class ProfileListActivity : AppCompatActivity() {
             setPadding(0, 0, 0, 16)
         }
 
-        btnRefresh = Button(this).apply {
+        btnRefresh = MaterialButton(this).apply {
             text = "Refresh"
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { refreshList() }
         }
 
-        btnCreateProfile = Button(this).apply {
+        btnCreateProfile = MaterialButton(this).apply {
             text = "New Profile"
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
             setOnClickListener { showCreateProfileDialog() }
@@ -102,7 +101,7 @@ class ProfileListActivity : AppCompatActivity() {
         profileContainer.removeAllViews()
 
         try {
-            val profilesDir = File(PROFILES_DIR)
+            val profilesDir = File(profilesDirPath)
             if (!profilesDir.exists() || profilesDir.listFiles().isNullOrEmpty()) {
                 showEmptyProfile("No profiles found. Create one by entering a package name.")
                 return
@@ -129,16 +128,24 @@ class ProfileListActivity : AppCompatActivity() {
     }
 
     private fun addProfileCard(profileName: String, file: File) {
-        val card = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(16, 16, 16, 16)
-            setBackgroundColor(android.graphics.Color.parseColor("#1AFFFFFF"))
-            val lp = LinearLayout.LayoutParams(
+        val currentTheme = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
+            .getInt("theme", ThemeManager.THEME_SYSTEM)
+        val colors = ThemeManager.getThemeColors(this@ProfileListActivity, currentTheme)
+
+        val card = MaterialCardView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
-            )
-            lp.setMargins(0, 0, 0, 12)
-            layoutParams = lp
+            ).also { it.setMargins(0, 0, 0, 12) }
+            radius = 16f
+            setContentPadding(16, 12, 16, 12)
+            setCardBackgroundColor(colors.surface)
+            strokeColor = colors.border
+            strokeWidth = 1
+        }
+
+        val innerLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
         }
 
         val nameText = TextView(this).apply {
@@ -146,9 +153,6 @@ class ProfileListActivity : AppCompatActivity() {
             textSize = 16f
             setTypeface(null, android.graphics.Typeface.BOLD)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-            val colors = ThemeManager.getThemeColors(this@ProfileListActivity,
-                getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
-                    .getInt("theme", ThemeManager.THEME_SYSTEM))
             setTextColor(colors.textPrimary)
         }
 
@@ -156,11 +160,9 @@ class ProfileListActivity : AppCompatActivity() {
             orientation = LinearLayout.HORIZONTAL
         }
 
-        val btnLoad = Button(this).apply {
+        val btnLoad = MaterialButton(this).apply {
             text = "Load"
-            textSize = 12f
             setOnClickListener {
-                // Return profile name to MainActivity
                 val intent = Intent().apply {
                     putExtra("profile_name", profileName)
                 }
@@ -169,15 +171,13 @@ class ProfileListActivity : AppCompatActivity() {
             }
         }
 
-        val btnRename = Button(this).apply {
+        val btnRename = MaterialButton(this).apply {
             text = "Rename"
-            textSize = 12f
             setOnClickListener { showRenameDialog(profileName, file) }
         }
 
-        val btnDelete = Button(this).apply {
+        val btnDelete = MaterialButton(this).apply {
             text = "Del"
-            textSize = 12f
             setTextColor(android.graphics.Color.RED)
             setOnClickListener { showDeleteConfirmDialog(profileName, file) }
         }
@@ -186,8 +186,9 @@ class ProfileListActivity : AppCompatActivity() {
         actionLayout.addView(btnRename)
         actionLayout.addView(btnDelete)
 
-        card.addView(nameText)
-        card.addView(actionLayout)
+        innerLayout.addView(nameText)
+        innerLayout.addView(actionLayout)
+        card.addView(innerLayout)
         profileContainer.addView(card)
     }
 
@@ -195,6 +196,8 @@ class ProfileListActivity : AppCompatActivity() {
         val input = EditText(this).apply {
             hint = "com.example.app"
         }
+
+        val profilesDir = File(profilesDirPath)
 
         AlertDialog.Builder(this)
             .setTitle("New Profile")
@@ -207,9 +210,7 @@ class ProfileListActivity : AppCompatActivity() {
                     return@setPositiveButton
                 }
 
-                // Create profile with default config (copy from default profile)
                 try {
-                    val profilesDir = File(PROFILES_DIR)
                     profilesDir.mkdirs()
                     val profileFile = File(profilesDir, "$pkg.conf")
 

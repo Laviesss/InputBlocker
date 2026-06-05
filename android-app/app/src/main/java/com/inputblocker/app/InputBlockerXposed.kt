@@ -20,6 +20,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private const val TAG = "InputBlocker-Hook"
         @Volatile private var cachedRegions = ArrayList<Region>()
         @Volatile private var cachedEnabled = true
+        @Volatile private var cachedPaused = false
         @Volatile private var cachedLsposedMode = true
         @Volatile private var testModeActive = false
         private var lastLoadTime = 0L
@@ -74,7 +75,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             val now = System.currentTimeMillis()
                             updateConfigIfNeeded(now)
                             
-                            if (!cachedEnabled) return
+                            if (!cachedEnabled || cachedPaused) return
                             if (!cachedLsposedMode) return // LSPosed mode disabled — OverlayService handles blocking
 
                             // Use index access for performance; dispatchMotionLocked(IBinder, MotionEvent, ...)
@@ -243,6 +244,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             
             val newRegions = ArrayList<Region>()
             var newEnabled = true
+            var newPaused = false
             var newLsposedMode = true
 
             BufferedReader(FileReader(file)).use { reader ->
@@ -250,6 +252,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                     val trimmed = line.trim()
                     when {
                         trimmed.startsWith("enabled=") -> newEnabled = trimmed.substring(8) == "1"
+                        trimmed.startsWith("paused=") -> newPaused = trimmed.substring(7) == "1"
                         trimmed.startsWith("lsposed_mode=") -> newLsposedMode = trimmed.substring(13) == "1"
                         trimmed.isNotEmpty() && !trimmed.startsWith("#") ->
                             Region.fromString(trimmed)?.let { newRegions.add(it) }
@@ -258,6 +261,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             }
             cachedRegions = newRegions
             cachedEnabled = newEnabled
+            cachedPaused = newPaused
             cachedLsposedMode = newLsposedMode
             lastLoadTime = now
         } catch (e: Exception) {

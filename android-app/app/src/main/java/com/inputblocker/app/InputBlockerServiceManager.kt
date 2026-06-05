@@ -152,12 +152,37 @@ object InputBlockerServiceManager {
         }
     }
     
-    fun reportCrash() {
+    fun reportCrash(error: Throwable? = null) {
         try {
             runRootCommand("mkdir -p /data/local/tmp/inputblocker && touch ${CRASH_FLAG}")
             // Increment consecutive crash counter
             val current = getCrashCount()
             runRootCommand("echo '${current + 1}' > $CRASH_COUNTER_FILE")
+
+            // Write detailed crash log
+            val timestamp = java.text.SimpleDateFormat(
+                "yyyy-MM-dd_HH-mm-ss", java.util.Locale.getDefault()
+            ).format(java.util.Date())
+            val crashLogDir = "/data/local/tmp/inputblocker/crash_logs"
+            val crashLogFile = "$crashLogDir/crash_$timestamp.log"
+            val detail = buildString {
+                appendLine("=== InputBlocker Crash Report ===")
+                appendLine("Time: $timestamp")
+                if (error != null) {
+                    appendLine("Error: ${error.message}")
+                    appendLine("Stack:")
+                    for (ste in error.stackTrace) {
+                        appendLine("  at $ste")
+                    }
+                }
+                appendLine("Crash Count: ${current + 1}")
+            }
+            runRootCommand("mkdir -p $crashLogDir")
+            // Write via temp file + root cp (echo can mangle special chars)
+            val tempFile = java.io.File("/data/local/tmp/inputblocker/crash_payload.tmp")
+            tempFile.writeText(detail)
+            runRootCommand("cp ${tempFile.absolutePath} $crashLogFile && chmod 644 $crashLogFile && rm -f ${tempFile.absolutePath}")
+
             Log.e(TAG, "Crash detected! Consecutive crash count: ${current + 1}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report crash", e)
