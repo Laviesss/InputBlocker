@@ -7,4 +7,5 @@
     <string name="theme_system">System</string>
     <string name="select_theme">Select Theme</string>
     <string name="theme_changed">Theme changed to %s</string>
+    <string name="accessibility_service_description">InputBlocker — Blocks ghost touches and accidental inputs via an accessibility overlay. Requires this service to create a trusted window that can intercept touch events on Android 12+.</string>
 </resources>

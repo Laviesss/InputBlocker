@@ -17,6 +17,10 @@ import java.util.*
 
 class BlockLogActivity : AppCompatActivity() {
 
+    companion object {
+        private const val MAX_LOG_ENTRIES = 1000
+    }
+
     private lateinit var logContainer: LinearLayout
     private lateinit var btnClearLog: Button
     private lateinit var btnShareLog: Button
@@ -87,6 +91,18 @@ class BlockLogActivity : AppCompatActivity() {
         refreshLog()
     }
 
+    private fun pruneLog(logFile: File) {
+        try {
+            val lines = logFile.readLines()
+            if (lines.size > MAX_LOG_ENTRIES) {
+                val pruned = lines.drop(lines.size - MAX_LOG_ENTRIES)
+                logFile.writeText(pruned.joinToString("\n"))
+            }
+        } catch (e: Exception) {
+            // Silently handle — pruning is best-effort
+        }
+    }
+
     private fun shareLogFile() {
         try {
             val rootLogFile = File(InputBlockerServiceManager.getModulePath(this) + "/config/blocklog.txt")
@@ -130,6 +146,9 @@ class BlockLogActivity : AppCompatActivity() {
                 showEmptyLog()
                 return
             }
+
+            // Auto-prune: keep only last MAX_LOG_ENTRIES lines
+            pruneLog(logFile)
 
             val logs = logFile.readLines().reversed().take(100)
             

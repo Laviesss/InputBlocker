@@ -15,6 +15,10 @@ object InputBlockerServiceManager {
     const val NORMAL_SHUTDOWN_FLAG = "/data/local/tmp/inputblocker/normal_shutdown"
     // Synced with hook module crash path (system_server crash detection)
     const val CRASH_FLAG = "/data/adb/modules/inputblocker/config/crash_detected"
+    const val CRASH_COUNTER_FILE = "/data/local/tmp/inputblocker/crash_count"
+    
+    /** Max consecutive crashes before safe mode is forced without requiring crash flag file */
+    private const val MAX_CONSECUTIVE_CRASHES = 3
     
     private var cachedModulePath: String? = null
     
@@ -62,8 +66,12 @@ object InputBlockerServiceManager {
         return cachedModulePath!!
     }
     
+    fun getConfigDir(context: Context): String {
+        return getModulePath(context) + "/config"
+    }
+
     fun getConfigFile(context: Context, profile: String = "default"): String {
-        return getModulePath(context) + "/config/profiles/$profile.conf"
+        return getConfigDir(context) + "/profiles/$profile.conf"
     }
 
     fun saveConfig(context: Context, profile: String, content: String) {
@@ -86,7 +94,15 @@ object InputBlockerServiceManager {
     
     fun startServices(context: Context) {
         Log.i(TAG, "Starting InputBlocker services...")
-        
+
+        // Check consecutive crash count for safe mode
+        val crashCount = getCrashCount()
+        if (crashCount >= MAX_CONSECUTIVE_CRASHES) {
+            Log.w(TAG, "$crashCount consecutive crashes detected — forcing safe mode")
+            enableSafeMode(context)
+            runRootCommand("rm -f $CRASH_COUNTER_FILE")
+        }
+
         if (shouldStartInSafeMode(context)) {
             Log.i(TAG, "Starting in safe mode - blocking disabled")
         }
@@ -139,14 +155,36 @@ object InputBlockerServiceManager {
     fun reportCrash() {
         try {
             runRootCommand("mkdir -p /data/local/tmp/inputblocker && touch ${CRASH_FLAG}")
-            Log.e(TAG, "Crash detected! Safe Mode flag set.")
+            // Increment consecutive crash counter
+            val current = getCrashCount()
+            runRootCommand("echo '${current + 1}' > $CRASH_COUNTER_FILE")
+            Log.e(TAG, "Crash detected! Consecutive crash count: ${current + 1}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to report crash", e)
         }
     }
 
+    fun getCrashCount(): Int {
+        return try {
+            val result = runRootCommand("cat $CRASH_COUNTER_FILE 2>/dev/null").trim()
+            result.toIntOrNull() ?: 0
+        } catch (_: Exception) {
+            0
+        }
+    }
+
+    fun resetCrashCounter() {
+        runRootCommand("rm -f $CRASH_COUNTER_FILE")
+    }
+
+    fun getCrashCountDir(): String {
+        return "/data/local/tmp/inputblocker"
+    }
+
     fun onShutdown() {
         runRootCommand("mkdir -p /data/local/tmp/inputblocker && touch $NORMAL_SHUTDOWN_FLAG")
+        // Reset consecutive crash counter on clean shutdown
+        runRootCommand("rm -f $CRASH_COUNTER_FILE")
     }
 
     fun clearEmergencyReset(context: Context) {

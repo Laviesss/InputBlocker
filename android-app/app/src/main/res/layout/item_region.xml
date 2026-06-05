@@ -16,6 +16,15 @@
         android:orientation="horizontal"
         android:padding="16dp">
 
+        <!-- Color preview bar for region visual -->
+        <View
+            android:id="@+id/view_region_preview"
+            android:layout_width="6dp"
+            android:layout_height="48dp"
+            android:layout_marginEnd="12dp"
+            android:background="@color/accent_green"
+            android:alpha="0.7" />
+
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"

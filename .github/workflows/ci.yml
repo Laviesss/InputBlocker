@@ -27,7 +27,7 @@ jobs:
         run: ./gradlew test lint -PVERSION_NAME=0.0.0 -PVERSION_CODE=1
 
       - name: "Build APK"
-        run: ./gradlew assembleRelease -PVERSION_NAME=0.0.0 -PVERSION_CODE=1
+        run: ./gradlew assembleDebug -PVERSION_NAME=0.0.0 -PVERSION_CODE=1
 
       - name: "Upload Lint Results"
         if: always()
@@ -41,6 +41,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: '**/build/outputs/apk/release/app-release.apk'
+          name: app-debug
+          path: '**/build/outputs/apk/debug/app-debug.apk'
           retention-days: 7

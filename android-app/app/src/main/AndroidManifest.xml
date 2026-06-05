@@ -10,6 +10,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:name=".App"
@@ -30,6 +31,18 @@
         <!-- Community Gallery Activity -->
         <activity
             android:name=".CommunityGalleryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker" />
+
+        <!-- Crash Log Viewer Activity -->
+        <activity
+            android:name=".CrashLogActivity"
+            android:exported="false"
+            android:theme="@style/Theme.InputBlocker" />
+
+        <!-- Profile List Activity -->
+        <activity
+            android:name=".ProfileListActivity"
             android:exported="false"
             android:theme="@style/Theme.InputBlocker" />
 
@@ -110,6 +123,19 @@
         <service
             android:name=".VolumeButtonListenerService"
             android:exported="false" />
+
+        <!-- Accessibility Service (trusted overlay for Android 12+) -->
+        <service
+            android:name=".InputBlockerAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
 
         <receiver
             android:name=".BootReceiver"
