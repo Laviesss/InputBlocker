@@ -94,7 +94,7 @@ InputBlocker filters touches at the OS input level based on physical properties 
 # 6. Open the InputBlocker companion app to verify
 ```
 
-> **First time?** See [Getting Started Guide](docs/GETTING_STARTED.md) for a full walkthrough.
+> **First time?** An onboarding wizard appears on first launch to guide you through the app. See [Getting Started Guide](docs/GETTING_STARTED.md) for a full walkthrough.
 
 ### Emergency Recovery
 
@@ -103,6 +103,7 @@ InputBlocker filters touches at the OS input level based on physical properties 
 | Overlay blocks everything | Press **Volume Down × 3 → Volume Up × 3** |
 | Boot loop | Boot Safe Mode → disable module in LSPosed |
 | Crash detected | `adb shell rm /data/adb/modules/inputblocker/config/crash_detected` |
+| Crash counter | `adb shell rm /data/local/tmp/inputblocker/crash_count` to reset consecutive crash count |
 | Hard disable | `echo "1" > /data/adb/modules/inputblocker/config/kill_switch` |
 
 ---
@@ -119,6 +120,10 @@ InputBlocker filters touches at the OS input level based on physical properties 
 | **Exclude zones** | Create "holes" in blocked regions for buttons you need |
 | **Per-app profiles** | Different blocking configs for different applications |
 | **Kill switch** | Emergency file-based disable — no UI needed |
+| **Pause/Resume** | Pause blocking across Xposed, Accessibility, and Overlay paths via unified `paused=1` config flag. Notification provides timed pause options (5min, 30min) |
+| **Block Counter** | Real-time blocked touch counter displayed in app UI, overlay, and notification with rate-limited logging (300ms min gap) |
+| **Config Validation** | Validates config integrity before saving, rejecting invalid values with descriptive error messages |
+| **Real-time Config Reload** | FileObserver with 2s polling fallback watches config files and applies changes without reboot |
 
 ### Companion App
 
@@ -134,6 +139,14 @@ InputBlocker filters touches at the OS input level based on physical properties 
 | **Update checker** | In-app notification when new releases are available |
 | **Quick Settings tile** | Toggle blocking from the notification shade |
 | **Emergency gesture** | Configurable button combo to disable blocking instantly |
+| **Pause/Resume** | Quick Actions tab with PAUSE/RESUME button; notification with Pause 5min, Pause 30min, and Resume buttons |
+| **Crash Viewer** | In-app crash log viewer at Quick Actions → Crash Log. Displays timestamps and stack traces with Refresh and Clear buttons |
+| **Profile Manager** | Per-app profile management at Quick Actions → Profiles. Create/Rename/Delete profiles by package name with auto-switching on app change |
+| **Block Counter** | Blocked touch count visible in app UI, live overlay (green text), and notification bar |
+| **Onboarding Wizard** | 3-slide first-run tutorial explaining the app, how it works, and getting started — shown once |
+| **Haptic Feedback** | Toggle switches vibrate on interaction via `HapticFeedbackConstants.CONFIRM` |
+| **Block Log Auto-Prune** | Automatic log trimming at 1000 entries to prevent unbounded growth |
+| **Region Preview Colors** | Color-coded region bars: green=rectangle, orange=circle, blue=ellipse, red=excluded zone |
 
 ### PC Designer Tool
 
@@ -153,6 +166,8 @@ InputBlocker filters touches at the OS input level based on physical properties 
 | **Async logging** | Dedicated logger thread prevents I/O from blocking touch dispatch |
 | **Resolution-independent** | Normalized coordinates (0.0–1.0) — one config works across screen sizes |
 | **Low overhead** | Sub-millisecond filtering with two-tier caching |
+| **Crash counting** | 3 consecutive crashes triggers safe mode automatically. Counter resets on clean shutdown or manual reset |
+| **ConfigFileObserver** | Real-time config reload via FileObserver with 2s polling fallback for filesystems without inotify |
 
 ---
 
@@ -241,6 +256,7 @@ BLOCK if (ContactArea < MinPressure) OR (Duration > MaxDuration)
 | **PC Designer** | Desktop visual region editor | Compose Desktop, Kotlin |
 | **Shared Core** | Normalized coordinate math, Region model | Kotlin Multiplatform |
 | **Module Scripts** | Root installation, service, health-check | Shell (POSIX) |
+| **Accessibility Service** | Trusted blocking via `TYPE_ACCESSIBILITY_OVERLAY` on Android 12+. Emergency volume-key kill-switch, foreground detection for profile switching, block counter, config file watching | Android Accessibility API, Kotlin |
 
 ---
 
@@ -254,6 +270,8 @@ BLOCK if (ContactArea < MinPressure) OR (Duration > MaxDuration)
 | **PC Designer (macOS)** | `.dmg` | [Releases page](https://github.com/Laviesss/InputBlocker/releases) |
 
 > The companion APK is bundled inside the module ZIP and installs automatically on first boot.
+>
+> **v0.1.0 is now available on [GitHub Releases](https://github.com/Laviesss/InputBlocker/releases)** — the first stable release with the full feature set.
 
 ---
 

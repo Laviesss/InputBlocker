@@ -52,6 +52,7 @@ Before you submit a PR:
 - [ ] Note any version bumps in `CHANGELOG.md`.
 - [ ] Follow established project patterns. Avoid redundant abstractions or dead code.
 - [ ] Don't add `as Any` casts, `@Suppress` annotations, or empty `catch` blocks to production code.
+- [ ] Test pause/resume across all modes
 
 ## Testing
 
@@ -71,6 +72,11 @@ InputBlocker works at the system input level, so testing requires:
 | **Profile switching** | Do per-app configs load correctly when you switch apps? |
 | **Performance** | Is there any perceptible input lag or unusual battery drain? |
 | **Safe mode** | Does crash detection trigger safe mode correctly after a forced failure? |
+| **Pause/resume** | Does PAUSE stop blocking and RESUME restart it? Does it sync across Overlay, Accessibility, and LSPosed modes? |
+| **Crash viewer** | Does CrashLogActivity display crash dumps with timestamps and stack traces? |
+| **Profile switching UI** | Does the Profiles manager in Quick Actions create, load, and auto-load per-app profiles? |
+| **Block counter** | Does the live counter increment on blocked touches and display correctly on the main screen, overlay, and notification? |
+| **Haptic feedback on toggles** | Do toggle switches in the app produce haptic feedback on supported devices? |
 
 ## Reporting Issues
 

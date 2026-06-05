@@ -9,6 +9,7 @@ InputBlocker is a monorepo. It contains the Android Engine (Xposed/LSPosed hook)
 | **JDK** | 17 | Required. Use Eclipse Temurin or a similar distribution. |
 | **Android SDK** | API 34 (compile/target), API 23 (min) | Set this through `ANDROID_HOME` or `local.properties`. |
 | **Gradle** | 8.x | The wrapper is included, so you don't need a manual install. |
+| **Kotlin Compose Plugin** | 2.4.0 | Supported alongside the Kotlin plugin version matching your Gradle setup. |
 
 ### Environment Setup
 
@@ -56,7 +57,7 @@ Build only the part you need:
 | `buildModule` | Root module ZIP (needs a prior Android build) |
 
 ```bash
-./gradlew buildAndroid -PVERSION_NAME="1.0.0" -PVERSION_CODE=10
+./gradlew buildAndroid -PVERSION_NAME="0.1.0" -PVERSION_CODE=1
 ```
 
 ### 🔹 Docker Build (CI Reproducibility)
@@ -74,8 +75,8 @@ Both version flags are required. The build will fail if you don't include them.
 
 | Flag | Type | Example | Purpose |
 |---|---|---|---|
-| `-PVERSION_NAME` | String | `"1.0.0"` | The version string users see. |
-| `-PVERSION_CODE` | Int | `10` | Internal integer for tracking updates. |
+| `-PVERSION_NAME` | String | `"0.1.0"` | The version string users see. |
+| `-PVERSION_CODE` | Int | `1` | Internal integer for tracking updates. |
 
 During the testing phase, `VERSION_NAME` stays at `0.1.0` regardless of changes. This keeps distribution consistent until we validate core features. Our CI/CD workflow handles automatic version assignment for official releases.
 
@@ -132,6 +133,8 @@ We use GitHub Actions for automated builds. The release workflow handles:
 - PC tool cross-platform compilation.
 - GitHub Release creation.
 - Deployment of `update.json` for the in-app updater.
+
+For CI builds without access to release signing secrets, `assembleDebug` is used instead of `assembleRelease`. Debug APKs are suitable for testing but should not be distributed to end users.
 
 ## Project Structure
 

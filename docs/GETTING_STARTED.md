@@ -77,6 +77,8 @@ Edit the config file directly at `/data/adb/modules/inputblocker/config/profiles
 
 See [ADVANCED.md](ADVANCED.md) for the config file format reference.
 
+> **Onboarding Wizard**: On first launch, the companion app shows a 3-screen onboarding wizard explaining key features, blocking modes, and configuration options. You can revisit this from Settings → Show Onboarding. It's a quick way to get oriented if you're new to the app.
+
 ---
 
 ## Testing Your Configuration
@@ -86,6 +88,7 @@ After setting up blocking regions, verify they work:
 1. **Enable the overlay** — In the companion app, toggle **Show Overlay** to see your block regions rendered on screen
 2. **Watch the block log** — Open **Block Log** in the app to see filtered touches with metadata
 3. **Test real usage** — Use your device normally. Real touches should pass through; ghost taps should be blocked
+4. **Watch the block counter** — The main screen, overlay (green text), and notification all show a live count of total blocked touches. Rate-limited to prevent UI spam
 
 **If the overlay is too aggressive**, use the emergency gesture: **Volume Down × 3 → Volume Up × 3** — this disables the overlay immediately.
 
@@ -100,20 +103,30 @@ InputBlocker runs silently in the background. Once configured:
 - The adaptive optimizer tightens region bounds based on real data
 - Blocked touches are recorded in `blocklog.txt` for review
 
+**Quick Actions**: The companion app's Quick Actions tab gives you several controls:
+- **Pause/Resume** — Tap **PAUSE** to temporarily stop blocking. Resume manually or wait for the timer to expire. Pause for 5 or 30 minutes via the notification buttons.
+- **Crash Log viewer** — Review crash dumps with timestamps and stack traces. Logs are written automatically by the crash detection system.
+- **Profiles manager** — Create per-app profiles by entering a package name. Profiles auto-load when that app is foreground. Use the Load button to activate a profile immediately.
+
+**Block Counter**: The main screen displays a live counter of total blocked touches. Also shown in the overlay (green text) and in the notification. Rate-limited to prevent UI spam.
+
 **Quick Settings**: The companion app adds a Quick Settings tile — toggle blocking on/off from the notification shade.
+
+**Battery Optimization**: On first launch, the app prompts you to disable battery optimization for itself. This prevents the system from killing background services. It's recommended to allow this.
 
 ---
 
 ## Understanding Modes
 
-InputBlocker has two blocking modes:
+InputBlocker has three blocking modes:
 
 | Mode | How It Works | Best For |
 |---|---|---|
 | **LSPosed Hook** | Hooks `InputDispatcher.dispatchMotionLocked` — touches blocked BEFORE apps see them | Precision, minimal latency |
 | **Overlay Mode** | WindowManager overlay catches touches — apps may briefly see them before the overlay does | Devices without LSPosed, testing |
+| **Accessibility Mode** | Uses `AccessibilityService` with `TYPE_ACCESSIBILITY_OVERLAY` to intercept touch events | Android 12+ devices without LSPosed |
 
-Toggle modes in Settings. LSPosed mode is recommended for daily use.
+Toggle modes in Settings. LSPosed mode is recommended for daily use. Accessibility Mode works on Android 12+ without LSPosed installed.
 
 ---
 

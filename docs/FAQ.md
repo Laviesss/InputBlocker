@@ -39,6 +39,18 @@ Exclude zones let you block a large area while keeping specific UI elements (lik
 **Q: How do normalized coordinates work?**  
 A: All coordinates are 0.0–1.0 and represent a percentage of the screen, not raw pixels. A block zone at `(0.0, 0.0, 0.5, 1.0)` covers the left half of the screen regardless of resolution. This means a config works across different devices and screen sizes.
 
+**Q: Can I pause blocking temporarily?**  
+A: Yes — use the **PAUSE** button in Quick Actions tab. Pause for 5 or 30 minutes via notification buttons. The pause state syncs across all modes (Overlay, Accessibility, LSPosed).
+
+**Q: How do I view crash logs?**  
+A: Open Quick Actions → **Crash Log**. Shows all crash dumps with timestamps and stack traces. Crash logs are written automatically by the crash detection system.
+
+**Q: How do I manage per-app profiles?**  
+A: Quick Actions → **Profiles**. Create profiles by entering a package name. Profiles auto-load when that app is foreground. Use the Load button to activate a profile immediately.
+
+**Q: What's the block counter?**  
+A: A live counter of total blocked touches displayed on the main screen, in the overlay (as green text), and in the notification. Rate-limited to prevent UI spam.
+
 ---
 
 ## Performance & Battery
@@ -75,6 +87,8 @@ A: If the screen generates ghost taps everywhere, filtering becomes impractical 
 A: Two-layer protection:
 1. **Hot-path** — All hook code is wrapped in try/catch. If the filter throws, it logs the error and passes the touch through (fail-open).
 2. **Boot-time** — If a crash is detected across a reboot, a `crash_detected` flag is set. The service manager reads this on boot and enters safe mode (all blocking disabled) until you clear the flag.
+
+Additionally, the app now tracks consecutive crash counts (3 strikes → safe mode). The crash viewer in Quick Actions lets you review crash details.
 
 **Q: Can a bad config cause a boot loop?**  
 A: Only if the config crashes the LSPosed hook during system boot. This is rare — config parser errors cause fail-open, not crash. If it happens, boot Safe Mode, disable InputBlocker in LSPosed, then fix the config.

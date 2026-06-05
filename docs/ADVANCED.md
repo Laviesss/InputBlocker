@@ -28,6 +28,7 @@ lsposed_mode=1
 |---|---|---|
 | **enabled** | `0` or `1` | Master toggle for this profile |
 | **lsposed_mode** | `0` or `1` | `1` = LSPosed hook mode (recommended), `0` = overlay mode |
+| **paused** | `0` or `1` | `1` = blocking suspended until explicitly resumed. Synced across all blocking services via `com.inputblocker.PAUSE` / `com.inputblocker.RESUME` broadcasts. |
 | **isExclude** | `0` or `1` | `0` = block zone, `1` = exclude zone (hole in a block) |
 | **type** | `0`, `1`, `2` | `0` = rectangle, `1` = circle, `2` = ellipse |
 | **x1, y1** | `0.0` – `1.0` | Top-left corner (normalized) |
@@ -138,24 +139,155 @@ echo "Ghost taps blocked since last reset: $COUNT"
 
 ## Crash Detection Mechanism
 
-The crash detection system operates across two layers:
+The crash detection system operates across three layers:
 
 1. **In-hook detection** — Every `beforeHookedMethod` is wrapped in try/catch. On exception:
    - Logs the error to logcat
-   - Writes to `crash_detected` flag file
+   - Calls `InputBlockerServiceManager.reportCrash(Throwable)` which writes the full stack trace to `/data/local/tmp/inputblocker/crash_logs/<timestamp>.log`
+   - Increments the crash counter at `/data/local/tmp/inputblocker/crash_count`
    - Re-throws so the system doesn't notice
 
 2. **Boot-time detection** — The `ServiceManager` reads `crash_detected` on startup:
    - If flag exists: enters **safe mode** (all blocking disabled, overlay shows "SAFE MODE")
    - If flag absent: normal operation
 
-**To exit safe mode:**
+3. **3-strike safe mode** — On each boot, the crash counter at `/data/local/tmp/inputblocker/crash_count` is checked:
+   - If count >= 3: enters safe mode automatically, regardless of other flags
+   - Counter resets on clean shutdown
+   - Prevents repeated crash loops from locking the device
+
+### Viewing Crash Logs In-App
+
+The companion app includes `CrashLogActivity` for viewing crash reports directly on the device:
+
+1. Open the InputBlocker companion app
+2. Tap **Quick Actions** in the menu
+3. Select **View Crash Logs**
+4. Each entry shows timestamp, error message, and full stack trace
+
+Crash logs are stored at `/data/local/tmp/inputblocker/crash_logs/` and persist across reboots.
+
+### Manual Crash Log Access
+
+```bash
+# List available crash logs
+adb shell ls -la /data/local/tmp/inputblocker/crash_logs/
+
+# Read a specific crash log
+adb shell cat /data/local/tmp/inputblocker/crash_logs/crash_20260101_120000.log
+
+# Check crash count
+adb shell cat /data/local/tmp/inputblocker/crash_count
+
+# Reset crash counter (after investigating)
+adb shell echo "0" > /data/local/tmp/inputblocker/crash_count
+```
+
+### Exiting Safe Mode
+
 ```bash
 adb shell rm /data/adb/modules/inputblocker/config/crash_detected
+adb shell echo "0" > /data/local/tmp/inputblocker/crash_count
 adb reboot
 ```
 
 Or just clear it from the companion app's settings screen.
+
+---
+
+## ConfigFileObserver (Real-Time Config Reload)
+
+The companion app reloads configuration changes in real time without requiring a service restart. This is powered by `ConfigFileObserver`, a two-layer file monitoring system:
+
+### How It Works
+
+```
+Config File Change → FileObserver (inotify)
+                   → On failure/unsupported FS → 2s polling fallback
+                   → Config reloaded in memory
+                   → Services pick up new region definitions
+```
+
+- **Primary layer**: `FileObserver` uses Linux inotify to receive instant notifications when config files change, are created, or are deleted.
+- **Fallback layer**: On filesystems that don't support inotify (certain FUSE mounts, some MTP or virtual storage), a polling loop checks file modification timestamps every 2 seconds.
+- **Scope**: Monitors all `.conf` files in the profiles directory, plus `kill_switch`, `crash_detected`, and `paused` state changes.
+
+### What Triggers a Reload
+
+- Editing `default.conf` or any per-app profile via ADB or PC Designer
+- Creating or deleting a profile file
+- Writing `paused=1` or `paused=0` to the config
+- Creating or removing the `kill_switch` file
+- Crash flag changes
+
+When a change is detected, the relevant service (OverlayService, AccessibilityService, or hook module) reloads its region definitions from disk. No service restart required.
+
+### Verifying Config Changes
+
+```bash
+# Watch for reload events in logcat
+adb shell logcat -s InputBlocker:ConfigFileObserver
+
+# Expected output:
+# "Config file modified: /data/adb/modules/inputblocker/config/profiles/default.conf"
+# "Reloaded 3 regions from config"
+```
+
+---
+
+## Pause/Resume Blocking
+
+The companion app provides a pause/resume mechanism that temporarily suspends all blocking without disabling the profile. This is useful for scenarios where you need full touch access temporarily.
+
+### How to Pause
+
+| Method | Steps |
+|---|---|
+| **Quick Actions toggle** | Open companion app → Quick Actions → tap Pause |
+| **Notification buttons** | Pull down notification → tap Pause 5min or Pause 30min |
+| **Shell command** | `adb shell am broadcast -a com.inputblocker.PAUSE` |
+
+### How to Resume
+
+| Method | Steps |
+|---|---|
+| **Quick Actions toggle** | Open companion app → Quick Actions → tap Resume |
+| **Notification buttons** | Pull down notification → tap Resume |
+| **Auto-resume** | Timer expires and re-enables blocking automatically |
+| **Shell command** | `adb shell am broadcast -a com.inputblocker.RESUME` |
+
+### How It Works
+
+1. The MainActivity toggle (or notification action) broadcasts `com.inputblocker.PAUSE` or `com.inputblocker.RESUME` as an Android intent.
+2. All three blocking services listen for these intents:
+   - **OverlayService** — stops blocking touches in the overlay
+   - **AccessibilityService** — stops blocking via accessibility gesture interception
+   - **LSPosed hook** — reads `paused=1` from the config file and stops filtering at the input dispatcher level
+3. The `paused=1` flag is written to the config file, so pause state persists across service restarts and reboots.
+4. Each service runs an auto-resume timer. When the selected pause duration (5 min, 30 min) expires, blocking is re-enabled automatically.
+
+### Notification Action Buttons
+
+The persistent notification includes three action buttons:
+
+- **Pause 5min** — Suspends blocking for 5 minutes, then auto-resumes
+- **Pause 30min** — Suspends blocking for 30 minutes, then auto-resumes
+- **Resume** — Immediately re-enables blocking (only shown when paused)
+
+These buttons work with all three services, not just the foreground service that posted the notification.
+
+### Shell Script Automation
+
+```bash
+#!/system/bin/sh
+# Pause blocking for a custom duration (in milliseconds)
+am broadcast -a com.inputblocker.PAUSE
+sleep 300   # 5 minutes
+am broadcast -a com.inputblocker.RESUME
+
+# Check current pause state
+grep "^paused=" /data/adb/modules/inputblocker/config/profiles/default.conf
+```
 
 ---
 

@@ -172,20 +172,96 @@ Three geometric shapes are supported, all using normalized coordinates (0.0–1.
 The companion app provides:
 
 - **OverlayService**: A foreground service that draws blocking region indicators on screen. Uses `WindowManager.LayoutParams` with `FLAG_NOT_FOCUSABLE | FLAG_NOT_TOUCH_MODAL` — it never captures focus and passes through touches outside configured blocked regions. When no regions are configured, it dynamically adds `FLAG_NOT_TOUCHABLE` so the overlay does not interfere with normal device use.
+- **AccessibilityService**: `InputBlockerAccessibilityService` using `TYPE_ACCESSIBILITY_OVERLAY` for trusted overlay rendering on Android 12+. Handles emergency kill-switch detection (Volume Down×3 → Up×3), foreground app detection for profile switching, block counter tracking, notification action buttons (Pause 5min/30min/Resume), and rate-limited block logging via `ConfigFileObserver`.
 - **VolumeButtonListenerService**: Listens for emergency reset gesture sequences (configurable button combos).
 - **Configuration UI**: Edit profiles, toggle blocking, view block logs and latency data.
-- **Crash Detection**: On next launch after an abnormal shutdown, the app enters safe mode (blocking force-disabled).
+- **CrashLogActivity**: In-app crash viewer at `com.inputblocker.app.CrashLogActivity`. Reads detailed crash dumps from `/data/local/tmp/inputblocker/crash_logs/`. Accessible from the Quick Actions menu.
+- **ProfileListActivity**: Per-app profile manager for creating, renaming, and deleting profiles tied to package names. Data stored at `InputBlockerServiceManager.getConfigDir() + "/profiles"`. Integrates with MainActivity via `startActivityForResult`.
+- **Pause/Resume Toggle**: MainActivity toggle broadcasts `com.inputblocker.PAUSE` / `com.inputblocker.RESUME` intents. All three blocking services (OverlayService, AccessibilityService, LSPosed hook) respond. Also persists `paused=1` to the config file for the hook module.
+- **Block Counter**: Maintained in both AccessibilityService and OverlayService via an `AtomicInteger` incremented on each blocked touch. Displayed in the overlay (green text), notification text, and app UI. Rate-limited to one log entry per 300ms.
+- **Haptic Feedback**: All toggle switches call `performHapticFeedback(CONFIRM)` for tactile confirmation.
+- **Crash Detection**: On next launch after an abnormal shutdown, the app enters safe mode (blocking force-disabled). Tracks consecutive crashes via a counter at `/data/local/tmp/inputblocker/crash_count`. After 3 consecutive crashes, safe mode activates automatically.
 
 ### Safe Mode Flow
 
 ```
 Boot → InputBlockerServiceManager.startServices()
      → Check crash_detected flag
+     → Check crash_count file
      → Check normal_shutdown flag
      → If abnormal shutdown without crash flag:
          → Write enabled=0, force_safe_mode=1 to config
          → Start overlay in safe mode (no blocking)
+     → If crash_count >= 3:
+         → Auto safe mode (all blocking disabled)
+         → Notification shown to user
 ```
+
+Safe mode exits when the user clears the crash flag from the app UI or via ADB. `InputBlockerServiceManager.reportCrash(Throwable)` accepts a throwable parameter and writes the full stack trace to a timestamped crash log at `/data/local/tmp/inputblocker/crash_logs/`, then increments the crash counter.
+
+### AccessibilityService
+
+`InputBlockerAccessibilityService` extends `AccessibilityService` and registers with `TYPE_ACCESSIBILITY_OVERLAY` on Android 12+ for trusted overlay handling. Key responsibilities:
+
+- **Emergency gesture**: Monitors button combinations (default Volume Down×3 → Up×3) as a kill-switch. When detected, disables all blocking immediately.
+- **Foreground detection**: Tracks the currently focused app via `onAccessibilityEvent` for automatic profile switching.
+- **Block counter**: Maintains an `AtomicInteger` incremented on each blocked touch. The current count is reflected in the overlay text, notification text, and app UI.
+- **Notification actions**: Provides notification action buttons for Pause 5min, Pause 30min, and Resume, allowing quick toggling without opening the app.
+- **ConfigFileObserver**: Integrates with `ConfigFileObserver` to reload blocking configurations in real time.
+- **Rate-limited logging**: Blocked touch events are written to the block log at a maximum rate of one entry per 300ms to prevent log flooding.
+
+### CrashLogActivity
+
+`com.inputblocker.app.CrashLogActivity` provides an in-app crash report viewer. It is accessible from the Quick Actions menu in the companion app.
+
+- **Source**: Reads crash log files from `/data/local/tmp/inputblocker/crash_logs/`
+- **Display**: Each entry shows timestamp, error message, and full stack trace
+- **Purpose**: Allows users and developers to review crash details directly on the device without ADB access
+
+### ProfileListActivity
+
+`ProfileListActivity` manages per-app blocking profiles.
+
+- **Storage**: Profiles are stored as `.conf` files at `InputBlockerServiceManager.getConfigDir() + "/profiles"`
+- **Operations**: Create, rename, and delete profiles tied to Android package names
+- **Integration**: Launched from MainActivity via `startActivityForResult`, returning the selected profile name
+
+### Pause/Resume
+
+The companion app implements a pause/resume mechanism that temporarily suspends all blocking:
+
+- **Broadcast intents**: The MainActivity toggle sends `com.inputblocker.PAUSE` or `com.inputblocker.RESUME` broadcasts
+- **Service response**: All three blocking services (OverlayService, AccessibilityService, LSPosed hook) respond to these intents
+- **Config persistence**: The LSPosed hook module reads `paused=1` from the config file to maintain pause state across reboots
+- **Notification controls**: Users can pause for 5 minutes or 30 minutes directly from the notification, or resume immediately
+- **Auto-resume**: Each service implements an auto-resume timer that re-enables blocking after the selected pause duration expires
+
+### Block Counter
+
+Both `AccessibilityService` and `OverlayService` maintain a block counter:
+
+- **Implementation**: `AtomicInteger` incremented on each blocked touch event
+- **Display**: Shown as green text in the overlay, in the notification text, and in the app UI
+- **Rate limit**: Log entries are capped at one per 300ms to prevent excessive I/O
+- **Purpose**: Provides instant feedback that blocking is active and gives users a sense of ghost tap frequency
+
+### Haptic Feedback
+
+All interactive toggle switches in the companion app call `performHapticFeedback(CONFIRM)` to provide tactile confirmation. This includes:
+
+- Blocking enable/disable toggle
+- Safe mode exit toggle
+- Emergency gesture configuration switches
+- Profile activation toggles
+
+### ConfigFileObserver
+
+The companion app monitors config files for changes in real time using a two-layer approach:
+
+- **Primary**: `FileObserver` (inotify) on the config directory detects file modifications, additions, and deletions as they happen.
+- **Fallback**: For filesystems that do not support inotify (e.g., some FUSE mounts), a polling loop runs every 2 seconds.
+- **Scope**: Monitors all `.conf` files in the profiles directory plus the kill switch and crash flag files.
+- **Reaction**: On detecting a config change, services reload their region definitions without requiring a service restart.
 
 ---
 
@@ -263,6 +339,16 @@ it takes priority over `default.conf` when that app is in the foreground. This a
 | `config/test_mode` | If present, the hook drops **all** touch events for performance testing. |
 | `config/crash_detected` | Written by the hook on critical failure. Triggers safe mode on next boot. |
 
+### Config Key-Value Flags
+
+The config file supports key-value flags at the top of the file, before any region definitions:
+
+| Key | Values | Description |
+|---|---|---|
+| `enabled` | `0` or `1` | Master toggle for this profile |
+| `lsposed_mode` | `0` or `1` | Enables LSPosed hook mode (recommended) |
+| `paused` | `0` or `1` | When `1`, all blocking is temporarily suspended until explicitly resumed. Synced across OverlayService, AccessibilityService, and the LSPosed hook module. |
+
 ---
 
 ## Auto-Tuning Logic
@@ -335,10 +421,13 @@ To prevent I/O on the input dispatch thread, all logging is performed via an asy
 | `/data/adb/modules/inputblocker/config/kill_switch` | Emergency disable |
 | `/data/adb/modules/inputblocker/config/test_mode` | Performance test mode |
 | `/data/adb/modules/inputblocker/config/crash_detected` | Crash flag |
+| `/data/local/tmp/inputblocker/crash_logs/` | Detailed crash dump directory (timestamped stack traces) |
+| `/data/local/tmp/inputblocker/crash_count` | Consecutive crash counter (3 strikes triggers auto safe mode) |
 
 ### Crash Protection
 
-The hook module has two layers of crash protection:
+The system has three layers of crash protection:
 
-1. **Hot-path safety**: Every `dispatchMotionLocked` invocation is wrapped in `try/catch(Throwable)`. On failure, a crash flag is written.
-2. **Boot-time detection**: On app startup, the companion app checks for the crash flag and — if present — writes `enabled=0` to the config, forcing safe mode.
+1. **Hot-path safety**: Every `dispatchMotionLocked` invocation is wrapped in `try/catch(Throwable)`. On failure, `InputBlockerServiceManager.reportCrash(Throwable)` writes a full stack trace to a timestamped log at `/data/local/tmp/inputblocker/crash_logs/` and increments the crash counter at `/data/local/tmp/inputblocker/crash_count`.
+2. **Boot-time detection**: On app startup, the companion app checks for the crash flag. If present, it writes `enabled=0` to the config, forcing safe mode.
+3. **3-strike safe mode**: If the crash counter reaches 3 or more consecutive crashes, all blocking is automatically disabled on the next boot regardless of other flags. The counter resets on a clean shutdown.

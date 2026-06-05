@@ -15,6 +15,9 @@ Common issues, diagnostic steps, and recovery procedures for InputBlocker.
 | "Crash detected" on boot | Hook threw unhandled exception | Clear crash flag, check logcat |
 | App crashes on launch | Corrupt config or data | Clear app data, reconfigure |
 | PC Designer can't connect | ADB not authorized / wrong port | Check USB debugging, re-authorize |
+| Pause/Resume not working | Broadcast not received by service | Restart app or toggle blocking off/on |
+| Crash logs empty | No crashes detected yet | This is normal — crash logs only appear after a crash |
+| Profile not switching | Profile file doesn't match foreground package | Verify profile name matches the exact package name |
 
 ---
 
@@ -181,6 +184,39 @@ adb shell /data/adb/modules/inputblocker/action.sh reinstall
 
 ---
 
+## Profiles Not Switching
+
+**Issue:** Per-app profile doesn't load when switching apps.
+
+**Fix:**
+1. Verify profile name matches exact package name (e.g., `com.example.app.conf`)
+2. Check logcat: `adb shell logcat -s InputBlocker:Profile`
+3. Ensure Accessibility Mode is enabled (foreground detection needs it)
+4. Profile files are in `/data/adb/modules/inputblocker/config/profiles/`
+5. Restart the companion app after creating a profile
+
+---
+
+## Pause/Resume Not Working
+
+**Issue:** Tapping PAUSE doesn't stop blocking.
+
+**Fix:**
+1. Check overlay mode — visual overlay should show "PAUSED" with countdown
+2. Notification should show Resume button during pause
+3. For LSPosed mode: pause writes `paused=1` to config — verify with `adb shell cat /data/adb/modules/inputblocker/config/profiles/default.conf | grep paused`
+4. If auto-resume doesn't trigger: check the service uptime (auto-resume timer runs in service poll loop)
+
+---
+
+## Crash Logs Show Nothing
+
+**Issue:** CrashLogActivity displays "No crash logs found."
+
+This is normal behavior — it only shows data after a crash has been detected and reported. To generate a test entry, the app writes crash logs on uncaught exceptions.
+
+---
+
 ## Collecting Logs for Bug Reports
 
 When opening a GitHub issue, include these logs:
@@ -194,6 +230,9 @@ adb shell cat /data/adb/modules/inputblocker/config/latency.log
 
 # Current config
 adb shell cat /data/adb/modules/inputblocker/config/profiles/default.conf
+
+# Crash logs (if any)
+adb shell ls -la /data/local/tmp/inputblocker/crash_logs/
 
 # logcat filtered for InputBlocker
 adb shell logcat -d -s InputBlocker:* '*:E'

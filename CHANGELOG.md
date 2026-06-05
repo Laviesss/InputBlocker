@@ -8,7 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-06-04
+
 ### Added
+- Initial release of the Android Engine with touch filtering.
+- PC Designer for visual region mapping and threshold tuning.
+- DBSCAN-based auto-tuning for ghost tap hotspot analysis.
+- Root-agnostic support for Magisk, KernelSU, and APatch.
+- Emergency reset gesture (Volume Down x3 followed by Volume Up x3).
+- Async logging system to prevent input lag.
+- Theme support for System, Light, Dark, and AMOLED modes.
+- KMP shared core for coordinate normalization.
+- Production-grade CI/CD pipeline with dynamic versioning.
 - LSPosed mode toggle (`lsposed_mode` config flag) — hook can be disabled without uninstalling
 - Auto-detection KDoc documenting the 500/2000/1000ms sleep tuning parameters
 - Rolling-release version note in About dialog
@@ -20,6 +31,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User acquisition strategy guide (PROMOTION.md)
 - "Sync with device" and "Run test mode" Quick Action buttons now functional
 - Testing-phase banner in release notes with grouped changelog
+- **Pause/Resume**: Pause/resume blocking across Xposed, Accessibility, and Overlay paths via `paused=1` config flag. Quick Actions tab with PAUSE/RESUME button. Notification provides Pause 5min, Pause 30min, and Resume buttons
+- **InputBlockerAccessibilityService**: New `TYPE_ACCESSIBILITY_OVERLAY` service for trusted blocking on Android 12+. Includes emergency volume-key kill-switch, foreground detection for profile switching, block counter, config file watching, and rate-limited block logging
+- **CrashLogActivity**: In-app crash log viewer at Quick Actions → Crash Log. Reads crash logs from `/data/local/tmp/inputblocker/crash_logs/` with timestamp and stack trace display. Features Refresh and Clear buttons
+- **ProfileListActivity**: Per-app profile manager at Quick Actions → Profiles. Supports create/rename/delete operations. Auto-switches profile based on foreground app
+- **Block counter**: Total blocked touches displayed in app UI, overlay (green text), and notification. Block entries rate-limited to 300ms minimum gap
+- **Safe mode with crash counting**: Tracks consecutive crash count at `/data/local/tmp/inputblocker/crash_count`. 3 consecutive crashes triggers automatic safe mode. Counter resets on clean shutdown or manual reset
+- **ConfigFileObserver**: Real-time config reload using Android FileObserver with 2s polling fallback for filesystems without inotify
+- **Config validation**: `validateConfig()` checks config integrity before saving, returning descriptive error messages on failure
+- **Onboarding wizard**: 3-slide first-run dialog explaining the app, how it works, and getting started. Shown once on initial launch
+- **Haptic feedback**: All toggle switches vibrate on toggle via `performHapticFeedback(HapticFeedbackConstants.CONFIRM)`
+- **Region preview colors**: Region list items display color-coded bars: green=rectangle, orange=circle, blue=ellipse, red=excluded zones
+- **BlockLogActivity auto-prune**: Keeps only the last 1000 entries to prevent unbounded log growth
+- **Battery optimization prompt**: On first launch, checks PowerManager whitelist status. Prompts user to disable battery optimization if not whitelisted
+- **LSPosed pause sync**: `paused=1` config flag written by togglePause() via root sed. InputBlockerXposed reads the flag and skips blocking when set
 
 ### Changed
 - README fully restructured with badges, ToC, feature table, architecture diagram, comparison table, FAQ
@@ -39,28 +64,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Config path in customize.sh now writes to `config/profiles/default.conf`
 - Legacy `blocked_regions.conf` removed from module setup
 - module/action.sh: added `file` command APK integrity check before `pm install`
-
----
-
-## [0.1.0] - 2026-05-20
-
-### Added
-- Initial release of the Android Engine with touch filtering.
-- PC Designer for visual region mapping and threshold tuning.
-- DBSCAN-based auto-tuning for ghost tap hotspot analysis.
-- Root-agnostic support for Magisk, KernelSU, and APatch.
-- Emergency reset gesture (Volume Down x3 followed by Volume Up x3).
-- Async logging system to prevent input lag.
-- Theme support for System, Light, Dark, and AMOLED modes.
-- KMP shared core for coordinate normalization.
-- Production-grade CI/CD pipeline with dynamic versioning.
-
----
-
-### ⚠️ Testing Phase Notice
-
-All testing releases use version `0.1.0` regardless of the changes included. Version `0.1.0` is treated as a rolling release during active development — the version string stays the same even as features and fixes accumulate.
-
-This ensures consistent distribution while core functionality is validated. Once the project exits the testing phase, strict semantic versioning will be applied.
-
-> **For the actual changelog of what changed between pre-releases, check the GitHub Releases page or the commit log between tags.**
