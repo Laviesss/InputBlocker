@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import android.os.Build
 import android.os.FileObserver
 import android.os.Handler
 import android.os.Looper
@@ -55,18 +56,34 @@ class ConfigFileObserver(
         lastModified = configFile.lastModified()
 
         try {
-            fileObserver = object : FileObserver(parentDir, FileObserver.CLOSE_WRITE or FileObserver.MOVED_TO) {
-                override fun onEvent(event: Int, path: String?) {
-                    if (path == null) return
-                    // Match the config file name, or match any .conf file (for profile switching)
-                    if (path == configFile.name || path.endsWith(".conf")) {
+            fileObserver = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // API 29+ supports mask-based FileObserver on the parent directory
+                object : FileObserver(parentDir, FileObserver.CLOSE_WRITE or FileObserver.MOVED_TO) {
+                    override fun onEvent(event: Int, path: String?) {
+                        if (path == null) return
+                        if (path == configFile.name || path.endsWith(".conf")) {
+                            val now = configFile.lastModified()
+                            if (now > lastModified) {
+                                lastModified = now
+                                handler.removeCallbacksAndMessages(null)
+                                handler.postDelayed({
+                                    if (running.get()) onConfigChanged()
+                                }, 300L)
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Pre-API 29: observe the config file directly (no mask support)
+                object : FileObserver(configFile.absolutePath) {
+                    override fun onEvent(event: Int, path: String?) {
                         val now = configFile.lastModified()
                         if (now > lastModified) {
                             lastModified = now
                             handler.removeCallbacksAndMessages(null)
                             handler.postDelayed({
                                 if (running.get()) onConfigChanged()
-                            }, 300L) // Debounce rapid writes
+                            }, 300L)
                         }
                     }
                 }
