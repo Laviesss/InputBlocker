@@ -22,7 +22,46 @@ object InputBlockerServiceManager {
     
     private var cachedModulePath: String? = null
     
+    /** Test hook: set to override command execution for unit tests */
+    internal var testCommandRunner: ((String) -> String)? = null
+
+    /**
+     * Checks whether root access (su) is available on this device.
+     * Returns true if su executes and returns a non-error response.
+     */
+    fun hasRootAccess(): Boolean {
+        testCommandRunner?.let { return it("echo ok").contains("ok") }
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "echo ok"))
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            val output = reader.readText().trim()
+            process.waitFor()
+            output.contains("ok")
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Checks whether LSPosed is installed by looking for its APK or module path.
+     */
+    fun isLsposedInstalled(): Boolean {
+        return try {
+            val process = Runtime.getRuntime().exec(arrayOf(
+                "sh", "-c",
+                "ls /data/data/org.lsposed.lsposed 2>/dev/null || " +
+                "ls /data/app/*lsposed* 2>/dev/null || " +
+                "pm list packages 2>/dev/null | grep -q lsposed"
+            ))
+            process.waitFor()
+            process.exitValue() == 0
+        } catch (_: Exception) {
+            false
+        }
+    }
+
     fun runRootCommand(command: String): String {
+        testCommandRunner?.let { return it(command) }
         return try {
             val process = Runtime.getRuntime().exec(arrayOf("su", "-c", command))
             val reader = BufferedReader(InputStreamReader(process.inputStream))

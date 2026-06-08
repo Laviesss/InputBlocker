@@ -20,7 +20,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class ConfigFileObserver(
     private val configPath: String,
-    private val onConfigChanged: () -> Unit
+    private val onConfigChanged: () -> Unit,
+    /** Injectable for testing – defaults to main-looper handler */
+    internal val handler: Handler = Handler(Looper.getMainLooper())
 ) {
     companion object {
         private const val TAG = "ConfigFileObserver"
@@ -32,7 +34,7 @@ class ConfigFileObserver(
     private var fallbackThread: Thread? = null
     @Volatile private var lastModified = 0L
     private val running = AtomicBoolean(false)
-    private val handler = Handler(Looper.getMainLooper())
+
 
     /** @see #start() */
     fun startWatching() = start()

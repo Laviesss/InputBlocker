@@ -1,7 +1,9 @@
 package com.inputblocker.app
 
 import android.Manifest
+import android.app.AlarmManager
 import android.app.AlertDialog
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -119,10 +121,32 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Senior Engineering: Fail-safe crash tracking
+        // Senior Engineering: Fail-safe crash tracking + auto-restart
         val oldHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             InputBlockerServiceManager.reportCrash(throwable)
+
+            // Auto-restart activity after 2 seconds via AlarmManager
+            try {
+                val restartIntent = Intent(this@MainActivity, MainActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                }
+                val pendingIntent = PendingIntent.getActivity(
+                    this@MainActivity,
+                    9001,
+                    restartIntent,
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+                )
+                val alarm = getSystemService(Context.ALARM_SERVICE) as AlarmManager
+                alarm.set(
+                    AlarmManager.RTC_WAKEUP,
+                    System.currentTimeMillis() + 2000,
+                    pendingIntent
+                )
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to schedule auto-restart", e)
+            }
+
             oldHandler?.uncaughtException(thread, throwable)
         }
 
@@ -173,6 +197,39 @@ class MainActivity : AppCompatActivity() {
         applyThemeToViews()
         showOnboardingIfNeeded()
         checkForUpdates()
+
+        // User-facing error state: check root access
+        if (!InputBlockerServiceManager.hasRootAccess()) {
+            AlertDialog.Builder(this)
+                .setTitle("Root Access Required")
+                .setMessage("InputBlocker requires root access (su) to function.\n\n" +
+                        "Please install Magisk, KernelSU, or APatch and grant superuser permissions.")
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .setPositiveButton("OK") { _, _ ->
+                    Toast.makeText(this, "Blocking will not work without root.", Toast.LENGTH_LONG).show()
+                }
+                .setCancelable(false)
+                .show()
+        }
+
+        // User-facing error state: warn if LSPosed mode on but LSPosed not installed
+        if (isLsposedMode && !InputBlockerServiceManager.isLsposedInstalled()) {
+            AlertDialog.Builder(this)
+                .setTitle("LSPosed Not Detected")
+                .setMessage("LSPosed mode is enabled but the LSPosed framework was not found on this device.\n\n" +
+                        "Please install LSPosed or switch to Overlay Mode.")
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .setPositiveButton("Switch to Overlay") { _, _ ->
+                    val lsposedSwitch = findViewById<SwitchMaterial>(R.id.switch_blocking_method)
+                    lsposedSwitch.isChecked = false
+                    isLsposedMode = false
+                    saveLsposedPreference(false)
+                    updateStatus()
+                    Toast.makeText(this, "Switched to Overlay Mode.", Toast.LENGTH_SHORT).show()
+                }
+                .setNeutralButton("Ignore", null)
+                .show()
+        }
         
         handleQuickActionIntent(intent)
     }
@@ -210,6 +267,26 @@ class MainActivity : AppCompatActivity() {
         
         findViewById<SwitchMaterial>(R.id.switch_blocking_method).setOnCheckedChangeListener { view, isChecked ->
             view.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+
+            if (isChecked && !InputBlockerServiceManager.isLsposedInstalled()) {
+                AlertDialog.Builder(this)
+                    .setTitle("LSPosed Not Detected")
+                    .setMessage("LSPosed framework was not found on this device.\n\n" +
+                            "Please install LSPosed first, or use Overlay Mode instead.")
+                    .setIcon(android.R.drawable.ic_dialog_alert)
+                    .setPositiveButton("Switch to Overlay") { _, _ ->
+                        view.isChecked = false
+                    }
+                    .setNegativeButton("Continue Anyway") { _, _ ->
+                        isLsposedMode = true
+                        saveLsposedPreference(true)
+                        updateStatus()
+                        Toast.makeText(this, "LSPosed Mode enabled.", Toast.LENGTH_LONG).show()
+                    }
+                    .show()
+                return@setOnCheckedChangeListener
+            }
+
             isLsposedMode = isChecked
             saveLsposedPreference(isChecked)
             updateStatus()
