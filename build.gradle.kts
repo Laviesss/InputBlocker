@@ -54,12 +54,8 @@ tasks.register<Zip>("buildModule") {
         rename { "InputBlocker.apk" }
         into("common")
     }
-    // Also place in system/app so the overlay auto-installs on boot
-    from("android-app/app/build/outputs/apk/release/") {
-        include("app-release.apk", "app-release-unsigned.apk")
-        rename { "InputBlocker.apk" }
-        into("system/app/InputBlocker")
-    }
+    // NOTE: APK intentionally NOT placed in system/app/ — doing so makes it a system
+    // overlay (uninstallable by user). The service.sh script handles user-app install.
     
     archiveFileName.set("InputBlockerModule.zip")
     destinationDirectory.set(file("build/distributions"))

@@ -33,7 +33,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private var cachedWindowManager: WindowManager? = null
 
         // Crash Protection: Write a flag if we fail in the hot path
-        private val CRASH_FLAG_PATH = "/data/adb/modules/inputblocker/config/crash_detected"
+        // Synced with InputBlockerServiceManager.CRASH_FLAG
 
         // --- Async Logging System (Only in system_server) ---
         private val logQueue = LinkedBlockingQueue<String>(500)
@@ -209,7 +209,8 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     private fun handleHookCrash(t: Throwable) {
         XposedBridge.log("$TAG CRITICAL CRASH: ${t.message}")
         try {
-            File(CRASH_FLAG_PATH).writeText("1")
+            // Must match InputBlockerServiceManager.CRASH_FLAG
+            File("/data/adb/modules/inputblocker/config/crash_detected").writeText("1")
         } catch (e: Exception) {
             XposedBridge.log("$TAG: Failed to write crash flag: ${e.message}")
         }

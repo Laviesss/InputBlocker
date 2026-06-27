@@ -14,7 +14,7 @@ import java.io.File
 class CrashLogActivity : AppCompatActivity() {
 
     companion object {
-        private const val CRASH_LOG_DIR = "/data/local/tmp/inputblocker/crash_logs"
+        private val CRASH_LOG_DIR = InputBlockerServiceManager.getCrashCountDir() + "/crash_logs"
         private const val MAX_LOG_LINES = 1000
     }
 

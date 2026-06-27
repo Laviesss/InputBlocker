@@ -36,11 +36,6 @@ if [ -d "$MODPATH/system/bin" ]; then
     chmod -R 755 "$MODPATH/system/bin/"
 fi
 
-# Set permissions for system app APK (Overlay)
-if [ -f "$MODPATH/system/app/InputBlocker/InputBlocker.apk" ]; then
-    chmod 644 "$MODPATH/system/app/InputBlocker/InputBlocker.apk"
-fi
-
 # Create default config (Xposed hook + companion app read from config/profiles/default.conf)
 mkdir -p "$MODPATH/config/profiles"
 if [ ! -f "$MODPATH/config/profiles/default.conf" ]; then

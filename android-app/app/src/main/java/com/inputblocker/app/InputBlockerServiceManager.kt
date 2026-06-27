@@ -218,7 +218,7 @@ object InputBlockerServiceManager {
             }
             runRootCommand("mkdir -p $crashLogDir")
             // Write via temp file + root cp (echo can mangle special chars)
-            val tempFile = java.io.File("/data/local/tmp/inputblocker/crash_payload.tmp")
+            val tempFile = java.io.File(getCrashCountDir(), "crash_payload.tmp")
             tempFile.writeText(detail)
             runRootCommand("cp ${tempFile.absolutePath} $crashLogFile && chmod 644 $crashLogFile && rm -f ${tempFile.absolutePath}")
 
