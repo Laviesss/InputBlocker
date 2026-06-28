@@ -43,7 +43,9 @@ class QuickSettingsTileService : TileService() {
         val currentProfile = prefs.getString("current_profile", "default") ?: "default"
 
         tile.label = "InputBlocker"
-        tile.subtitle = currentProfile
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            tile.subtitle = currentProfile
+        }
         tile.state = if (isEnabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         
         tile.updateTile()
