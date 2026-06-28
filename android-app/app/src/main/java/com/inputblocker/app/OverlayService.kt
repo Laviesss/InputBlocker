@@ -78,6 +78,7 @@ class OverlayService : Service() {
     @Volatile private var paused = false
     private var pauseExpirationTime = 0L
     private var currentProfile = "default"
+    private var shakeDetector: ShakeDetector? = null
     private var lastForegroundApp: String? = null
     private var blockingExpirationTime = 0L
 
@@ -122,6 +123,17 @@ class OverlayService : Service() {
 
         startForeground(NOTIFICATION_ID, createNotification())
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+
+        // Initialize shake-to-toggle
+        val prefs = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
+        val shakeSensitivity = prefs.getInt("shake_sensitivity", ShakeDetector.SENSITIVITY_MEDIUM)
+        shakeDetector = ShakeDetector(this) {
+            toggleBlocking()
+        }.apply {
+            sensitivity = shakeSensitivity
+            register()
+        }
+
         loadConfig()
         createOverlayView()
         registerConfigReceiver()
@@ -260,6 +272,7 @@ class OverlayService : Service() {
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
+        // ── Toggle button ──────────────────────────────────────────
         val toggleIntent = Intent(this, NotificationReceiver::class.java).apply {
             action = NotificationReceiver.ACTION_TOGGLE_BLOCKING
         }
@@ -267,6 +280,15 @@ class OverlayService : Service() {
             this, 1, toggleIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
+        // ── Profile switch button ──────────────────────────────────
+        val profileIntent = Intent(this, NotificationReceiver::class.java).apply {
+            action = NotificationReceiver.ACTION_SWITCH_PROFILE
+        }
+        val profilePendingIntent = PendingIntent.getBroadcast(
+            this, 6, profileIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // ── Safe Mode button ───────────────────────────────────────
         val safeIntent = Intent(this, NotificationReceiver::class.java).apply {
             action = NotificationReceiver.ACTION_SAFE_MODE
         }
@@ -274,64 +296,68 @@ class OverlayService : Service() {
             this, 2, safeIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
+        // ── Status text ────────────────────────────────────────────
+        val title = buildString {
+            append("InputBlocker")
+            if (currentProfile != "default") {
+                append(" [$currentProfile]")
+            }
+        }
+
         val statusText = buildString {
             when {
-                forceSafeMode -> append("Safe Mode")
-                paused -> append("Paused")
-                isEnabled -> append("Active — ${regions.size} zone(s)")
+                forceSafeMode -> append("⚠ Safe Mode")
+                paused -> {
+                    val remaining = ((pauseExpirationTime - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
+                    append("⏸ Paused — ${remaining}s")
+                }
+                isEnabled -> {
+                    append("Active — ${regions.size} zone(s)")
+                    if (blockCount.get() > 0) append(" [${blockCount.get()} blocked]")
+                }
                 else -> append("Disabled")
-            }
-            if (blockCount.get() > 0) {
-                append(" [${blockCount.get()} blocked]")
             }
         }
 
         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("InputBlocker")
+            .setContentTitle(title)
             .setContentText(statusText)
             .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
-            .addAction(
-                android.R.drawable.ic_menu_close_clear_cancel,
-                "Toggle", togglePendingIntent
-            )
-            .addAction(
-                android.R.drawable.ic_menu_view,
-                "Safe Mode", safePendingIntent
-            )
 
-        // Add pause/resume actions when blocking is active
-        if (!paused && isEnabled && !forceSafeMode) {
-            builder.addAction(
-                android.R.drawable.ic_media_pause,
-                "Pause 5m",
-                PendingIntent.getBroadcast(
-                    this, 3,
-                    Intent(ACTION_PAUSE_5MIN).setPackage(packageName),
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-            )
-            builder.addAction(
-                android.R.drawable.ic_media_pause,
-                "Pause 30m",
-                PendingIntent.getBroadcast(
-                    this, 4,
-                    Intent(ACTION_PAUSE_30MIN).setPackage(packageName),
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-            )
-        } else if (paused) {
+        if (paused) {
+            // When paused: show Resume instead of Toggle
+            val resumeIntent = Intent(this, NotificationReceiver::class.java).apply {
+                action = NotificationReceiver.ACTION_TOGGLE_BLOCKING
+            }
             builder.addAction(
                 android.R.drawable.ic_media_play,
                 "Resume",
-                PendingIntent.getBroadcast(
-                    this, 5,
-                    Intent(ACTION_RESUME).setPackage(packageName),
-                    PendingIntent.FLAG_IMMUTABLE
-                )
+                PendingIntent.getBroadcast(this, 7, resumeIntent, PendingIntent.FLAG_IMMUTABLE)
+            )
+        } else {
+            builder.addAction(
+                if (isEnabled && !forceSafeMode) android.R.drawable.ic_media_pause
+                else android.R.drawable.ic_media_play,
+                if (isEnabled && !forceSafeMode) "Pause" else "Enable",
+                togglePendingIntent
             )
         }
+
+        if (!forceSafeMode) {
+            builder.addAction(
+                android.R.drawable.ic_menu_sort_by_size,
+                "Profile",
+                profilePendingIntent
+            )
+        }
+
+        builder.addAction(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            "Safe Mode",
+            safePendingIntent
+        )
 
         return builder.build()
     }
@@ -474,6 +500,13 @@ class OverlayService : Service() {
                     "com.inputblocker.ENABLE" -> enableBlocking(intent.getBooleanExtra("force_safe", true))
                     "com.inputblocker.PAUSE" -> pauseBlocking(60000)
                     "com.inputblocker.RESUME" -> resumeBlocking()
+                    "com.inputblocker.SWITCH_PROFILE" -> {
+                        val profile = intent.getStringExtra(NotificationReceiver.EXTRA_PROFILE_NAME)
+                        if (profile != null && profile != currentProfile) {
+                            currentProfile = profile
+                            reloadConfig()
+                        }
+                    }
                 }
             }
         }
@@ -483,6 +516,7 @@ class OverlayService : Service() {
             addAction("com.inputblocker.ENABLE")
             addAction("com.inputblocker.PAUSE")
             addAction("com.inputblocker.RESUME")
+            addAction("com.inputblocker.SWITCH_PROFILE")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(configReceiver, filter, RECEIVER_NOT_EXPORTED)
@@ -503,6 +537,25 @@ class OverlayService : Service() {
         runOnUiThread { updateOverlayState() }
     }
 
+    /**
+     * Toggle blocking on/off. Called from shake gesture or other external triggers.
+     */
+    private fun toggleBlocking() {
+        if (forceSafeMode) {
+            Toast.makeText(this, "In safe mode — cannot enable", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (isEnabled && !paused) {
+            disableBlocking()
+            Toast.makeText(this, "Blocking disabled", Toast.LENGTH_SHORT).show()
+        } else {
+            paused = false
+            isEnabled = true
+            runOnUiThread { updateOverlayState() }
+            Toast.makeText(this, "Blocking enabled", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.action?.let { action ->
             when (action) {
@@ -517,6 +570,8 @@ class OverlayService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        shakeDetector?.unregister()
+        shakeDetector = null
         configObserver?.stop()
         configReceiver?.let {
             try { unregisterReceiver(it) } catch (e: Exception) {

@@ -102,6 +102,7 @@
                 <action android:name="com.inputblocker.ACTION_TOGGLE_BLOCKING" />
                 <action android:name="com.inputblocker.ACTION_SAFE_MODE" />
                 <action android:name="com.inputblocker.ACTION_SYNC" />
+                <action android:name="com.inputblocker.ACTION_SWITCH_PROFILE" />
             </intent-filter>
         </receiver>
 

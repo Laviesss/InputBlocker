@@ -40,8 +40,10 @@ class QuickSettingsTileService : TileService() {
         val tile = qsTile ?: return
         val prefs = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
         val isEnabled = prefs.getBoolean("enabled", true)
-        
+        val currentProfile = prefs.getString("current_profile", "default") ?: "default"
+
         tile.label = "InputBlocker"
+        tile.subtitle = currentProfile
         tile.state = if (isEnabled) Tile.STATE_ACTIVE else Tile.STATE_INACTIVE
         
         tile.updateTile()
