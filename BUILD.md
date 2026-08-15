@@ -6,22 +6,22 @@ InputBlocker is a monorepo. It contains the Android Engine (Xposed/LSPosed hook)
 
 | Dependency | Version | Notes |
 |---|---|---|
-| **JDK** | 17 | Required. Use Eclipse Temurin or a similar distribution. |
-| **Android SDK** | API 34 (compile/target), API 23 (min) | Set this through `ANDROID_HOME` or `local.properties`. |
-| **Gradle** | 8.x | The wrapper is included, so you don't need a manual install. |
+| **JDK** | 17+ | Required (JDK 17, 21+ supported). |
+| **Android SDK** | API 34+ (compile/target), API 23 (min) | Set this through `ANDROID_HOME` or `local.properties`. |
+| **Gradle** | 9.x | The wrapper is included, so you don't need a manual install. |
 | **Kotlin Compose Plugin** | 2.4.0 | Supported alongside the Kotlin plugin version matching your Gradle setup. |
 
 ### Environment Setup
 
 **Linux / macOS:**
 ```bash
-export JAVA_HOME=/path/to/jdk17
+export JAVA_HOME=/path/to/jdk
 export ANDROID_HOME=/path/to/android-sdk
 ```
 
 **Windows (PowerShell):**
 ```powershell
-$env:JAVA_HOME = "C:\path\to\jdk17"
+$env:JAVA_HOME = "C:\path\to\jdk"
 $env:ANDROID_HOME = "C:\path\to\Android\Sdk"
 ```
 
@@ -71,14 +71,14 @@ docker run --rm -v $(pwd):/home/gradle/project -w /home/gradle/project inputbloc
 
 ## Version Parameters
 
-Both version flags are required. The build will fail if you don't include them.
+Version flags can be passed via `-PVERSION_NAME` and `-PVERSION_CODE`. Defaults (`0.1.0` / `1`) are configured in `gradle.properties` if omitted.
 
-| Flag | Type | Example | Purpose |
-|---|---|---|---|
-| `-PVERSION_NAME` | String | `"0.1.0"` | The version string users see. |
-| `-PVERSION_CODE` | Int | `1` | Internal integer for tracking updates. |
+| Flag | Type | Default | Example | Purpose |
+|---|---|---|---|---|
+| `-PVERSION_NAME` | String | `"0.1.0"` | `"0.1.0"` | The version string users see. |
+| `-PVERSION_CODE` | Int | `1` | `1` | Internal integer for tracking updates. |
 
-During the testing phase, `VERSION_NAME` stays at `0.1.0` regardless of changes. This keeps distribution consistent until we validate core features. Our CI/CD workflow handles automatic version assignment for official releases.
+Our CI/CD workflow handles automatic version assignment for official releases.
 
 ## Verifying Your Build
 
@@ -96,16 +96,16 @@ Once the build finishes, you should verify the artifacts before deployment.
 | **PC Tool (EXE)** | `pc-tool-kotlin/build/compose/binaries/main/exe/InputBlockerSetup-<version>.exe` |
 | **PC Tool (DEB)** | `pc-tool-kotlin/build/compose/binaries/main/deb/inputblockersetup_<version>_amd64.deb` |
 | **PC Tool (DMG)** | `pc-tool-kotlin/build/compose/binaries/main/dmg/InputBlockerSetup-<version>.dmg` |
-| **Module ZIP** | `build/distributions/inputblocker.zip` |
+| **Module ZIP** | `build/distributions/InputBlockerModule.zip` |
 
 ## Troubleshooting
 
 ### Java Version Mismatch
 
 ```
-Unsupported class file major version 67
+Unsupported class file major version
 ```
-This means your environment isn't using JDK 17. Check your version with `java -version` and make sure `JAVA_HOME` points to the right path.
+Make sure `JAVA_HOME` points to a compatible JDK 17+ distribution. Check your version with `java -version`.
 
 ### SDK Not Found
 
@@ -119,10 +119,6 @@ If the build hangs or behaves strangely, try stopping the daemon:
 ```
 Then run your build command again.
 
-### Version Flags Missing
-
-If you see "Version flags are required," you forgot to pass `-PVERSION_NAME` and `-PVERSION_CODE`. These are mandatory for every build task.
-
 ## CI/CD Pipeline
 
 We use GitHub Actions for automated builds. The release workflow handles:
@@ -134,14 +130,10 @@ We use GitHub Actions for automated builds. The release workflow handles:
 - GitHub Release creation.
 - Deployment of `update.json` for the in-app updater.
 
-For CI builds without access to release signing secrets, `assembleDebug` is used instead of `assembleRelease`. Debug APKs are suitable for testing but should not be distributed to end users.
-
 ## Project Structure
 
 ```
 ├── android-app/          # Android app and LSPosed/Vector hook module
-│   ├── app/
-│   └── module/
 ├── shared/               # KMP shared core
 ├── pc-tool-kotlin/       # Compose Desktop PC Designer
 ├── module/               # Root module shell scripts

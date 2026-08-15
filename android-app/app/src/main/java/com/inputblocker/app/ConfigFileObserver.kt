@@ -10,13 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Monitors config file changes via FileObserver (inotify) with a
- * polling fallback for filesystems that don't support inotify
- * (e.g., some Magisk overlay setups).
- *
- * Usage:
- *   val watcher = ConfigFileObserver(configPath) { /* reload */ }
- *   watcher.start()
- *   watcher.stop()
+ * polling fallback for filesystems that don't support inotify.
  */
 class ConfigFileObserver(
     private val configPath: String,
@@ -26,7 +20,6 @@ class ConfigFileObserver(
 ) {
     companion object {
         private const val TAG = "ConfigFileObserver"
-        /** Fallback polling interval (ms) if FileObserver fails */
         private const val FALLBACK_POLL_MS = 5000L
     }
 
@@ -35,11 +28,14 @@ class ConfigFileObserver(
     @Volatile private var lastModified = 0L
     private val running = AtomicBoolean(false)
 
+    private val reloadRunnable = Runnable {
+        if (running.get()) {
+            onConfigChanged()
+        }
+    }
 
-    /** @see #start() */
     fun startWatching() = start()
 
-    /** @see #stop() */
     fun stopWatching() = stop()
 
     fun start() {
@@ -54,12 +50,10 @@ class ConfigFileObserver(
             return
         }
 
-        // Initial timestamp
         lastModified = configFile.lastModified()
 
         try {
             fileObserver = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // API 29+ supports mask-based FileObserver on the parent directory
                 object : FileObserver(parentDir, FileObserver.CLOSE_WRITE or FileObserver.MOVED_TO) {
                     override fun onEvent(event: Int, path: String?) {
                         if (path == null) return
@@ -67,25 +61,20 @@ class ConfigFileObserver(
                             val now = configFile.lastModified()
                             if (now > lastModified) {
                                 lastModified = now
-                                handler.removeCallbacksAndMessages(null)
-                                handler.postDelayed({
-                                    if (running.get()) onConfigChanged()
-                                }, 300L)
+                                handler.removeCallbacks(reloadRunnable)
+                                handler.postDelayed(reloadRunnable, 300L)
                             }
                         }
                     }
                 }
             } else {
-                // Pre-API 29: observe the config file directly (no mask support)
                 object : FileObserver(configFile.absolutePath) {
                     override fun onEvent(event: Int, path: String?) {
                         val now = configFile.lastModified()
                         if (now > lastModified) {
                             lastModified = now
-                            handler.removeCallbacksAndMessages(null)
-                            handler.postDelayed({
-                                if (running.get()) onConfigChanged()
-                            }, 300L)
+                            handler.removeCallbacks(reloadRunnable)
+                            handler.postDelayed(reloadRunnable, 300L)
                         }
                     }
                 }
@@ -105,15 +94,13 @@ class ConfigFileObserver(
         fileObserver = null
         fallbackThread?.interrupt()
         fallbackThread = null
-        handler.removeCallbacksAndMessages(null)
+        handler.removeCallbacks(reloadRunnable)
     }
 
-    /** Force an immediate config reload (called when app saves config directly) */
+    /** Force an immediate config reload */
     fun notifyChanged() {
-        handler.removeCallbacksAndMessages(null)
-        handler.post {
-            if (running.get()) onConfigChanged()
-        }
+        handler.removeCallbacks(reloadRunnable)
+        handler.post(reloadRunnable)
     }
 
     private fun startFallback() {
@@ -126,9 +113,7 @@ class ConfigFileObserver(
                     val modified = configFile.lastModified()
                     if (modified > lastModified) {
                         lastModified = modified
-                        handler.post {
-                            if (running.get()) onConfigChanged()
-                        }
+                        handler.post(reloadRunnable)
                     }
                 } catch (_: InterruptedException) {
                     break

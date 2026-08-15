@@ -17,7 +17,7 @@ echo "Evaluating InputBlocker request..."
 if pm list packages | grep -q "$PKG_NAME"; then
     echo "Companion app found. Launching Quick Menu..."
     # Launch with FLAG_ACTIVITY_NEW_TASK (0x10000000)
-    if am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1; then
+    if am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n "$PKG_NAME/.MainActivity" > /dev/null 2>&1; then
         echo "Success: Quick Action menu opened."
         sys_log "Successfully launched Quick Menu."
     else
@@ -29,20 +29,27 @@ else
     sys_log "App not installed. Attempting fallback installation..."
     
     APK_PATH="$MODDIR/common/InputBlocker.apk"
-    if [ -f "$APK_PATH" ]; then
-        # Verify APK is a valid zip file before attempting install
-        APK_MIME=$(file "$APK_PATH" 2>/dev/null)
-        echo "$APK_MIME" | grep -qi "zip" && APK_VALID=1 || APK_VALID=0
+    if [ ! -f "$APK_PATH" ]; then
+        APK_PATH="$MODDIR/InputBlocker.apk"
+    fi
+
+    if [ -f "$APK_PATH" ] && [ -s "$APK_PATH" ]; then
+        APK_VALID=1
+        if command -v unzip >/dev/null 2>&1; then
+            unzip -t "$APK_PATH" >/dev/null 2>&1 || APK_VALID=0
+        fi
+
         if [ "$APK_VALID" -eq 0 ]; then
-            echo "ERROR: APK file appears corrupted (not a valid ZIP)."
+            echo "ERROR: APK file appears corrupted."
             echo "Please reinstall the module."
-            sys_log "APK corrupt: not a valid ZIP"
+            sys_log "APK corrupt."
             exit 1
         fi
+
         echo "APK integrity check passed. Installing..."
         if pm install -r "$APK_PATH" > /dev/null 2>&1; then
             echo "Installation successful! Launching app..."
-            am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n $PKG_NAME/.MainActivity > /dev/null 2>&1
+            am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n "$PKG_NAME/.MainActivity" > /dev/null 2>&1
             sys_log "Installed and launched app via action button."
         else
             echo "Installation failed."

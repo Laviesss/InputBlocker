@@ -30,27 +30,13 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.inputblocker.shared.Region
-import java.io.BufferedReader
 import java.io.File
-import java.io.FileReader
-import java.lang.ref.WeakReference
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * AccessibilityService providing a trusted touch-blocking overlay
  * using [WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY].
- *
- * Bypasses Android 12+ restrictions on [WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY]
- * which prevent apps from intercepting touches through overlays.
- *
- * Key features:
- * - Config file monitoring via [ConfigFileObserver] with polling fallback
- * - Notification with pause/resume action buttons
- * - Block counter displayed in notification and on overlay
- * - Rate-limited block logging to prevent spam
- * - Emergency kill-switch via volume key sequence
- * - Foreground app detection for per-profile switching
  */
 class InputBlockerAccessibilityService : AccessibilityService() {
 
@@ -59,32 +45,21 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         private const val CHANNEL_ID = "InputBlockerAccessibility"
         private const val NOTIFICATION_ID = 1002
 
-        /** Pause durations (ms) for notification action buttons */
         private const val PAUSE_5MIN_MS = 5 * 60 * 1000L
         private const val PAUSE_30MIN_MS = 30 * 60 * 1000L
 
-        /** Max time (ms) for emergency sequence completion */
         private const val SEQUENCE_TIMEOUT_MS = 5000L
-
-        /** Poll interval (ms) as fallback when FileObserver is unavailable */
         private const val POLL_INTERVAL_MS = 2000L
-
-        /** Minimum gap (ms) between block log entries to prevent spam */
         private const val RATE_LIMIT_MS = 300L
 
-        /** Notification action strings */
         private const val ACTION_PAUSE_5MIN = "com.inputblocker.accessibility.PAUSE_5MIN"
         private const val ACTION_PAUSE_30MIN = "com.inputblocker.accessibility.PAUSE_30MIN"
         private const val ACTION_RESUME = "com.inputblocker.accessibility.RESUME"
     }
 
-    // ── Window management ──────────────────────────────────────────
-
     private var wm: WindowManager? = null
     private var overlayView: TouchBlockOverlay? = null
     private var overlayParams: WindowManager.LayoutParams? = null
-
-    // ── State ───────────────────────────────────────────────────────
 
     private val regions = CopyOnWriteArrayList<Region>()
     @Volatile private var blockingEnabled = true
@@ -97,16 +72,10 @@ class InputBlockerAccessibilityService : AccessibilityService() {
     private var blockingExpirationTime = 0L
     @Volatile private var isRunning = true
 
-    // ── Rate limiting ───────────────────────────────────────────────
-
     private var lastBlockLogTime = 0L
     private val blockCount = AtomicInteger(0)
 
-    // ── FileObserver ────────────────────────────────────────────────
-
     private var configObserver: ConfigFileObserver? = null
-
-    // ── Key sequence tracking ──────────────────────────────────────
 
     private val keyHistory = ArrayList<Int>()
     private val keyTimestamps = ArrayList<Long>()
@@ -115,8 +84,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         keyHistory.clear()
         keyTimestamps.clear()
     }
-
-    // ── Notification action receiver ────────────────────────────────
 
     private val notificationReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -128,8 +95,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ── Global action receiver (from MainActivity broadcasts) ────
-
     private val globalReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -138,10 +103,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             }
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Service Lifecycle
-    // ═══════════════════════════════════════════════════════════════
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -163,7 +124,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             registerReceiver(notificationReceiver, filter)
         }
 
-        // Register MainActivity PAUSE/RESUME broadcasts
         val globalFilter = IntentFilter().apply {
             addAction("com.inputblocker.PAUSE")
             addAction("com.inputblocker.RESUME")
@@ -178,7 +138,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         startForeground(NOTIFICATION_ID, buildNotification())
         createOverlay()
 
-        // Load config and start observers
         loadConfig()
         updateOverlay()
         startConfigWatching()
@@ -221,10 +180,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         Log.i(TAG, "AccessibilityService destroyed")
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Config Loading & Watching
-    // ═══════════════════════════════════════════════════════════════
-
     private fun loadConfig() {
         val oldRegions = regions.toList()
         regions.clear()
@@ -238,7 +193,7 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         }
 
         try {
-            BufferedReader(FileReader(configFile)).use { reader ->
+            configFile.bufferedReader().use { reader ->
                 reader.lineSequence().forEach { line ->
                     val trimmed = line.trim()
                     when {
@@ -260,7 +215,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             Log.e(TAG, "Failed to load config for profile $currentProfile", e)
         }
 
-        // Only reset block count when regions actually changed
         if (regions.toList() != oldRegions) {
             blockCount.set(0)
         }
@@ -297,10 +251,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Poll Loop (fallback for non-inotify filesystems)
-    // ═══════════════════════════════════════════════════════════════
-
     private fun startPollLoop() {
         Thread {
             while (isRunning) {
@@ -310,7 +260,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
                     loadConfig()
                     runOnUiThread { updateOverlay() }
 
-                    // Auto-expire timed blocking sessions
                     if (blockingEnabled && blockingExpirationTime > 0 &&
                         System.currentTimeMillis() > blockingExpirationTime
                     ) {
@@ -325,7 +274,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
                         }
                     }
 
-                    // Auto-resume from pause
                     if (paused && System.currentTimeMillis() > pauseExpirationTime) {
                         paused = false
                         runOnUiThread { updateOverlay() }
@@ -338,10 +286,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             }
         }.apply { isDaemon = true }.start()
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Pause / Resume
-    // ═══════════════════════════════════════════════════════════════
 
     private fun pauseBlocking(durationMs: Long) {
         paused = true
@@ -369,10 +313,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             ).show()
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Overlay Management
-    // ═══════════════════════════════════════════════════════════════
 
     private fun createOverlay() {
         val manager = wm ?: return
@@ -435,10 +375,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         updateNotification()
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Emergency Key Sequence (Volume Down x3 → Volume Up x3)
-    // ═══════════════════════════════════════════════════════════════
-
     private fun trackKeySequence(type: Int) {
         val now = System.currentTimeMillis()
         mainHandler.removeCallbacks(resetSequenceTask)
@@ -480,10 +416,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Haptic Feedback
-    // ═══════════════════════════════════════════════════════════════
-
     private fun vibratePattern() {
         val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             val vm = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as VibratorManager
@@ -500,10 +432,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             vibrator.vibrate(pattern, -1)
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Notification
-    // ═══════════════════════════════════════════════════════════════
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -591,10 +519,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  UI Thread Helper
-    // ═══════════════════════════════════════════════════════════════
-
     private fun runOnUiThread(action: () -> Unit) {
         if (Looper.myLooper() == Looper.getMainLooper()) {
             action()
@@ -602,10 +526,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
             mainHandler.post(action)
         }
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  TouchBlockOverlay
-    // ═══════════════════════════════════════════════════════════════
 
     inner class TouchBlockOverlay(context: Context) : View(context) {
 
@@ -705,16 +625,15 @@ class InputBlockerAccessibilityService : AccessibilityService() {
                 event.action == MotionEvent.ACTION_MOVE
             ) {
                 for (region in currentRegions) {
-                    if (region.isExclude && isInside(nx, ny, region)) return false
+                    if (region.isExclude && region.contains(nx, ny)) return false
                 }
 
                 for (region in currentRegions) {
-                    if (!region.isExclude && isInside(nx, ny, region)) {
+                    if (!region.isExclude && region.contains(nx, ny)) {
                         val contactArea = event.pressure
                         if (contactArea < region.minPressure) {
                             blockCount.incrementAndGet()
 
-                            // Rate-limit block logging
                             val now = System.currentTimeMillis()
                             if (now - lastBlockLogTime > RATE_LIMIT_MS) {
                                 lastBlockLogTime = now
@@ -737,24 +656,6 @@ class InputBlockerAccessibilityService : AccessibilityService() {
                 }
             }
             return false
-        }
-
-        private fun isInside(nx: Float, ny: Float, r: Region): Boolean {
-            return when (r.type) {
-                0 -> nx >= r.x1 && nx <= r.x2 && ny >= r.y1 && ny <= r.y2
-                1 -> {
-                    val dx = (nx - r.x1) * width
-                    val dy = (ny - r.y1) * height
-                    val radius = r.x2 * width
-                    (dx * dx + dy * dy) <= (radius * radius)
-                }
-                2 -> {
-                    val dx = (nx - r.x1)
-                    val dy = (ny - r.y1)
-                    (dx * dx) / (r.x2 * r.x2) + (dy * dy) / (r.y2 * r.y2) <= 1f
-                }
-                else -> false
-            }
         }
     }
 }

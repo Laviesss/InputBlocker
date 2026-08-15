@@ -9,16 +9,12 @@ import de.robv.android.xposed.IXposedHookZygoteInit
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import java.io.File
-import java.io.BufferedReader
-import java.io.FileReader
 import java.util.concurrent.LinkedBlockingQueue
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
 
 class InputBlockerXposed : IXposedHookZygoteInit {
     companion object {
         private const val TAG = "InputBlocker-Hook"
-        @Volatile private var cachedRegions = ArrayList<Region>()
+        @Volatile private var cachedRegions: List<Region> = emptyList()
         @Volatile private var cachedEnabled = true
         @Volatile private var cachedPaused = false
         @Volatile private var cachedLsposedMode = true
@@ -30,33 +26,36 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         private var cachedHeight = 0
         private var lastMetricsUpdate = 0L
         private const val METRICS_TTL = 60000L // 60 seconds
-        private var cachedWindowManager: WindowManager? = null
-
-        // Crash Protection: Write a flag if we fail in the hot path
-        // Synced with InputBlockerServiceManager.CRASH_FLAG
 
         // --- Async Logging System (Only in system_server) ---
         private val logQueue = LinkedBlockingQueue<String>(500)
-        private var loggerStarted = false
+        @Volatile private var loggerStarted = false
 
+        @Synchronized
         private fun startLogger() {
             if (loggerStarted) return
             loggerStarted = true
-            Thread({
-                while (true) {
+            val loggerThread = Thread({
+                while (!Thread.currentThread().isInterrupted) {
                     try {
                         val entry = logQueue.take()
                         val parts = entry.split("|", limit = 2)
                         if (parts.size == 2) {
                             val file = File(parts[0])
+                            file.parentFile?.mkdirs()
                             file.appendText("${parts[1]}\n")
                             if (file.length() > 204800) file.delete() // 200KB rotation
                         }
+                    } catch (_: InterruptedException) {
+                        Thread.currentThread().interrupt()
+                        break
                     } catch (e: Exception) {
-                            android.util.Log.w(TAG, "Logger thread error: ${e.message}")
-                        }
+                        android.util.Log.w(TAG, "Logger thread error: ${e.message}")
+                    }
                 }
-            }, "InputBlocker-Logger").start()
+            }, "InputBlocker-Logger")
+            loggerThread.isDaemon = true
+            loggerThread.start()
         }
     }
 
@@ -78,7 +77,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             if (!cachedEnabled || cachedPaused) return
                             if (!cachedLsposedMode) return // LSPosed mode disabled — OverlayService handles blocking
 
-                            // Use index access for performance; dispatchMotionLocked(IBinder, MotionEvent, ...)
                             val motionEvent = param.args.getOrNull(1) as? MotionEvent ?: return
                             
                             val startNano = System.nanoTime()
@@ -96,32 +94,28 @@ class InputBlockerXposed : IXposedHookZygoteInit {
                             }
                             
                             val regions = cachedRegions
-                            val size = regions.size
                             
                             // 1. Priority: Exclude Zones (Whitelist)
-                            for (i in 0 until size) {
-                                val region = regions[i]
-                                if (region.isExclude && isInsideRegion(nx, ny, region)) {
+                            for (region in regions) {
+                                if (region.isExclude && region.contains(nx, ny)) {
                                     logLatency(System.nanoTime() - startNano)
                                     return
                                 }
                             }
                             
                             // 2. Surgical Blocking Zones
-                            for (i in 0 until size) {
-                                val region = regions[i]
-                                if (!region.isExclude && isInsideRegion(nx, ny, region)) {
+                            for (region in regions) {
+                                if (!region.isExclude && region.contains(nx, ny)) {
                                     if (shouldBlockSurgically(motionEvent, region)) {
                                         logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
                                         logLatency(System.nanoTime() - startNano)
-                                        param.setResult(null) 
+                                        param.setResult(null)
                                         return
                                     }
                                 }
                             }
                             logLatency(System.nanoTime() - startNano)
                         } catch (t: Throwable) {
-                            // Senior Engineering: Fail-safe crash detection
                             handleHookCrash(t)
                         }
                     }
@@ -132,37 +126,11 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         }
     }
 
-    private fun isInsideRegion(nx: Float, ny: Float, region: Region): Boolean {
-        return when (region.type) {
-            0 -> nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2
-            1 -> { // Circle (x1, y1) = center, x2 = radius (normalized to width)
-                val dx = (nx - region.x1) * cachedWidth
-                val dy = (ny - region.y1) * cachedHeight
-                val r = region.x2 * cachedWidth
-                (dx * dx + dy * dy) <= (r * r)
-            }
-            2 -> { // Ellipse (x1, y1) = center, x2 = rx, y2 = ry
-                val dx = (nx - region.x1) * cachedWidth
-                val dy = (ny - region.y1) * cachedHeight
-                val rx = region.x2 * cachedWidth
-                val ry = region.y2 * cachedHeight
-                (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1.0f
-            }
-            else -> false
-        }
-    }
-
     private fun shouldBlockSurgically(event: MotionEvent, region: Region): Boolean {
         val pressure = event.pressure
         val duration = event.eventTime - event.downTime
-        
-        // Block if touch contact area is small OR if duration exceeds the threshold.
-        // On capacitive screens MotionEvent.pressure reflects contact area (TouchMajor/
-        // TouchMinor), not physical force. Ghost taps from failing digitizers produce
-        // a tiny electrical contact patch, so the pressure value is near-zero.
         return pressure < region.minPressure || duration > region.maxDuration
     }
-
 
     private fun updateMetricsIfNeeded(now: Long) {
         if (now - lastMetricsUpdate < METRICS_TTL && cachedWidth > 0) return
@@ -178,19 +146,10 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             if (metrics.widthPixels > 0) {
                 cachedWidth = metrics.widthPixels
                 cachedHeight = metrics.heightPixels
-                cachedWindowManager = wm
                 lastMetricsUpdate = now
             }
         } catch (e: Exception) {
             android.util.Log.w(TAG, "Failed to update display metrics: ${e.message}")
-        }
-    }
-
-    private fun logLiveEvent(type: String, nx: Float, ny: Float) {
-        try {
-            android.util.Log.i("InputBlockerLive", "$type|$nx|$ny")
-        } catch (e: Exception) {
-            XposedBridge.log("$TAG: logLiveEvent failed: ${e.message}")
         }
     }
 
@@ -209,8 +168,9 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     private fun handleHookCrash(t: Throwable) {
         XposedBridge.log("$TAG CRITICAL CRASH: ${t.message}")
         try {
-            // Must match InputBlockerServiceManager.CRASH_FLAG
-            File("/data/adb/modules/inputblocker/config/crash_detected").writeText("1")
+            val crashFile = File("/data/adb/modules/inputblocker/config/crash_detected")
+            crashFile.parentFile?.mkdirs()
+            crashFile.writeText("1")
         } catch (e: Exception) {
             XposedBridge.log("$TAG: Failed to write crash flag: ${e.message}")
         }
@@ -220,7 +180,6 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         if (now - lastLoadTime < CACHE_TTL) return
 
         try {
-            // Centralized throttled I/O
             val killSwitch = File("/data/adb/modules/inputblocker/config/kill_switch")
             if (killSwitch.exists()) {
                 cachedEnabled = false
@@ -248,7 +207,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             var newPaused = false
             var newLsposedMode = true
 
-            BufferedReader(FileReader(file)).use { reader ->
+            file.bufferedReader().use { reader ->
                 reader.lineSequence().forEach { line ->
                     val trimmed = line.trim()
                     when {

@@ -15,9 +15,6 @@ import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
@@ -27,9 +24,7 @@ import android.widget.Toast
 import androidx.annotation.Nullable
 import androidx.core.app.NotificationCompat
 import com.inputblocker.shared.Region
-import java.io.BufferedReader
 import java.io.File
-import java.io.FileReader
 import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -45,11 +40,9 @@ class OverlayService : Service() {
         private const val CHANNEL_ID = "InputBlockerOverlay"
         private const val NOTIFICATION_ID = 1001
 
-        /** Pause durations (ms) for notification action buttons */
         private const val PAUSE_5MIN_MS = 5 * 60 * 1000L
         private const val PAUSE_30MIN_MS = 30 * 60 * 1000L
 
-        /** Minimum gap (ms) between block log entries */
         private const val RATE_LIMIT_MS = 300L
 
         private const val ACTION_PAUSE_5MIN = "com.inputblocker.overlay.PAUSE_5MIN"
@@ -64,7 +57,7 @@ class OverlayService : Service() {
 
         fun addBlockEntry(entry: BlockLogActivity.BlockEntry) {
             globalBlockLog.add(entry)
-            if (globalBlockLog.size > 50) {
+            while (globalBlockLog.size > 50) {
                 globalBlockLog.poll()
             }
         }
@@ -84,14 +77,12 @@ class OverlayService : Service() {
 
     private var configReceiver: BroadcastReceiver? = null
     private var configObserver: ConfigFileObserver? = null
-    private var isRunning = true
+    @Volatile private var isRunning = true
     private var overlayParams: WindowManager.LayoutParams? = null
 
-    // ── Rate limiting & block counter ───────────────────────────────
     private var lastBlockLogTime = 0L
     private val blockCount = AtomicInteger(0)
 
-    // ── Notification action receiver ────────────────────────────────
     private val notificationReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
@@ -108,7 +99,6 @@ class OverlayService : Service() {
         isRunning = true
         createNotificationChannel()
 
-        // Register notification action receiver
         val filter = IntentFilter().apply {
             addAction(ACTION_PAUSE_5MIN)
             addAction(ACTION_PAUSE_30MIN)
@@ -124,7 +114,6 @@ class OverlayService : Service() {
         startForeground(NOTIFICATION_ID, createNotification())
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        // Initialize shake-to-toggle
         val prefs = getSharedPreferences("InputBlockerPrefs", MODE_PRIVATE)
         val shakeSensitivity = prefs.getInt("shake_sensitivity", ShakeDetector.SENSITIVITY_MEDIUM)
         shakeDetector = ShakeDetector(this) {
@@ -140,10 +129,6 @@ class OverlayService : Service() {
         startConfigWatching()
         startPollLoop()
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Config Monitoring (FileObserver + polling fallback)
-    // ═══════════════════════════════════════════════════════════════
 
     private fun startConfigWatching() {
         configObserver?.stop()
@@ -165,7 +150,6 @@ class OverlayService : Service() {
                     Thread.sleep(2000)
                     if (!isRunning) break
 
-                    // Foreground app detection
                     val fgApp = getForegroundPackage()
                     if (fgApp != null && fgApp != lastForegroundApp) {
                         lastForegroundApp = fgApp
@@ -179,7 +163,6 @@ class OverlayService : Service() {
                         }
                     }
 
-                    // Auto-expire blocking session
                     if (isEnabled && blockingExpirationTime > 0 &&
                         System.currentTimeMillis() > blockingExpirationTime
                     ) {
@@ -189,7 +172,6 @@ class OverlayService : Service() {
                         }
                     }
 
-                    // Auto-resume from pause
                     if (paused && System.currentTimeMillis() > pauseExpirationTime) {
                         paused = false
                         runOnUiThread {
@@ -197,16 +179,14 @@ class OverlayService : Service() {
                             Toast.makeText(this@OverlayService, "Blocking resumed", Toast.LENGTH_SHORT).show()
                         }
                     }
+                } catch (_: InterruptedException) {
+                    break
                 } catch (e: Exception) {
                     Log.e(TAG, "Poll loop error", e)
                 }
             }
         }.apply { isDaemon = true }.start()
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Pause / Resume
-    // ═══════════════════════════════════════════════════════════════
 
     private fun pauseBlocking(durationMs: Long) {
         paused = true
@@ -231,15 +211,13 @@ class OverlayService : Service() {
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Legacy helper
-    // ═══════════════════════════════════════════════════════════════
-
     private fun isLsposedModeFromConfig(): Boolean {
         val configFile = File(InputBlockerServiceManager.getConfigFile(this, "default"))
         if (!configFile.exists()) return false
         return try {
-            configFile.readLines().any { it.trim().startsWith("lsposed_mode=1") }
+            configFile.bufferedReader().use { reader ->
+                reader.lineSequence().any { it.trim().startsWith("lsposed_mode=1") }
+            }
         } catch (e: Exception) {
             false
         }
@@ -251,10 +229,6 @@ class OverlayService : Service() {
         val match = Regex(" ([a-zA-Z0-9._]+)/").find(output)
         return match?.groupValues?.get(1)
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Notification
-    // ═══════════════════════════════════════════════════════════════
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -272,7 +246,6 @@ class OverlayService : Service() {
             this, 0, notificationIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        // ── Toggle button ──────────────────────────────────────────
         val toggleIntent = Intent(this, NotificationReceiver::class.java).apply {
             action = NotificationReceiver.ACTION_TOGGLE_BLOCKING
         }
@@ -280,7 +253,6 @@ class OverlayService : Service() {
             this, 1, toggleIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        // ── Profile switch button ──────────────────────────────────
         val profileIntent = Intent(this, NotificationReceiver::class.java).apply {
             action = NotificationReceiver.ACTION_SWITCH_PROFILE
         }
@@ -288,7 +260,6 @@ class OverlayService : Service() {
             this, 6, profileIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        // ── Safe Mode button ───────────────────────────────────────
         val safeIntent = Intent(this, NotificationReceiver::class.java).apply {
             action = NotificationReceiver.ACTION_SAFE_MODE
         }
@@ -296,7 +267,6 @@ class OverlayService : Service() {
             this, 2, safeIntent, PendingIntent.FLAG_IMMUTABLE
         )
 
-        // ── Status text ────────────────────────────────────────────
         val title = buildString {
             append("InputBlocker")
             if (currentProfile != "default") {
@@ -327,7 +297,6 @@ class OverlayService : Service() {
             .setOngoing(true)
 
         if (paused) {
-            // When paused: show Resume instead of Toggle
             val resumeIntent = Intent(this, NotificationReceiver::class.java).apply {
                 action = NotificationReceiver.ACTION_TOGGLE_BLOCKING
             }
@@ -362,10 +331,6 @@ class OverlayService : Service() {
         return builder.build()
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Config Loading
-    // ═══════════════════════════════════════════════════════════════
-
     private fun loadConfig() {
         val oldRegions = regions.toList()
         regions.clear()
@@ -379,7 +344,7 @@ class OverlayService : Service() {
         }
 
         try {
-            BufferedReader(FileReader(configFile)).use { reader ->
+            configFile.bufferedReader().use { reader ->
                 reader.lineSequence().forEach { line ->
                     val trimmed = line.trim()
                     when {
@@ -398,7 +363,6 @@ class OverlayService : Service() {
             Log.e(TAG, "Error loading config", e)
         }
 
-        // Reset block count when regions actually change
         if (regions.toList() != oldRegions) {
             blockCount.set(0)
         }
@@ -410,18 +374,6 @@ class OverlayService : Service() {
         val nm = getSystemService(NotificationManager::class.java)
         nm?.notify(NOTIFICATION_ID, createNotification())
     }
-
-    private fun emergencyReset() {
-        InputBlockerServiceManager.enableSafeMode(this)
-        reloadConfig()
-        runOnUiThread {
-            Toast.makeText(this, "EMERGENCY RESET triggered", Toast.LENGTH_LONG).show()
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  Overlay Management
-    // ═══════════════════════════════════════════════════════════════
 
     private fun createOverlayView() {
         if (windowManager == null || isLsposedModeFromConfig()) return
@@ -487,10 +439,6 @@ class OverlayService : Service() {
         nm?.notify(NOTIFICATION_ID, createNotification())
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    //  Broadcast Receiver Registration
-    // ═══════════════════════════════════════════════════════════════
-
     private fun registerConfigReceiver() {
         configReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
@@ -537,9 +485,6 @@ class OverlayService : Service() {
         runOnUiThread { updateOverlayState() }
     }
 
-    /**
-     * Toggle blocking on/off. Called from shake gesture or other external triggers.
-     */
     private fun toggleBlocking() {
         if (forceSafeMode) {
             Toast.makeText(this, "In safe mode — cannot enable", Toast.LENGTH_SHORT).show()
@@ -588,10 +533,6 @@ class OverlayService : Service() {
     private fun runOnUiThread(action: Runnable) {
         android.os.Handler(android.os.Looper.getMainLooper()).post(action)
     }
-
-    // ═══════════════════════════════════════════════════════════════
-    //  TouchBlockView
-    // ═══════════════════════════════════════════════════════════════
 
     inner class TouchBlockView(context: Context) : View(context) {
         private var serviceRef = WeakReference<OverlayService>(null)
@@ -676,11 +617,11 @@ class OverlayService : Service() {
 
             if (event.action == MotionEvent.ACTION_DOWN || event.action == MotionEvent.ACTION_MOVE) {
                 for (region in regionsList) {
-                    if (region.isExclude && isPointInRegion(nx, ny, region)) return false
+                    if (region.isExclude && region.contains(nx, ny)) return false
                 }
 
                 for (region in regionsList) {
-                    if (!region.isExclude && isPointInRegion(nx, ny, region)) {
+                    if (!region.isExclude && region.contains(nx, ny)) {
                         val contactArea = event.pressure
                         val duration = event.eventTime - event.downTime
 
@@ -709,26 +650,6 @@ class OverlayService : Service() {
                 }
             }
             return false
-        }
-
-        private fun isPointInRegion(nx: Float, ny: Float, region: Region): Boolean {
-            return when (region.type) {
-                0 -> nx >= region.x1 && nx <= region.x2 && ny >= region.y1 && ny <= region.y2
-                1 -> {
-                    val dx = (nx - region.x1) * width
-                    val dy = (ny - region.y1) * height
-                    val r = region.x2 * width
-                    (dx * dx + dy * dy) <= (r * r)
-                }
-                2 -> {
-                    val dx = (nx - region.x1)
-                    val dy = (ny - region.y1)
-                    val rx = region.x2
-                    val ry = region.y2
-                    (dx * dx) / (rx * rx) + (dy * dy) / (ry * ry) <= 1.0f
-                }
-                else -> false
-            }
         }
     }
 }

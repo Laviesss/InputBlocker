@@ -1,8 +1,12 @@
 package com.inputblocker.pctool
 
-import java.io.*
-import java.util.*
+import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
 import com.inputblocker.shared.GhostTap
+import com.inputblocker.shared.Region
 
 class ADBHelper : AutoCloseable {
     var deviceSerial: String? = null
@@ -16,15 +20,20 @@ class ADBHelper : AutoCloseable {
     var cachedModulePath: String? = null
         private set
 
+    private var streamExecutor: ExecutorService? = null
+    private var streamProcess: Process? = null
+
     init {
         startADBServer()
         connect()
-        cachedModulePath = detectModulePath()
+        if (connected) {
+            cachedModulePath = detectModulePath()
+        }
     }
 
     private fun startADBServer() {
         try {
-            runProcess("adb", "start-server")
+            runCmd("adb", "start-server")
         } catch (e: Exception) {
             println("Failed to start ADB server: ${e.message}")
         }
@@ -35,6 +44,8 @@ class ADBHelper : AutoCloseable {
             val devices = listDevices()
             if (devices.isEmpty()) {
                 println("No devices found")
+                connected = false
+                deviceSerial = null
                 return
             }
             if (devices.size > 1) {
@@ -47,13 +58,14 @@ class ADBHelper : AutoCloseable {
         } catch (e: Exception) {
             println("ADB connection failed: ${e.message}")
             connected = false
+            deviceSerial = null
         }
     }
 
     private fun listDevices(): List<String> {
         val devices = mutableListOf<String>()
         try {
-            val output = runProcess("adb", "devices")
+            val output = runCmd("adb", "devices")
             output.lines().forEach { line ->
                 if (line.contains("\tdevice")) {
                     val parts = line.split("\t")
@@ -69,8 +81,9 @@ class ADBHelper : AutoCloseable {
     }
 
     private fun getScreenSize() {
+        val serial = deviceSerial ?: return
         try {
-            val output = runProcess("adb", "-s $deviceSerial shell wm size")
+            val output = runCmd("adb", "-s", serial, "shell", "wm", "size")
             val parts = output.split(":")
             if (parts.size > 1) {
                 val sizeParts = parts[1].trim().split("x")
@@ -85,6 +98,7 @@ class ADBHelper : AutoCloseable {
     }
 
     private fun detectModulePath(): String {
+        val serial = deviceSerial ?: return "/data/adb/modules/inputblocker"
         val paths = listOf(
             "/data/adb/modules/inputblocker",      // Magisk
             "/data/ksu/modules/inputblocker",      // KernelSU
@@ -93,7 +107,7 @@ class ADBHelper : AutoCloseable {
         )
 
         for (path in paths) {
-            val result = runProcess("adb", "-s $deviceSerial shell test -d '$path' && echo EXISTS || echo MISSING")
+            val result = runCmd("adb", "-s", serial, "shell", "test -d '$path' && echo EXISTS || echo MISSING")
             if (result.contains("EXISTS")) {
                 println("Detected module path: $path")
                 return path
@@ -105,48 +119,57 @@ class ADBHelper : AutoCloseable {
     fun ensureConnected(): Boolean {
         if (connected && deviceSerial != null) {
             try {
-                val state = runProcess("adb", "-s $deviceSerial get-state")
+                val state = runCmd("adb", "-s", deviceSerial!!, "get-state")
                 if (state.trim().equals("device", ignoreCase = true)) {
                     return true
                 }
-            } catch (_: Exception) { /* device not reachable, will reconnect */ }
+            } catch (_: Exception) { }
         }
         connect()
         return connected
     }
 
-    // Overload for simple arguments
-    fun runProcess(fileName: String, args: String): String {
-        val fullCmd = mutableListOf<String>()
-        fullCmd.add(fileName)
-        args.split(" ").forEach { if (it.isNotEmpty()) fullCmd.add(it) }
-        
+    fun runCmd(vararg args: String): String {
+        return runCmdList(args.toList())
+    }
+
+    fun runCmdList(cmd: List<String>): String {
         return try {
-            val process = ProcessBuilder(fullCmd)
+            val process = ProcessBuilder(cmd)
                 .redirectErrorStream(true)
                 .start()
             val reader = process.inputStream.bufferedReader()
             val output = reader.readText()
-            process.waitFor()
+            val finished = process.waitFor(10, TimeUnit.SECONDS)
+            if (!finished) {
+                process.destroyForcibly()
+            }
             output
         } catch (e: Exception) {
-            println("Error running process $fileName: ${e.message}")
+            println("Error running command ${cmd.firstOrNull()}: ${e.message}")
             ""
         }
     }
 
+    // Legacy compatibility method
+    fun runProcess(fileName: String, args: String): String {
+        val cmd = mutableListOf<String>()
+        cmd.add(fileName)
+        args.split(" ").filter { it.isNotEmpty() }.forEach { cmd.add(it) }
+        return runCmdList(cmd)
+    }
+
     fun pullBlockLog(): List<GhostTap> {
         if (!ensureConnected()) return emptyList()
-        
-        val modulePath = cachedModulePath ?: return emptyList()
+        val serial = deviceSerial ?: return emptyList()
+        val modulePath = cachedModulePath ?: detectModulePath()
         val logPath = "$modulePath/config/blocklog.txt"
-        val output = runProcess("adb", "-s $deviceSerial shell cat $logPath")
+        val output = runCmd("adb", "-s", serial, "shell", "cat", logPath)
         
         val taps = mutableListOf<GhostTap>()
         output.lines().forEach { line ->
             if (line.isBlank()) return@forEach
             try {
-                // Format: HH:mm:ss | X: 0.xxx, Y: 0.yyy | P: 0.xxx, D: xxxms | Region: [...]
                 val parts = line.split("|")
                 if (parts.size >= 3) {
                     val timestamp = parts[0].trim()
@@ -175,14 +198,16 @@ class ADBHelper : AutoCloseable {
         return taps
     }
 
-    fun streamLiveEvents(onEvent: (LiveEvent) -> Unit): java.util.concurrent.Future<*> {
-        val executor = java.util.concurrent.Executors.newSingleThreadExecutor()
+    fun streamLiveEvents(onEvent: (LiveEvent) -> Unit): Future<*> {
+        val serial = deviceSerial ?: throw IllegalStateException("No device connected")
+        val executor = Executors.newSingleThreadExecutor()
+        streamExecutor = executor
         return executor.submit {
             try {
-                val process = ProcessBuilder("adb", "-s $deviceSerial", "logcat", "-s", "InputBlockerLive").start()
+                val process = ProcessBuilder("adb", "-s", serial, "logcat", "-s", "InputBlockerLive").start()
+                streamProcess = process
                 val reader = process.inputStream.bufferedReader()
                 reader.forEachLine { line ->
-                    // Line format: I/InputBlockerLive: TYPE|X|Y
                     val logContent = line.substringAfter("InputBlockerLive: ").trim()
                     val parts = logContent.split("|")
                     if (parts.size == 3) {
@@ -202,18 +227,15 @@ class ADBHelper : AutoCloseable {
 
     fun installModule(zipFile: File): Boolean {
         if (!ensureConnected()) return false
+        val serial = deviceSerial ?: return false
         
         return try {
-            // 1. Push ZIP to temporary storage
-            runProcess("adb", "-s $deviceSerial push ${zipFile.absolutePath} /data/local/tmp/inputblocker.zip")
+            runCmd("adb", "-s", serial, "push", zipFile.absolutePath, "/data/local/tmp/inputblocker.zip")
             
-            // 2. Use root shell to install.
-            // The most universal way for Magisk/KSU/APatch is to put it in the modules folder and reboot,
-            // or use the manager's API. Since we are root, we can manually deploy.
             val modulePath = "/data/adb/modules/inputblocker"
             val installCmd = "su -c \"mkdir -p $modulePath && unzip -o /data/local/tmp/inputblocker.zip -d $modulePath && chmod -R 755 $modulePath\""
             
-            val result = runProcess("adb", "-s $deviceSerial shell $installCmd")
+            val result = runCmd("adb", "-s", serial, "shell", installCmd)
             result.contains("unzip") || !result.contains("error", ignoreCase = true)
         } catch (e: Exception) {
             println("Installation failed: ${e.message}")
@@ -223,33 +245,35 @@ class ADBHelper : AutoCloseable {
 
     fun pullLatencyLog(): List<Long> {
         if (!ensureConnected()) return emptyList()
-        
-        val modulePath = cachedModulePath ?: return emptyList()
+        val serial = deviceSerial ?: return emptyList()
+        val modulePath = cachedModulePath ?: detectModulePath()
         val logPath = "$modulePath/config/latency.log"
-        val output = runProcess("adb", "-s $deviceSerial shell cat $logPath")
+        val output = runCmd("adb", "-s", serial, "shell", "cat", logPath)
         
         return output.lines().mapNotNull { it.trim().toLongOrNull() }
     }
 
-    fun pullConfig(): List<com.inputblocker.shared.Region> {
+    fun pullConfig(): List<Region> {
         if (!ensureConnected()) return emptyList()
-        
-        val modulePath = cachedModulePath ?: return emptyList()
+        val serial = deviceSerial ?: return emptyList()
+        val modulePath = cachedModulePath ?: detectModulePath()
         val configPath = "$modulePath/config/profiles/default.conf"
-        val output = runProcess("adb", "-s $deviceSerial shell cat $configPath")
+        val output = runCmd("adb", "-s", serial, "shell", "cat", configPath)
         
-        val regions = mutableListOf<com.inputblocker.shared.Region>()
+        val regions = mutableListOf<Region>()
         output.lines().forEach { line ->
             val trimmed = line.trim()
             if (trimmed.isNotEmpty() && !trimmed.startsWith("#") && !trimmed.startsWith("enabled=") && !trimmed.startsWith("force_safe_mode=")) {
-                com.inputblocker.shared.Region.fromString(trimmed)?.let { regions.add(it) }
+                Region.fromString(trimmed)?.let { regions.add(it) }
             }
         }
         return regions
     }
 
-    fun pushConfig(regions: List<com.inputblocker.shared.Region>, enabled: Boolean, forceSafeMode: Boolean): Boolean {
+    fun pushConfig(regions: List<Region>, enabled: Boolean, forceSafeMode: Boolean): Boolean {
         if (!ensureConnected()) return false
+        val serial = deviceSerial ?: return false
+        val modulePath = cachedModulePath ?: detectModulePath()
 
         val config = StringBuilder()
         config.appendLine("# InputBlocker Configuration")
@@ -262,9 +286,9 @@ class ADBHelper : AutoCloseable {
             val tempFile = File.createTempFile("inputblocker_config", ".txt")
             tempFile.writeText(config.toString())
 
-            runProcess("adb", "-s $deviceSerial shell mkdir -p $cachedModulePath/config/profiles")
-            runProcess("adb", "-s $deviceSerial push ${tempFile.absolutePath} $cachedModulePath/config/profiles/default.conf")
-            runProcess("adb", "-s $deviceSerial shell chmod 644 $cachedModulePath/config/profiles/default.conf")
+            runCmd("adb", "-s", serial, "shell", "mkdir", "-p", "$modulePath/config/profiles")
+            runCmd("adb", "-s", serial, "push", tempFile.absolutePath, "$modulePath/config/profiles/default.conf")
+            runCmd("adb", "-s", serial, "shell", "chmod", "644", "$modulePath/config/profiles/default.conf")
 
             tempFile.delete()
             true
@@ -274,26 +298,16 @@ class ADBHelper : AutoCloseable {
         }
     }
 
-    fun getCurrentConfig(): List<com.inputblocker.shared.Region> {
-        val regions = mutableListOf<com.inputblocker.shared.Region>()
-        if (!ensureConnected()) return regions
-
-        try {
-            val output = runProcess("adb", "-s $deviceSerial shell cat $cachedModulePath/config/profiles/default.conf")
-            output.lines().forEach { rawLine ->
-                val line = rawLine.trim()
-                if (line.isNotEmpty() && !line.startsWith("#") && !line.startsWith("enabled=") && !line.startsWith("force_safe_mode=")) {
-                    com.inputblocker.shared.Region.fromString(line)?.let { regions.add(it) }
-                }
-            }
-        } catch (e: Exception) {
-            println("Failed to get current config: ${e.message}")
-        }
-        return regions
+    fun getCurrentConfig(): List<Region> {
+        return pullConfig()
     }
 
     override fun close() {
         connected = false
+        try {
+            streamProcess?.destroyForcibly()
+            streamExecutor?.shutdownNow()
+        } catch (_: Exception) { }
     }
 }
 
