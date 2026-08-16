@@ -25,7 +25,17 @@ detect_module_path() {
 
 MODULE_DIR="$(detect_module_path)"
 CONFIG_DIR="$MODULE_DIR/config"
-CONFIG_FILE="$CONFIG_DIR/blocked_regions.conf"
+PRIMARY_CONFIG="$CONFIG_DIR/profiles/default.conf"
+LEGACY_CONFIG="$CONFIG_DIR/blocked_regions.conf"
+
+if [ -f "$PRIMARY_CONFIG" ]; then
+    CONFIG_FILE="$PRIMARY_CONFIG"
+elif [ -f "$LEGACY_CONFIG" ]; then
+    CONFIG_FILE="$LEGACY_CONFIG"
+else
+    CONFIG_FILE="$PRIMARY_CONFIG"
+fi
+
 LOG_FILE="/sdcard/Download/inputblocker.log"
 
 log_msg() {
@@ -33,7 +43,7 @@ log_msg() {
     log -p i -t InputBlocker "$1"
 }
 
-mkdir -p "$CONFIG_DIR"
+mkdir -p "$CONFIG_DIR/profiles"
 
 show_help() {
     cat << 'EOF'
@@ -49,18 +59,18 @@ Commands:
     enable              Enable touch blocking
     disable             Disable touch blocking
     list                List all blocked regions
-    add <x1,y1,x2,y2>   Add a blocked region
+    add <x1,y1,x2,y2>   Add a blocked region (normalized 0.0-1.0)
     remove <id>         Remove a blocked region by ID
     clear               Remove all regions
     reset-crash         Reset crash protection flag
     path                Show module path
-    gui                 Launch visual setup GUI
+    gui                 Launch companion app Quick Menu
 
 Kill Switch:
     Press Vol Down x3, then Vol Up x3 (within 5 seconds)
 
 Examples:
-    inputblocker add 0,0,100,200
+    inputblocker add 0.65,0.65,1.0,1.0
     inputblocker list
     inputblocker reset-crash
 
@@ -86,16 +96,22 @@ save_config() {
     
     {
         echo "# InputBlocker Configuration"
-        echo "# Format: x1,y1,x2,y2"
-        echo ""
         echo "enabled=$ENABLED"
         echo "force_safe_mode=$FORCE_SAFE"
         echo ""
-        grep -v "^#" "$CONFIG_FILE" 2>/dev/null | grep -v "^enabled=" | grep -v "^force_safe_mode=" | grep -v "^$"
+        if [ -f "$CONFIG_FILE" ]; then
+            grep -v "^#" "$CONFIG_FILE" 2>/dev/null | grep -v "^enabled=" | grep -v "^force_safe_mode=" | grep -v "^$"
+        fi
     } > "$TEMP_FILE"
     
     mv "$TEMP_FILE" "$CONFIG_FILE"
     chmod 644 "$CONFIG_FILE"
+}
+
+get_regions() {
+    if [ -f "$CONFIG_FILE" ]; then
+        grep -v "^#" "$CONFIG_FILE" 2>/dev/null | grep -v "^enabled=" | grep -v "^force_safe_mode=" | grep -v "^$"
+    fi
 }
 
 show_status() {
@@ -104,6 +120,7 @@ show_status() {
     echo "InputBlocker Status - by Laviesss"
     echo "==========================="
     echo "Module path: $MODULE_DIR"
+    echo "Config file: $CONFIG_FILE"
     echo ""
     
     if [ "$FORCE_SAFE" -eq 1 ]; then
@@ -119,15 +136,17 @@ show_status() {
     echo "Blocked Regions:"
     
     COUNT=0
-    while IFS=',' read -r x1 y1 x2 y2; do
-        [ -z "$x1" ] && continue
-        echo "$x1" | grep -qE '^[0-9]+$' || continue
-        
+    REGIONS_FILE=$(mktemp)
+    get_regions > "$REGIONS_FILE"
+
+    exec 3< "$REGIONS_FILE"
+    while read -r line <&3; do
+        [ -z "$line" ] && continue
         COUNT=$((COUNT + 1))
-        WIDTH=$((x2 - x1))
-        HEIGHT=$((y2 - y1))
-        echo "  [$COUNT] (${x1},${y1}) -> (${x2},${y2}) [${WIDTH}x${HEIGHT}]"
-    done < <(grep -v "^#" "$CONFIG_FILE" 2>/dev/null | grep -v "^enabled=" | grep -v "^force_safe_mode=" | grep -v "^$")
+        echo "  [$COUNT] $line"
+    done
+    exec 3<&-
+    rm -f "$REGIONS_FILE"
     
     [ "$COUNT" -eq 0 ] && echo "  No regions configured"
     
@@ -138,60 +157,75 @@ show_status() {
 add_region() {
     local coords="$1"
     
-    [ -z "$coords" ] && { echo "Error: Provide x1,y1,x2,y2"; return 1; }
+    [ -z "$coords" ] && { echo "Error: Provide x1,y1,x2,y2 or region string"; return 1; }
     
-    local x1 y1 x2 y2
-    IFS=',' read -r x1 y1 x2 y2 <<< "$coords"
-    
-    [ -z "$x1" ] || [ -z "$y1" ] || [ -z "$x2" ] || [ -z "$y2" ] && { echo "Error: Invalid format"; return 1; }
-    
-    echo "$x1" | grep -qE '^[0-9]+$' || { echo "Error: Coordinates must be numbers"; return 1; }
-    [ "$x1" -ge "$x2" ] || [ "$y1" -ge "$y2" ] && { echo "Error: x1<x2, y1<y2 required"; return 1; }
-    
+    init_config
     load_config
-    echo "${x1},${y1},${x2},${y2}" >> "$CONFIG_FILE"
-    echo "Added: (${x1},${y1}) -> (${x2},${y2})"
-    log_msg "Added region: ${x1},${y1},${x2},${y2}"
+    
+    FIELD_COUNT=$(echo "$coords" | awk -F',' '{print NF}')
+    if [ "$FIELD_COUNT" -eq 4 ]; then
+        REGION_LINE="0,0,$coords,0.15,300"
+    else
+        REGION_LINE="$coords"
+    fi
+    
+    echo "$REGION_LINE" >> "$CONFIG_FILE"
+    echo "Added region: $REGION_LINE"
+    log_msg "Added region: $REGION_LINE"
 }
 
 remove_region() {
-    local id="$1"
+    local target_id="$1"
     
-    [ -z "$id" ] && { echo "Error: Specify region ID"; return 1; }
+    [ -z "$target_id" ] && { echo "Error: Specify region ID"; return 1; }
     
     load_config
     
+    REGIONS_FILE=$(mktemp)
     TEMP_FILE=$(mktemp)
-    COUNT=0
-    FOUND=0
-    
-    while IFS=',' read -r x1 y1 x2 y2; do
-        [ -z "$x1" ] && continue
-        echo "$x1" | grep -qE '^[0-9]+$' || continue
-        
-        COUNT=$((COUNT + 1))
-        
-        if [ "$COUNT" -eq "$id" ]; then
-            FOUND=1
-            echo "Removed [$id]: (${x1},${y1}) -> (${x2},${y2})"
-        else
-            echo "${x1},${y1},${x2},${y2}" >> "$TEMP_FILE"
-        fi
-    done < "$CONFIG_FILE"
-    
-    [ "$FOUND" -eq 0 ] && { rm "$TEMP_FILE"; echo "Error: Region $id not found"; return 1; }
-    
+
+    get_regions > "$REGIONS_FILE"
+
     {
+        echo "# InputBlocker Configuration"
         echo "enabled=$ENABLED"
         echo "force_safe_mode=$FORCE_SAFE"
-    } >> "$TEMP_FILE"
+        echo ""
+    } > "$TEMP_FILE"
+
+    COUNT=0
+    FOUND=0
+    REMOVED_LINE=""
     
+    exec 3< "$REGIONS_FILE"
+    while read -r line <&3; do
+        [ -z "$line" ] && continue
+        COUNT=$((COUNT + 1))
+        if [ "$COUNT" -eq "$target_id" ]; then
+            FOUND=1
+            REMOVED_LINE="$line"
+        else
+            echo "$line" >> "$TEMP_FILE"
+        fi
+    done
+    exec 3<&-
+
+    rm -f "$REGIONS_FILE"
+
+    if [ "$FOUND" -eq 0 ]; then
+        rm -f "$TEMP_FILE"
+        echo "Error: Region $target_id not found"
+        return 1
+    fi
+    
+    echo "Removed region [$target_id]: $REMOVED_LINE"
     mv "$TEMP_FILE" "$CONFIG_FILE"
+    chmod 644 "$CONFIG_FILE"
 }
 
 clear_regions() {
     load_config
-    echo "# InputBlocker" > "$CONFIG_FILE"
+    echo "# InputBlocker Configuration" > "$CONFIG_FILE"
     echo "enabled=$ENABLED" >> "$CONFIG_FILE"
     echo "force_safe_mode=$FORCE_SAFE" >> "$CONFIG_FILE"
     echo "Regions cleared"
@@ -233,9 +267,9 @@ init_config() {
 enabled=1
 force_safe_mode=0
 
-# Kill switch: Vol Down x3 -> Vol Up x3 (within 5 seconds)
-# Add regions below:
+# Format: isExclude,type,x1,y1,x2,y2,minPressure,maxDuration
 EOF
+    chmod 644 "$CONFIG_FILE"
     log_msg "Created config file at $CONFIG_FILE"
 }
 
@@ -250,7 +284,7 @@ case "$1" in
     clear) clear_regions ;;
     reset-crash) reset_crash ;;
     path) echo "$MODULE_DIR" ;;
-    gui|setup) echo "Use InputBlocker Setup tool on your computer" ;;
+    gui|setup) am start -f 0x10000000 -a com.inputblocker.ACTION_QUICK_MENU -n com.inputblocker.app/.MainActivity >/dev/null 2>&1 ;;
     help|--help|-h|"") show_help ;;
-    *) echo "Unknown: $1"; show_help ;;
+    *) echo "Unknown command: $1"; show_help ;;
 esac

@@ -10,7 +10,7 @@ plugins {
 kotlin {
     jvm()
     sourceSets {
-        val jvmMain by getting {
+        jvmMain {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(project(":shared"))
@@ -30,13 +30,23 @@ compose.desktop {
                 "msi" -> listOf(TargetFormat.Msi)
                 else  -> listOf(TargetFormat.Exe, TargetFormat.Msi)
             }
-            val otherTargets = listOf(TargetFormat.Deb, TargetFormat.Dmg)
+
+            val hasFakeroot = try {
+                ProcessBuilder("which", "fakeroot").start().waitFor() == 0
+            } catch (_: Exception) { false }
+
+            val otherTargets = mutableListOf<TargetFormat>()
+            if (hasFakeroot) {
+                otherTargets.add(TargetFormat.Deb)
+            }
+            otherTargets.add(TargetFormat.Dmg)
+
             targetFormats(*(windowsTargets + otherTargets).toTypedArray())
             packageName = "InputBlocker"
             description = "PC Designer for InputBlocker - Configure ghost tap filtering regions"
             vendor = "Laviesss"
             copyright = "Copyright (c) ${Calendar.getInstance().get(Calendar.YEAR)} Laviesss"
-            packageVersion = project.property("VERSION_NAME").toString().let { raw ->
+            packageVersion = (project.findProperty("VERSION_NAME")?.toString() ?: "0.1.0").let { raw ->
                 val isMacOS = System.getProperty("os.name").lowercase().contains("mac")
                 // macOS jpackage rejects versions where the first segment is 0
                 if (isMacOS && raw.startsWith("0.")) raw.replaceFirst(Regex("^0"), "1")
@@ -44,13 +54,9 @@ compose.desktop {
             }
             windows {
                 menuGroup = "InputBlocker"
-                // Show a desktop shortcut option in the installer
                 shortcut = true
-                // Show directory chooser during install so users can pick the install path
                 dirChooser = true
-                // Install per-user (no admin required by default)
                 perUserInstall = true
-                // Production: no console window (crash logs go to crash_logs/ folder)
                 console = false
             }
             macOS {

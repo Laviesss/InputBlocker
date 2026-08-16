@@ -15,72 +15,78 @@ data class GhostTap(
 object ClusterUtils {
     /**
      * Implements DBSCAN (Density-Based Spatial Clustering of Applications with Noise).
-     * This is used to find "hotspots" of ghost taps in the block logs.
+     * Used to find "hotspots" of ghost taps in the block logs.
      */
     fun clusterTaps(taps: List<GhostTap>, epsilon: Float, minPoints: Int): List<List<GhostTap>> {
-        if (taps.isEmpty()) return emptyList()
+        if (taps.isEmpty() || epsilon <= 0f || minPoints <= 0) return emptyList()
 
-        val points = taps.map { Point(it.x, it.y) }
-        val clusters = mutableListOf<MutableList<Point>>()
-        val visited = mutableSetOf<Point>()
-        val noise = mutableSetOf<Point>()
+        val indexedTaps = taps.withIndex().toList()
+        val clusters = mutableListOf<List<GhostTap>>()
+        val visited = mutableSetOf<Int>()
 
-        for (point in points) {
-            if (point in visited) continue
-            visited.add(point)
+        for ((index, tap) in indexedTaps) {
+            if (index in visited) continue
+            visited.add(index)
 
-            val neighbors = findNeighbors(point, points, epsilon)
-            if (neighbors.size < minPoints) {
-                noise.add(point)
-            } else {
-                val cluster = mutableListOf<Point>()
-                expandCluster(point, neighbors, clusters, cluster, visited, points, epsilon, minPoints)
-                clusters.add(cluster)
+            val neighbors = findNeighborIndices(tap, indexedTaps, epsilon)
+            if (neighbors.size >= minPoints) {
+                val clusterIndices = mutableListOf<Int>()
+                expandClusterIndices(index, neighbors, clusterIndices, visited, indexedTaps, epsilon, minPoints)
+                clusters.add(clusterIndices.map { taps[it] })
             }
         }
 
-        // Map Points back to GhostTaps
-        return clusters.map { clusterPoints ->
-            taps.filter { tap -> Point(tap.x, tap.y) in clusterPoints }
-        }
+        return clusters
     }
 
-    private fun expandCluster(
-        point: Point,
-        neighbors: List<Point>,
-        clusters: MutableList<MutableList<Point>>,
-        cluster: MutableList<Point>,
-        visited: MutableSet<Point>,
-        allPoints: List<Point>,
+    private fun expandClusterIndices(
+        startIndex: Int,
+        initialNeighbors: List<Int>,
+        clusterIndices: MutableList<Int>,
+        visited: MutableSet<Int>,
+        allTaps: List<IndexedValue<GhostTap>>,
         epsilon: Float,
         minPoints: Int
     ) {
-        cluster.add(point)
-        val queue = neighbors.toMutableList()
+        clusterIndices.add(startIndex)
+        val queue = initialNeighbors.toMutableList()
 
         var i = 0
         while (i < queue.size) {
-            val nextPoint = queue[i]
-            if (nextPoint !in visited) {
-                visited.add(nextPoint)
-                val nextNeighbors = findNeighbors(nextPoint, allPoints, epsilon)
+            val nextIndex = queue[i]
+            if (nextIndex !in visited) {
+                visited.add(nextIndex)
+                val nextNeighbors = findNeighborIndices(allTaps[nextIndex].value, allTaps, epsilon)
                 if (nextNeighbors.size >= minPoints) {
-                    queue.addAll(nextNeighbors.filter { it !in visited })
+                    for (nn in nextNeighbors) {
+                        if (nn !in queue) {
+                            queue.add(nn)
+                        }
+                    }
                 }
             }
-            if (nextPoint !in cluster) {
-                cluster.add(nextPoint)
+            if (nextIndex !in clusterIndices) {
+                clusterIndices.add(nextIndex)
             }
             i++
         }
     }
 
-    private fun findNeighbors(point: Point, allPoints: List<Point>, epsilon: Float): List<Point> {
-        return allPoints.filter { other ->
-            val dx = point.x - other.x
-            val dy = point.y - other.y
-            sqrt(dx * dx + dy * dy) <= epsilon
+    private fun findNeighborIndices(
+        target: GhostTap,
+        allTaps: List<IndexedValue<GhostTap>>,
+        epsilon: Float
+    ): List<Int> {
+        val result = mutableListOf<Int>()
+        val epsSq = epsilon * epsilon
+        for (item in allTaps) {
+            val dx = target.x - item.value.x
+            val dy = target.y - item.value.y
+            if (dx * dx + dy * dy <= epsSq) {
+                result.add(item.index)
+            }
         }
+        return result
     }
 
     /**
@@ -91,9 +97,9 @@ object ClusterUtils {
         if (cluster.isEmpty()) return Region(0f, 0f, 0f, 0f)
 
         var minX = Float.MAX_VALUE
-        var maxX = Float.MIN_VALUE
+        var maxX = -Float.MAX_VALUE
         var minY = Float.MAX_VALUE
-        var maxY = Float.MIN_VALUE
+        var maxY = -Float.MAX_VALUE
 
         for (tap in cluster) {
             if (tap.x < minX) minX = tap.x
@@ -121,17 +127,17 @@ object ClusterUtils {
      */
     fun suggestThresholds(cluster: List<GhostTap>): Pair<Float, Long> {
         if (cluster.isEmpty()) return Pair(0.1f, 1000L)
-        
+
         // The max pressure in the cluster is the "upper bound" of the noise.
         // We suggest a value slightly above this to block all noise but allow fingers.
         val maxNoisePressure = cluster.maxOf { it.pressure }
-        val suggestedMinPressure = maxNoisePressure + 0.02f
-        
+        val suggestedMinPressure = (maxNoisePressure + 0.02f).coerceIn(0f, 1f)
+
         // The min duration in the cluster is the "shortest" ghost tap.
         // We suggest a value slightly below this to block all ghost taps.
         val minNoiseDuration = cluster.minOf { it.duration }
         val suggestedMaxDuration = (minNoiseDuration - 50).coerceAtLeast(100L)
-        
+
         return Pair(suggestedMinPressure, suggestedMaxDuration)
     }
 }

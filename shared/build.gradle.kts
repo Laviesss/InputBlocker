@@ -4,20 +4,26 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(17)
-    jvm()
+    jvm {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
     android {
         namespace = "com.inputblocker.shared"
         compileSdk = 34
     }
 
     sourceSets {
-        val commonMain by getting {
+        commonMain {
             dependencies {
                 // Common dependencies here
             }
         }
-        val androidMain by getting
-        val jvmMain by getting
+        commonTest {
+            dependencies {
+                implementation(kotlin("test"))
+            }
+        }
     }
 }
