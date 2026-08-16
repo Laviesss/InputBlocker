@@ -588,44 +588,6 @@ class MainActivity : AppCompatActivity() {
         startActivity(intent)
     }
 
-    private fun clusterTouches(touches: List<Pair<Float, Float>>): List<Region> {
-        if (touches.isEmpty()) return emptyList()
-        
-        val regionsResult = mutableListOf<Region>()
-        val used = BooleanArray(touches.size) { false }
-        val threshold = 0.05f 
-        
-        for (i in touches.indices) {
-            if (used[i]) continue
-            
-            var minX = touches[i].first
-            var maxX = touches[i].first
-            var minY = touches[i].second
-            var maxY = touches[i].second
-            
-            used[i] = true
-            
-            var changed = true
-            while (changed) {
-                changed = false
-                for (j in touches.indices) {
-                    if (used[j]) continue
-                    if (Math.abs(touches[j].first - (minX + maxX) / 2) < threshold && 
-                        Math.abs(touches[j].second - (minY + maxY) / 2) < threshold) {
-                        minX = Math.min(minX, touches[j].first)
-                        maxX = Math.max(maxX, touches[j].first)
-                        minY = Math.min(minY, touches[j].second)
-                        maxY = Math.max(maxY, touches[j].second)
-                        used[j] = true
-                        changed = true
-                    }
-                }
-            }
-            regionsResult.add(Region(minX, minY, maxX, maxY))
-        }
-        return regionsResult
-    }
-
     private fun applyTheme() {
         ThemeManager.applyTheme(this, currentTheme)
     }

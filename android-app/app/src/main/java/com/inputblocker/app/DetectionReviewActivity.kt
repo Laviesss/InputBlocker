@@ -1,5 +1,6 @@
 package com.inputblocker.app
 
+import com.inputblocker.shared.ClusterUtils
 import com.inputblocker.shared.Region
 import android.app.Activity
 import android.app.AlertDialog
@@ -31,6 +32,7 @@ class DetectionReviewActivity : Activity() {
     }
 
     private var regions = mutableListOf<Region>()
+    private var clusterTapCounts = mutableListOf<Int>()
     private lateinit var rootLayout: FrameLayout
     private lateinit var reviewCanvas: ReviewCanvas
     private lateinit var btnSave: Button
@@ -54,7 +56,9 @@ class DetectionReviewActivity : Activity() {
         val eps = prefs.getFloat("dbscan_eps", 0.03f)
         val minPts = prefs.getInt("dbscan_minpts", 3)
 
-        regions.addAll(DetectionUtils.detectRegions(points, eps, minPts))
+        val clustered = ClusterUtils.clusterPairs(points, eps, minPts)
+        regions.addAll(clustered.map { ClusterUtils.calculateBoundingBox(it) })
+        clusterTapCounts.addAll(clustered.map { it.size })
         
         if (regions.isEmpty()) {
             Toast.makeText(this, "No clear clusters found", Toast.LENGTH_SHORT).show()
@@ -79,7 +83,7 @@ class DetectionReviewActivity : Activity() {
         }
 
         reviewCanvas = ReviewCanvas(this)
-        reviewCanvas.setRegions(regions)
+        reviewCanvas.setRegions(regions, clusterTapCounts)
         
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -92,7 +96,8 @@ class DetectionReviewActivity : Activity() {
             setTextColor(Color.WHITE)
             textSize = 18f
             gravity = android.view.Gravity.CENTER
-            text = "Proposed Regions: ${regions.size}"
+            val totalTaps = clusterTapCounts.sum()
+            text = "$totalTaps taps in ${regions.size} region${if (regions.size != 1) "s" else ""}"
         }
 
         btnSave = Button(this).apply {
@@ -122,9 +127,21 @@ class DetectionReviewActivity : Activity() {
     }
 
     private fun showConfirmationDialog() {
+        val clusterDetails = buildString {
+            append("Found ${regions.size} ghost tap area${if (regions.size != 1) "s" else ""}:\n")
+            for ((i, count) in clusterTapCounts.withIndex()) {
+                val r = regions[i]
+                val tapCount = count
+                val w = (r.x2 - r.x1) * 100
+                val h = (r.y2 - r.y1) * 100
+                append("  #${i + 1}: $tapCount tap${if (tapCount != 1) "s" else ""} (${"%.0f".format(w)}×${"%.0f".format(h)}%)\n")
+            }
+            append("\nWhat would you like to do?")
+        }
+
         AlertDialog.Builder(this)
             .setTitle("Ghost Taps Detected")
-            .setMessage("We found ${regions.size} potential ghost tap areas. What would you like to do?")
+            .setMessage(clusterDetails.trimEnd())
             .setPositiveButton("Refine") { _, _ ->
                 enterEditingMode()
             }
@@ -213,11 +230,15 @@ class DetectionReviewActivity : Activity() {
     private fun updateClustering(eps: Float, minPts: Int) {
         val points = SensingActivity.capturedTouches
         if (points.isEmpty()) return
-        
+
         regions.clear()
-        regions.addAll(DetectionUtils.detectRegions(points, eps, minPts))
-        reviewCanvas.setRegions(regions)
-        tvCount.text = "Proposed Regions: ${regions.size}"
+        clusterTapCounts.clear()
+        val reclustered = ClusterUtils.clusterPairs(points, eps, minPts)
+        regions.addAll(reclustered.map { ClusterUtils.calculateBoundingBox(it) })
+        clusterTapCounts.addAll(reclustered.map { it.size })
+        reviewCanvas.setRegions(regions, clusterTapCounts)
+        val totalTaps = clusterTapCounts.sum()
+        tvCount.text = "$totalTaps taps in ${regions.size} region${if (regions.size != 1) "s" else ""}"
     }
 
 
@@ -268,6 +289,7 @@ class DetectionReviewActivity : Activity() {
         }
 
         private var regionsList = mutableListOf<Region>()
+        private var regionTapCounts = mutableListOf<Int>()
         private var selectedRegion: Region? = null
         private var isDragging = false
         private var isResizing = false
@@ -275,15 +297,32 @@ class DetectionReviewActivity : Activity() {
         private var lastX = 0f
         private var lastY = 0f
 
-        fun setRegions(list: List<Region>) {
+        private val labelPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = 32f
+            isAntiAlias = true
+            isFakeBoldText = true
+        }
+        private val labelBgPaint = Paint().apply {
+            color = Color.argb(160, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+
+        fun setRegions(list: List<Region>, tapCounts: List<Int> = emptyList()) {
             regionsList.clear()
+            regionTapCounts.clear()
             regionsList.addAll(list)
+            regionTapCounts.addAll(tapCounts)
+            // Pad tap counts if we got fewer than regions
+            while (regionTapCounts.size < regionsList.size) {
+                regionTapCounts.add(0)
+            }
             invalidate()
         }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            for (region in regionsList) {
+            for ((i, region) in regionsList.withIndex()) {
                 val rect = RectF(
                     region.x1 * width, region.y1 * height,
                     region.x2 * width, region.y2 * height
@@ -292,6 +331,18 @@ class DetectionReviewActivity : Activity() {
                 
                 val paint = if (region == selectedRegion) selectedPaint else borderPaint
                 canvas.drawRect(rect, paint)
+
+                // Draw tap count label near top-left of this region
+                val count = regionTapCounts.getOrElse(i) { 0 }
+                if (count > 0) {
+                    val label = "${count}t"
+                    val textWidth = labelPaint.measureText(label)
+                    val lx = rect.left + 4f
+                    val ly = rect.top + 4f
+                    canvas.drawRect(lx, ly - labelPaint.textSize + 4f,
+                        lx + textWidth + 8f, ly + 4f, labelBgPaint)
+                    canvas.drawText(label, lx + 4f, ly, labelPaint)
+                }
 
                 if (region == selectedRegion) {
                     drawHandles(canvas, rect)

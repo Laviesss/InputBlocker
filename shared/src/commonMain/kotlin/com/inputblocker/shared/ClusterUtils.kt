@@ -1,7 +1,5 @@
 package com.inputblocker.shared
 
-import kotlin.math.sqrt
-
 data class Point(val x: Float, val y: Float)
 
 data class GhostTap(
@@ -14,39 +12,53 @@ data class GhostTap(
 
 object ClusterUtils {
     /**
-     * Implements DBSCAN (Density-Based Spatial Clustering of Applications with Noise).
-     * Used to find "hotspots" of ghost taps in the block logs.
+     * Core DBSCAN (Density-Based Spatial Clustering of Applications with Noise).
+     *
+     * Index-based: the "visited" set keys on list indices, not coordinate values,
+     * so two taps at the exact same (x, y) stay distinct instead of collapsing
+     * into a single point. Distance is compared squared (no sqrt) for speed.
+     *
+     * [xOf]/[yOf] extract coordinates so one algorithm serves both [GhostTap]
+     * clusters and raw [Pair<Float, Float>] coordinate clusters.
      */
-    fun clusterTaps(taps: List<GhostTap>, epsilon: Float, minPoints: Int): List<List<GhostTap>> {
-        if (taps.isEmpty() || epsilon <= 0f || minPoints <= 0) return emptyList()
+    private fun <T> clusterByIndex(
+        items: List<T>,
+        epsilon: Float,
+        minPoints: Int,
+        xOf: (T) -> Float,
+        yOf: (T) -> Float
+    ): List<List<T>> {
+        if (items.isEmpty() || epsilon <= 0f || minPoints <= 0) return emptyList()
 
-        val indexedTaps = taps.withIndex().toList()
-        val clusters = mutableListOf<List<GhostTap>>()
+        val indexed = items.withIndex().toList()
+        val clusters = mutableListOf<List<T>>()
         val visited = mutableSetOf<Int>()
 
-        for ((index, tap) in indexedTaps) {
+        for ((index, item) in indexed) {
             if (index in visited) continue
             visited.add(index)
 
-            val neighbors = findNeighborIndices(tap, indexedTaps, epsilon)
+            val neighbors = findNeighborIndices(item, indexed, epsilon, xOf, yOf)
             if (neighbors.size >= minPoints) {
                 val clusterIndices = mutableListOf<Int>()
-                expandClusterIndices(index, neighbors, clusterIndices, visited, indexedTaps, epsilon, minPoints)
-                clusters.add(clusterIndices.map { taps[it] })
+                expandClusterIndices(index, neighbors, clusterIndices, visited, indexed, epsilon, minPoints, xOf, yOf)
+                clusters.add(clusterIndices.map { items[it] })
             }
         }
 
         return clusters
     }
 
-    private fun expandClusterIndices(
+    private fun <T> expandClusterIndices(
         startIndex: Int,
         initialNeighbors: List<Int>,
         clusterIndices: MutableList<Int>,
         visited: MutableSet<Int>,
-        allTaps: List<IndexedValue<GhostTap>>,
+        allItems: List<IndexedValue<T>>,
         epsilon: Float,
-        minPoints: Int
+        minPoints: Int,
+        xOf: (T) -> Float,
+        yOf: (T) -> Float
     ) {
         clusterIndices.add(startIndex)
         val queue = initialNeighbors.toMutableList()
@@ -56,7 +68,7 @@ object ClusterUtils {
             val nextIndex = queue[i]
             if (nextIndex !in visited) {
                 visited.add(nextIndex)
-                val nextNeighbors = findNeighborIndices(allTaps[nextIndex].value, allTaps, epsilon)
+                val nextNeighbors = findNeighborIndices(allItems[nextIndex].value, allItems, epsilon, xOf, yOf)
                 if (nextNeighbors.size >= minPoints) {
                     for (nn in nextNeighbors) {
                         if (nn !in queue) {
@@ -72,16 +84,20 @@ object ClusterUtils {
         }
     }
 
-    private fun findNeighborIndices(
-        target: GhostTap,
-        allTaps: List<IndexedValue<GhostTap>>,
-        epsilon: Float
+    private fun <T> findNeighborIndices(
+        target: T,
+        allItems: List<IndexedValue<T>>,
+        epsilon: Float,
+        xOf: (T) -> Float,
+        yOf: (T) -> Float
     ): List<Int> {
         val result = mutableListOf<Int>()
         val epsSq = epsilon * epsilon
-        for (item in allTaps) {
-            val dx = target.x - item.value.x
-            val dy = target.y - item.value.y
+        val tx = xOf(target)
+        val ty = yOf(target)
+        for (item in allItems) {
+            val dx = tx - xOf(item.value)
+            val dy = ty - yOf(item.value)
             if (dx * dx + dy * dy <= epsSq) {
                 result.add(item.index)
             }
@@ -90,24 +106,53 @@ object ClusterUtils {
     }
 
     /**
+     * DBSCAN for [GhostTap] — clusters ghost tap logs into hotspots.
+     */
+    fun clusterTaps(taps: List<GhostTap>, epsilon: Float, minPoints: Int): List<List<GhostTap>> =
+        clusterByIndex(taps, epsilon, minPoints, { it.x }, { it.y })
+
+    /**
+     * DBSCAN for raw [Pair<Float, Float>] coordinates — used by on-device detection
+     * and anywhere that doesn't need full GhostTap metadata.
+     */
+    fun clusterPairs(
+        points: List<Pair<Float, Float>>,
+        epsilon: Float,
+        minPoints: Int
+    ): List<List<Pair<Float, Float>>> =
+        clusterByIndex(points, epsilon, minPoints, { it.first }, { it.second })
+
+    /**
      * Calculates the smallest bounding box that encompasses a cluster of taps.
      * Returns a Region object.
      */
+    @JvmName("calculateBoundingBoxFromGhostTaps")
     fun calculateBoundingBox(cluster: List<GhostTap>): Region {
         if (cluster.isEmpty()) return Region(0f, 0f, 0f, 0f)
+        return buildBoundingBox(
+            minX = cluster.minOf { it.x },
+            maxX = cluster.maxOf { it.x },
+            minY = cluster.minOf { it.y },
+            maxY = cluster.maxOf { it.y }
+        )
+    }
 
-        var minX = Float.MAX_VALUE
-        var maxX = -Float.MAX_VALUE
-        var minY = Float.MAX_VALUE
-        var maxY = -Float.MAX_VALUE
+    /**
+     * Calculates the smallest bounding box that encompasses a cluster of raw
+     * [Pair<Float, Float>] coordinates. Returns a Region object.
+     */
+    @JvmName("calculateBoundingBoxFromPairs")
+    fun calculateBoundingBox(points: List<Pair<Float, Float>>): Region {
+        if (points.isEmpty()) return Region(0f, 0f, 0f, 0f)
+        return buildBoundingBox(
+            minX = points.minOf { it.first },
+            maxX = points.maxOf { it.first },
+            minY = points.minOf { it.second },
+            maxY = points.maxOf { it.second }
+        )
+    }
 
-        for (tap in cluster) {
-            if (tap.x < minX) minX = tap.x
-            if (tap.x > maxX) maxX = tap.x
-            if (tap.y < minY) minY = tap.y
-            if (tap.y > maxY) maxY = tap.y
-        }
-
+    private fun buildBoundingBox(minX: Float, maxX: Float, minY: Float, maxY: Float): Region {
         val padding = 0.01f
         return Region(
             isExclude = false,

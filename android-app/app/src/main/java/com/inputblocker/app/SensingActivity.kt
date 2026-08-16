@@ -2,19 +2,22 @@ package com.inputblocker.app
 
 import android.app.Activity
 import android.content.Intent
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ProgressBar
 import android.widget.TextView
-import android.widget.Toast
-import android.graphics.Canvas
-import android.graphics.Paint
 import java.util.ArrayList
 
 class SensingActivity : Activity() {
@@ -27,11 +30,20 @@ class SensingActivity : Activity() {
 
     private lateinit var rootLayout: FrameLayout
     private lateinit var timerText: TextView
+    private lateinit var tapCounterText: TextView
+    private lateinit var progressBar: ProgressBar
+    private lateinit var btnStop: Button
     private lateinit var heatmapView: HeatmapView
     private var startTime = 0L
+    private var handler: Handler? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Keep screen on and fullscreen during sensing
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        @Suppress("DEPRECATION")
+        window.addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
 
         // Full screen, black background
         rootLayout = FrameLayout(this).apply {
@@ -44,23 +56,62 @@ class SensingActivity : Activity() {
 
         heatmapView = HeatmapView(this)
 
+        // Timer text — centered
         timerText = TextView(this).apply {
             setTextColor(Color.WHITE)
             textSize = 24f
-            text = "Sensing Ghost Taps... Please wait"
-            gravity = android.view.Gravity.CENTER
+            text = "Sensing Ghost Taps..."
+            gravity = Gravity.CENTER
+        }
+
+        // Tap counter — top-left overlay
+        tapCounterText = TextView(this).apply {
+            setTextColor(Color.argb(200, 255, 255, 255))
+            textSize = 16f
+            text = "Taps captured: 0"
+            setPadding(24, 48, 24, 0)
+        }
+
+        // Progress bar — bottom
+        progressBar = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = (detectionDurationMs / 1000).toInt()
+            progress = 0
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                24,
+                Gravity.BOTTOM
+            ).apply { setMargins(48, 0, 48, 100) }
+        }
+
+        // Stop & Review button — bottom-right, visible after first tap
+        btnStop = Button(this).apply {
+            text = "Stop & Review"
+            visibility = View.GONE
+            setOnClickListener { stopAndReview() }
+            layoutParams = FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.END
+            ).apply { setMargins(0, 0, 48, 140) }
         }
 
         rootLayout.addView(heatmapView)
         rootLayout.addView(timerText, FrameLayout.LayoutParams(
             ViewGroup.LayoutParams.WRAP_CONTENT,
             ViewGroup.LayoutParams.WRAP_CONTENT,
-            android.view.Gravity.CENTER
+            Gravity.CENTER
         ))
+        rootLayout.addView(tapCounterText, FrameLayout.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            Gravity.TOP or Gravity.START
+        ))
+        rootLayout.addView(progressBar)
+        rootLayout.addView(btnStop)
 
         setContentView(rootLayout)
 
-        // Start detection
+        // Start sensing
         startTime = System.currentTimeMillis()
         capturedTouches.clear()
         startCountdown()
@@ -72,31 +123,53 @@ class SensingActivity : Activity() {
             val ny = event.y / resources.displayMetrics.heightPixels
             capturedTouches.add(Pair(nx, ny))
             heatmapView.addPoint(nx, ny)
+            tapCounterText.text = "Taps captured: ${capturedTouches.size}"
+            if (capturedTouches.size == 1) {
+                btnStop.visibility = View.VISIBLE
+            }
             Log.d(TAG, "Captured touch at normalized ($nx, $ny)")
         }
         return true // Consume all touches
     }
 
-
     private fun startCountdown() {
-        val handler = Handler(Looper.getMainLooper())
-        handler.post(object : Runnable {
+        handler = Handler(Looper.getMainLooper())
+        handler?.post(object : Runnable {
             override fun run() {
                 val elapsed = System.currentTimeMillis() - startTime
                 val remaining = (detectionDurationMs - elapsed).coerceAtLeast(0)
-                
-                timerText.text = "Sensing Ghost Taps... ${remaining / 1000}s remaining"
-                
-                if (remaining > 0) {
-                    handler.postDelayed(this, 1000)
+                val secondsElapsed = (elapsed / 1000).toInt()
+
+                timerText.text = if (remaining > 0) {
+                    "Sensing... ${remaining / 1000}s remaining"
                 } else {
-                    timerText.text = "Sensing Complete!"
-                    val intent = Intent(this@SensingActivity, DetectionReviewActivity::class.java)
-                    startActivity(intent)
-                    finish()
+                    "Sensing Complete!"
+                }
+                progressBar.progress = secondsElapsed
+
+                if (remaining > 0) {
+                    handler?.postDelayed(this, 1000)
+                } else {
+                    launchReview()
                 }
             }
         })
+    }
+
+    private fun stopAndReview() {
+        handler?.removeCallbacksAndMessages(null)
+        launchReview()
+    }
+
+    private fun launchReview() {
+        val intent = Intent(this@SensingActivity, DetectionReviewActivity::class.java)
+        startActivity(intent)
+        finish()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        handler?.removeCallbacksAndMessages(null)
     }
 
     class HeatmapView(context: android.content.Context) : View(context) {
