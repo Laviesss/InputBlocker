@@ -1,10 +1,12 @@
 package com.inputblocker.pctool
 
 import java.io.File
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Future
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import com.inputblocker.shared.GhostTap
 import com.inputblocker.shared.Region
 
@@ -22,6 +24,12 @@ class ADBHelper : AutoCloseable {
 
     private var streamExecutor: ExecutorService? = null
     private var streamProcess: Process? = null
+
+    companion object {
+        private val cmdExecutor = Executors.newCachedThreadPool { r ->
+            Thread(r).apply { isDaemon = true }
+        }
+    }
 
     init {
         startADBServer()
@@ -139,11 +147,16 @@ class ADBHelper : AutoCloseable {
                 .redirectErrorStream(true)
                 .start()
             val reader = process.inputStream.bufferedReader()
-            val output = reader.readText()
-            val finished = process.waitFor(10, TimeUnit.SECONDS)
-            if (!finished) {
+            val future = CompletableFuture.supplyAsync({
+                reader.readText()
+            }, cmdExecutor)
+            val output = try {
+                future.get(10, TimeUnit.SECONDS)
+            } catch (_: TimeoutException) {
                 process.destroyForcibly()
+                ""
             }
+            process.waitFor(1, TimeUnit.SECONDS)
             output
         } catch (e: Exception) {
             println("Error running command ${cmd.firstOrNull()}: ${e.message}")
