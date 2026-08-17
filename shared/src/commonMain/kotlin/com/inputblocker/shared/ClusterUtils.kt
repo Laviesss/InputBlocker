@@ -153,28 +153,14 @@ object ClusterUtils {
     }
 
     private fun buildBoundingBox(minX: Float, maxX: Float, minY: Float, maxY: Float): Region {
-        val minSize = 0.05f // Minimum 5% screen size for reliable touch blocking
-        val currentW = maxX - minX
-        val currentH = maxY - minY
-
-        val cx = (minX + maxX) / 2f
-        val cy = (minY + maxY) / 2f
-
-        val halfW = (if (currentW < minSize) minSize else currentW + 0.02f) / 2f
-        val halfH = (if (currentH < minSize) minSize else currentH + 0.02f) / 2f
-
-        val x1 = (cx - halfW).coerceIn(0f, 1f)
-        val x2 = (cx + halfW).coerceIn(0f, 1f)
-        val y1 = (cy - halfH).coerceIn(0f, 1f)
-        val y2 = (cy + halfH).coerceIn(0f, 1f)
-
+        val padding = 0.01f
         return Region(
             isExclude = false,
             type = 0,
-            x1 = x1,
-            y1 = y1,
-            x2 = x2,
-            y2 = y2,
+            x1 = (minX - padding).coerceAtLeast(0f),
+            y1 = (minY - padding).coerceAtLeast(0f),
+            x2 = (maxX + padding).coerceAtMost(1f),
+            y2 = (maxY + padding).coerceAtMost(1f),
             minPressure = 0f,
             maxDuration = 1000L
         )

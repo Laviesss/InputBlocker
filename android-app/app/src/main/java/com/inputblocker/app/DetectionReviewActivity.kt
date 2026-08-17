@@ -57,20 +57,13 @@ class DetectionReviewActivity : Activity() {
         val minPts = prefs.getInt("dbscan_minpts", 3)
 
         val clustered = ClusterUtils.clusterPairs(points, eps, minPts)
-        if (clustered.isNotEmpty()) {
-            regions.addAll(clustered.map { ClusterUtils.calculateBoundingBox(it) })
-            clusterTapCounts.addAll(clustered.map { it.size })
-        } else if (points.isNotEmpty()) {
-            // Fallback: Create bounding boxes for points even if below minPts
-            val fallbackCluster = points.distinct()
-            regions.add(ClusterUtils.calculateBoundingBox(fallbackCluster))
-            clusterTapCounts.add(fallbackCluster.size)
-        }
-
-        // Guarantee at least one region is available for editing/saving
+        regions.addAll(clustered.map { ClusterUtils.calculateBoundingBox(it) })
+        clusterTapCounts.addAll(clustered.map { it.size })
+        
         if (regions.isEmpty()) {
-            regions.add(Region(0.25f, 0.25f, 0.75f, 0.75f))
-            clusterTapCounts.add(0)
+            Toast.makeText(this, "No clear clusters found", Toast.LENGTH_SHORT).show()
+            finish()
+            return
         }
 
         // 2. UI Setup
@@ -117,36 +110,6 @@ class DetectionReviewActivity : Activity() {
             setOnClickListener { showTuningDialog() }
         }
 
-        val btnAddRegion = Button(this).apply {
-            text = "+ Add Region"
-            setOnClickListener {
-                val newR = Region(0.3f, 0.3f, 0.7f, 0.7f)
-                regions.add(newR)
-                clusterTapCounts.add(0)
-                reviewCanvas.setRegions(regions, clusterTapCounts)
-                tvCount.text = "${clusterTapCounts.sum()} taps in ${regions.size} regions"
-            }
-        }
-
-        val btnDeleteRegion = Button(this).apply {
-            text = "Delete Selected"
-            setOnClickListener {
-                val sel = reviewCanvas.getSelectedRegion()
-                if (sel != null) {
-                    val idx = regions.indexOf(sel)
-                    if (idx >= 0) {
-                        regions.removeAt(idx)
-                        if (idx < clusterTapCounts.size) clusterTapCounts.removeAt(idx)
-                        reviewCanvas.clearSelection()
-                        reviewCanvas.setRegions(regions, clusterTapCounts)
-                        tvCount.text = "${clusterTapCounts.sum()} taps in ${regions.size} regions"
-                    }
-                } else {
-                    Toast.makeText(this@DetectionReviewActivity, "Tap a region to select it first", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }
-
         btnCancel = Button(this).apply {
             text = "Discard"
             setOnClickListener { finish() }
@@ -154,8 +117,6 @@ class DetectionReviewActivity : Activity() {
 
         controls.addView(tvCount)
         controls.addView(btnFineTune)
-        controls.addView(btnAddRegion)
-        controls.addView(btnDeleteRegion)
         controls.addView(btnSave)
         controls.addView(btnCancel)
 
@@ -294,12 +255,10 @@ class DetectionReviewActivity : Activity() {
             
             InputBlockerServiceManager.saveConfig(this, "default", content.toString())
             
-            // Broadcast reload event to all services and components
-            val packageReloadIntent = Intent("com.inputblocker.RELOAD").apply {
-                setPackage(packageName)
-            }
-            sendBroadcast(packageReloadIntent)
-
+            val intent = Intent("com.inputblocker.RELOAD")
+            intent.setPackage(packageName)
+            sendBroadcast(intent)
+            
             Toast.makeText(this, "Regions applied successfully!", Toast.LENGTH_SHORT).show()
             finish()
         } catch (e: Exception) {
@@ -347,13 +306,6 @@ class DetectionReviewActivity : Activity() {
         private val labelBgPaint = Paint().apply {
             color = Color.argb(160, 0, 0, 0)
             style = Paint.Style.FILL
-        }
-
-        fun getSelectedRegion(): Region? = selectedRegion
-
-        fun clearSelection() {
-            selectedRegion = null
-            invalidate()
         }
 
         fun setRegions(list: List<Region>, tapCounts: List<Int> = emptyList()) {
@@ -449,51 +401,47 @@ class DetectionReviewActivity : Activity() {
                     }
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    val sel = selectedRegion ?: return false
+                    if (selectedRegion == null) return false
 
                     val dx = (x - lastX) / width
                     val dy = (y - lastY) / height
                     
-                    var updated = if (isResizing) {
-                        when (activeHandle) {
-                            Handle.TOP_LEFT -> sel.copy(x1 = sel.x1 + dx, y1 = sel.y1 + dy)
-                            Handle.TOP_RIGHT -> sel.copy(x2 = sel.x2 + dx, y1 = sel.y1 + dy)
-                            Handle.BOTTOM_LEFT -> sel.copy(x1 = sel.x1 + dx, y2 = sel.y2 + dy)
-                            Handle.BOTTOM_RIGHT -> sel.copy(x2 = sel.x2 + dx, y2 = sel.y2 + dy)
-                            else -> sel
-                        }
-                    } else if (isDragging) {
-                        sel.copy(
-                            x1 = sel.x1 + dx,
-                            x2 = sel.x2 + dx,
-                            y1 = sel.y1 + dy,
-                            y2 = sel.y2 + dy
-                        )
-                    } else sel
+                                 if (isResizing) {
+                                     val r = selectedRegion!!
+                                     selectedRegion = when (activeHandle) {
+                                         Handle.TOP_LEFT -> r.copy(x1 = r.x1 + dx, y1 = r.y1 + dy) as Region
+                                         Handle.TOP_RIGHT -> r.copy(x2 = r.x2 + dx, y1 = r.y1 + dy) as Region
+                                         Handle.BOTTOM_LEFT -> r.copy(x1 = r.x1 + dx, y2 = r.y2 + dy) as Region
+                                         Handle.BOTTOM_RIGHT -> r.copy(x2 = r.x2 + dx, y2 = r.y2 + dy) as Region
+                                         else -> r as Region
+                                     }
+                                 } else if (isDragging) {
+                                     val r = selectedRegion!!
+                                     selectedRegion = r.copy(
+                                         x1 = r.x1 + dx,
+                                         x2 = r.x2 + dx,
+                                         y1 = r.y1 + dy,
+                                         y2 = r.y2 + dy
+                                     )
+                                 }
 
-                    // Clamp to [0, 1] and prevent coordinate inversion
-                    val nx1 = updated.x1.coerceAtLeast(0f)
-                    val ny1 = updated.y1.coerceAtLeast(0f)
-                    val nx2 = updated.x2.coerceAtMost(1f)
-                    val ny2 = updated.y2.coerceAtMost(1f)
+                    
+                                 // Clamp to [0, 1] and prevent inversion
+                                 selectedRegion = selectedRegion?.let { r: Region ->
+                                     val nx1 = r.x1.coerceAtLeast(0f)
+                                     val ny1 = r.y1.coerceAtLeast(0f)
+                                     val nx2 = r.x2.coerceAtMost(1f)
+                                     val ny2 = r.y2.coerceAtMost(1f)
+                                     
+                                     val fx1 = if (nx1 > nx2) nx2 else nx1
+                                     val fx2 = if (nx1 > nx2) nx1 else nx2
+                                     val fy1 = if (ny1 > ny2) ny2 else ny1
+                                     val fy2 = if (ny1 > ny2) ny1 else ny2
+                                     
+                                     r.copy(x1 = fx1, y1 = fy1, x2 = fx2, y2 = fy2)
+                                 }
 
-                    val fx1 = Math.min(nx1, nx2)
-                    val fx2 = Math.max(nx1, nx2)
-                    val fy1 = Math.min(ny1, ny2)
-                    val fy2 = Math.max(ny1, ny2)
-
-                    val finalRegion = updated.copy(x1 = fx1, y1 = fy1, x2 = fx2, y2 = fy2)
-
-                    // Sync changes back to outer regions list & inner regionsList
-                    val index = regionsList.indexOf(selectedRegion)
-                    if (index >= 0) {
-                        regionsList[index] = finalRegion
-                        if (index < this@DetectionReviewActivity.regions.size) {
-                            this@DetectionReviewActivity.regions[index] = finalRegion
-                        }
-                    }
-                    selectedRegion = finalRegion
-
+                    
                     lastX = x
                     lastY = y
                     invalidate()
