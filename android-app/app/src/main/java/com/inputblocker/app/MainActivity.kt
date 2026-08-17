@@ -641,25 +641,25 @@ class MainActivity : AppCompatActivity() {
      */
     private fun startAutoDetection() {
         Thread {
+            var origLocksetting = "0"
             try {
-                Log.i("MainActivity", "Starting Auto-Detection sequence...")
-                InputBlockerServiceManager.runRootCommand("settings put secure lockscreen.disabled 1")
-                Thread.sleep(500)   // Wait for lockscreen setting to apply
-                InputBlockerServiceManager.runRootCommand("input keyevent 26")       // Screen off
-                Thread.sleep(2000)  // Wait for display to fully power down
-                InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP")  // Wake
-                Thread.sleep(1000)  // Wait for screen to become responsive
-                runOnUiThread {
-                    val intent = Intent(this, SensingActivity::class.java)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(intent)
-                    Toast.makeText(this, "Sensing mode active!", Toast.LENGTH_LONG).show()
+                if (InputBlockerServiceManager.hasRootAccess()) {
+                    val current = InputBlockerServiceManager.runRootCommand("settings get secure lockscreen.disabled").trim()
+                    if (current.isNotEmpty() && !current.contains("null") && !current.contains("Error")) {
+                        origLocksetting = current
+                    }
+                    InputBlockerServiceManager.runRootCommand("settings put secure lockscreen.disabled 1")
                 }
             } catch (e: Exception) {
-                Log.e("MainActivity", "Auto-detection sequence failed", e)
-                runOnUiThread {
-                    Toast.makeText(this, "Detection failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                Log.w("MainActivity", "Failed to query or set lockscreen setting: ${e.message}")
+            }
+
+            runOnUiThread {
+                val intent = Intent(this, SensingActivity::class.java).apply {
+                    putExtra("EXTRA_ORIG_LOCKSCREEN_SETTING", origLocksetting)
+                    putExtra("EXTRA_PERFORM_POWER_CYCLE", true)
                 }
+                startActivity(intent)
             }
         }.start()
     }
@@ -951,6 +951,9 @@ class MainActivity : AppCompatActivity() {
             content.append("$region\n")
         }
         InputBlockerServiceManager.saveConfig(this, "default", content.toString())
+
+        // Notify active services to reload configuration immediately
+        sendBroadcast(Intent("com.inputblocker.RELOAD").apply { setPackage(packageName) })
     }
 
     private fun updateUI() {
