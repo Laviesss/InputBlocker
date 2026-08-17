@@ -204,7 +204,11 @@ class SensingActivity : Activity() {
                 lastNx = nx
                 lastNy = ny
 
-                capturedTouches.add(Pair(nx, ny))
+                    // Cap at 1000 touches to prevent unbounded memory growth
+                    if (capturedTouches.size >= 1000) {
+                        capturedTouches.subList(0, capturedTouches.size - 500).clear()
+                    }
+                    capturedTouches.add(Pair(nx, ny))
                 heatmapView.addPoint(nx, ny)
                 tapCounterText.text = "Taps captured: ${capturedTouches.size}"
                 if (capturedTouches.size == 1) {

@@ -21,6 +21,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         @Volatile private var testModeActive = false
         private var lastLoadTime = 0L
         private var lastConfigFileModified = -1L
+        private var lastConfigFileSize = -1L
         private const val CACHE_TTL = 10000L // 10 seconds fallback poll
         
         private var cachedWidth = 0
@@ -246,26 +247,29 @@ class InputBlockerXposed : IXposedHookZygoteInit {
 
         val file = File(configPath)
         val fileLastMod = if (file.exists()) file.lastModified() else -1L
+        val fileSize = if (file.exists()) file.length() else -1L
 
-        // Re-read immediately if file modification time changed, otherwise respect TTL
-        if (now - lastLoadTime < CACHE_TTL && fileLastMod == lastConfigFileModified && lastConfigFileModified != -1L) return
+        // Re-read if file modification time or size changed, otherwise respect TTL
+        if (now - lastLoadTime < CACHE_TTL && fileLastMod == lastConfigFileModified && fileSize == lastConfigFileSize && lastConfigFileModified != -1L) return
 
         try {
             val killSwitch = File("/data/adb/modules/inputblocker/config/kill_switch")
             if (killSwitch.exists()) {
-                cachedEnabled = false
-                lastLoadTime = now
-                lastConfigFileModified = fileLastMod
-                return
+            cachedEnabled = false
+            lastLoadTime = now
+            lastConfigFileModified = fileLastMod
+            lastConfigFileSize = fileSize
+            return
             }
 
             testModeActive = File("/data/adb/modules/inputblocker/config/test_mode").exists()
 
-            if (!file.exists()) {
-                lastLoadTime = now
-                lastConfigFileModified = fileLastMod
-                return
-            }
+        if (!file.exists()) {
+            lastLoadTime = now
+            lastConfigFileModified = fileLastMod
+            lastConfigFileSize = fileSize
+            return
+        }
             
             val newRegions = ArrayList<Region>()
             var newEnabled = true
@@ -290,6 +294,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             cachedLsposedMode = newLsposedMode
             lastLoadTime = now
             lastConfigFileModified = fileLastMod
+            lastConfigFileSize = fileSize
         } catch (e: Exception) {
             XposedBridge.log("$TAG: Error loading config: ${e.message}")
         }

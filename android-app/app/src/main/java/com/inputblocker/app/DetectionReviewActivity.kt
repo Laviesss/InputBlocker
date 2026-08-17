@@ -293,12 +293,7 @@ class DetectionReviewActivity : Activity() {
             }
             
             InputBlockerServiceManager.saveConfig(this, "default", content.toString())
-            
-            // Broadcast reload event to all services and components
-            val packageReloadIntent = Intent("com.inputblocker.RELOAD").apply {
-                setPackage(packageName)
-            }
-            sendBroadcast(packageReloadIntent)
+            // saveConfig() already sends a RELOAD broadcast — no need to duplicate
 
             Toast.makeText(this, "Regions applied successfully!", Toast.LENGTH_SHORT).show()
             finish()

@@ -951,9 +951,7 @@ class MainActivity : AppCompatActivity() {
             content.append("$region\n")
         }
         InputBlockerServiceManager.saveConfig(this, "default", content.toString())
-
-        // Notify active services to reload configuration immediately
-        sendBroadcast(Intent("com.inputblocker.RELOAD").apply { setPackage(packageName) })
+        // saveConfig() already sends a RELOAD broadcast — no need to duplicate
     }
 
     private fun updateUI() {

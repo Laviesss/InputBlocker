@@ -50,11 +50,19 @@ if [ ! -f "$APK_PATH" ]; then
     fi
 fi
 
+# Diagnostic: log APK file info before install attempt
+APK_SIZE=$(ls -l "$APK_PATH" 2>/dev/null | awk '{print $5}')
+APK_PERMS=$(ls -l "$APK_PATH" 2>/dev/null | awk '{print $1}')
+sys_log "APK path: $APK_PATH"
+sys_log "APK size: ${APK_SIZE:-unknown} bytes"
+sys_log "APK perms: ${APK_PERMS:-unknown}"
+
 # Try install up to 3 times
 INSTALLED=false
 for i in 1 2 3; do
     sys_log "Installation attempt $i/3..."
-    pm install -r "$APK_PATH" > /dev/null 2>&1
+    INSTALL_OUTPUT=$(pm install -r "$APK_PATH" 2>&1)
+    sys_log "pm install output: $INSTALL_OUTPUT"
 
     # Verify installation (up to 5 checks, 3s apart)
     for j in 1 2 3 4 5; do
@@ -73,14 +81,33 @@ if [ "$INSTALLED" = "true" ]; then
     sys_log "Companion app installed successfully as user app (uninstallable)."
     echo "$(getprop ro.build.version.release)" > "$INSTALL_FLAG"
 else
-    # Final fallback: open the APK for manual install via system intent
-    sys_log "FATAL: Silent install failed after 3 attempts. Launching manual install intent..."
-    if [ -f "$APK_PATH" ]; then
-        am start -a android.intent.action.VIEW \
-            -d "file://$APK_PATH" \
-            -t "application/vnd.android.package-archive" \
-            -f 0x10000000 > /dev/null 2>&1
-        sys_log "Manual install intent launched. User must confirm installation."
+    # Final fallback: copy APK to /data/local/tmp and retry install
+    # (file:// URI is blocked on Android 7+; pm install from /data/local/tmp works reliably)
+    sys_log "FATAL: Silent install failed after 3 attempts. Trying /data/local/tmp fallback..."
+    TMP_APK="/data/local/tmp/InputBlocker.apk"
+    cp "$APK_PATH" "$TMP_APK" 2>/dev/null
+    chmod 644 "$TMP_APK" 2>/dev/null
+
+    if [ -f "$TMP_APK" ]; then
+        sys_log "Retrying install from $TMP_APK..."
+        INSTALL_OUTPUT=$(pm install -r "$TMP_APK" 2>&1)
+        sys_log "Fallback pm install output: $INSTALL_OUTPUT"
+
+        for j in 1 2 3 4 5; do
+            if pm list packages | grep -q "$PKG_NAME"; then
+                sys_log "App installed successfully via fallback path."
+                INSTALLED=true
+                break
+            fi
+            sleep 3
+        done
+    fi
+
+    if [ "$INSTALLED" = "true" ]; then
+        echo "$(getprop ro.build.version.release)" > "$INSTALL_FLAG"
+    else
+        sys_log "FATAL: All install methods failed. APK must be installed manually."
+        sys_log "Manual install: adb install -r $APK_PATH"
     fi
 fi
 

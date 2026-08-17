@@ -52,20 +52,27 @@ object InputBlockerServiceManager {
             if (res.isNotEmpty()) return res.contains("installed")
         }
         return try {
-            val checkPaths = listOf(
+            // Module paths: verify directory exists, has module.prop, and is not disabled
+            val modulePaths = listOf(
+                "/data/adb/modules/zygisk_lsposed",
+                "/data/adb/modules/lsposed",
+                "/data/adb/modules/zygisk_vector",
+                "/data/adb/modules/vector"
+            )
+            val moduleChecks = modulePaths.joinToString(" || ") { path ->
+                "(test -d '$path' && test -f '$path/module.prop' && test ! -f '$path/disable' && test ! -f '$path/lsposed_disabled')"
+            }
+            // Manager data directories: existence check
+            val dataPaths = listOf(
                 "/data/data/org.lsposed.lsposed",
                 "/data/data/org.lsposed.manager",
                 "/data/data/io.github.lsposed.manager",
                 "/data/data/com.vector.lsposed",
                 "/data/data/com.wind.vector",
-                "/data/adb/modules/zygisk_lsposed",
-                "/data/adb/modules/lsposed",
-                "/data/adb/modules/zygisk_vector",
-                "/data/adb/modules/vector",
                 "/data/adb/lspd"
             )
-            val pathChecks = checkPaths.joinToString(" || ") { "ls -d $it 2>/dev/null" }
-            val cmd = "$pathChecks || pm list packages 2>/dev/null | grep -iE 'lsposed|vector|edxposed|xposed'"
+            val dataChecks = dataPaths.joinToString(" || ") { "ls -d $it 2>/dev/null" }
+            val cmd = "$moduleChecks || $dataChecks || pm list packages 2>/dev/null | grep -iE 'lsposed|vector|edxposed|xposed'"
             val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
             process.waitFor()
             process.exitValue() == 0
