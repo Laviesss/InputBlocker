@@ -98,6 +98,7 @@ class InputBlockerAccessibilityService : AccessibilityService() {
     private val globalReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
+                "com.inputblocker.RELOAD" -> onChange()
                 "com.inputblocker.PAUSE" -> pauseBlocking(60000)
                 "com.inputblocker.RESUME" -> resumeBlocking()
             }
@@ -125,6 +126,7 @@ class InputBlockerAccessibilityService : AccessibilityService() {
         }
 
         val globalFilter = IntentFilter().apply {
+            addAction("com.inputblocker.RELOAD")
             addAction("com.inputblocker.PAUSE")
             addAction("com.inputblocker.RESUME")
         }

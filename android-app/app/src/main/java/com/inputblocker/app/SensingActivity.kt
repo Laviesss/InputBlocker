@@ -1,10 +1,12 @@
 package com.inputblocker.app
 
 import android.app.Activity
+import android.app.KeyguardManager
 import android.content.Intent
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -37,13 +39,32 @@ class SensingActivity : Activity() {
     private var startTime = 0L
     private var handler: Handler? = null
 
+    private var origLockscreenSetting: String? = null
+    private var lockscreenRestored = false
+    private var lastCapturedTime = 0L
+    private var lastNx = -1f
+    private var lastNy = -1f
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Keep screen on and fullscreen during sensing
+        origLockscreenSetting = intent.getStringExtra("EXTRA_ORIG_LOCKSCREEN_SETTING")
+
+        // Set window flags to stay visible over keyguard and keep display alive
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            val km = getSystemService(KeyguardManager::class.java)
+            km?.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        @Suppress("DEPRECATION")
-        window.addFlags(WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON)
 
         // Full screen, black background
         rootLayout = FrameLayout(this).apply {
@@ -111,23 +132,69 @@ class SensingActivity : Activity() {
 
         setContentView(rootLayout)
 
-        // Start sensing
-        startTime = System.currentTimeMillis()
         capturedTouches.clear()
-        startCountdown()
+
+        val performPowerCycle = intent.getBooleanExtra("EXTRA_PERFORM_POWER_CYCLE", false)
+        if (performPowerCycle) {
+            timerText.text = "Cycling screen power..."
+            Thread {
+                try {
+                    Thread.sleep(400) // Brief pause to ensure activity window attached
+                    Log.i(TAG, "Executing power off event...")
+                    InputBlockerServiceManager.runRootCommand("input keyevent 26") // Screen off
+                    Thread.sleep(2000) // 2s power down
+                    Log.i(TAG, "Executing wakeup event...")
+                    InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP") // Wake
+                    Thread.sleep(800)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Power cycle failed: ${e.message}")
+                }
+                runOnUiThread {
+                    startTime = System.currentTimeMillis()
+                    startCountdown()
+                }
+            }.start()
+        } else {
+            startTime = System.currentTimeMillis()
+            startCountdown()
+        }
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
-        if (event.action == MotionEvent.ACTION_DOWN) {
-            val nx = event.x / resources.displayMetrics.widthPixels
-            val ny = event.y / resources.displayMetrics.heightPixels
-            capturedTouches.add(Pair(nx, ny))
-            heatmapView.addPoint(nx, ny)
-            tapCounterText.text = "Taps captured: ${capturedTouches.size}"
-            if (capturedTouches.size == 1) {
-                btnStop.visibility = View.VISIBLE
+        val now = System.currentTimeMillis()
+        val action = event.actionMasked
+
+        // Capture discrete taps, partial touches, stationary stuck touches, and moves
+        if (action == MotionEvent.ACTION_DOWN ||
+            action == MotionEvent.ACTION_POINTER_DOWN ||
+            action == MotionEvent.ACTION_MOVE ||
+            action == MotionEvent.ACTION_HOVER_MOVE) {
+
+            val metrics = resources.displayMetrics
+            val width = if (metrics.widthPixels > 0) metrics.widthPixels.toFloat() else 1f
+            val height = if (metrics.heightPixels > 0) metrics.heightPixels.toFloat() else 1f
+
+            val nx = (event.x / width).coerceIn(0f, 1f)
+            val ny = (event.y / height).coerceIn(0f, 1f)
+
+            // Throttle capturing: capture if at least 30ms passed OR position shifted by > 0.002
+            val dt = now - lastCapturedTime
+            val dx = Math.abs(nx - lastNx)
+            val dy = Math.abs(ny - lastNy)
+
+            if (dt > 30 || dx > 0.002f || dy > 0.002f || action == MotionEvent.ACTION_DOWN) {
+                lastCapturedTime = now
+                lastNx = nx
+                lastNy = ny
+
+                capturedTouches.add(Pair(nx, ny))
+                heatmapView.addPoint(nx, ny)
+                tapCounterText.text = "Taps captured: ${capturedTouches.size}"
+                if (capturedTouches.size >= 1) {
+                    btnStop.visibility = View.VISIBLE
+                }
+                Log.d(TAG, "Captured touch at normalized ($nx, $ny) [action=$action]")
             }
-            Log.d(TAG, "Captured touch at normalized ($nx, $ny)")
         }
         return true // Consume all touches
     }
@@ -162,13 +229,31 @@ class SensingActivity : Activity() {
     }
 
     private fun launchReview() {
+        restoreLockscreenSettingSilently()
         val intent = Intent(this@SensingActivity, DetectionReviewActivity::class.java)
         startActivity(intent)
         finish()
     }
 
+    private fun restoreLockscreenSettingSilently() {
+        if (lockscreenRestored) return
+        lockscreenRestored = true
+        val orig = origLockscreenSetting ?: return
+        Thread {
+            try {
+                if (InputBlockerServiceManager.hasRootAccess()) {
+                    InputBlockerServiceManager.runRootCommand("settings put secure lockscreen.disabled $orig")
+                    Log.i(TAG, "Silently restored lockscreen.disabled setting to $orig")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restore lockscreen setting: ${e.message}")
+            }
+        }.start()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
+        restoreLockscreenSettingSilently()
         handler?.removeCallbacksAndMessages(null)
     }
 

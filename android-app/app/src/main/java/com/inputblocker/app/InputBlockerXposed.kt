@@ -20,7 +20,8 @@ class InputBlockerXposed : IXposedHookZygoteInit {
         @Volatile private var cachedLsposedMode = true
         @Volatile private var testModeActive = false
         private var lastLoadTime = 0L
-        private const val CACHE_TTL = 10000L // 10 seconds for standard config
+        private var lastConfigFileModified = -1L
+        private const val CACHE_TTL = 10000L // 10 seconds fallback poll
         
         private var cachedWidth = 0
         private var cachedHeight = 0
@@ -60,69 +61,120 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     }
 
     override fun initZygote(startupParam: IXposedHookZygoteInit.StartupParam) {
-        XposedBridge.log("InputBlocker hook module initialized (Legacy Xposed API / Vector)")
+        XposedBridge.log("$TAG: InputBlocker hook module initialized (Vector/Zygisk/LSPosed compatible)")
         
+        val hookHandler = object : de.robv.android.xposed.XC_MethodHook() {
+            override fun beforeHookedMethod(param: MethodHookParam) {
+                try {
+                    val now = System.currentTimeMillis()
+                    updateConfigIfNeeded(now)
+
+                    if (!cachedEnabled || cachedPaused) return
+                    if (!cachedLsposedMode) return // LSPosed mode disabled — OverlayService handles blocking
+
+                    // Extract MotionEvent from method arguments (supports dispatchMotionLocked & injectInputEvent overloads)
+                    var motionEvent: MotionEvent? = null
+                    for (arg in param.args) {
+                        if (arg is MotionEvent) {
+                            motionEvent = arg
+                            break
+                        }
+                    }
+                    if (motionEvent == null) return
+
+                    val startNano = System.nanoTime()
+                    updateMetricsIfNeeded(now)
+
+                    if (cachedWidth <= 0 || cachedHeight <= 0) return
+
+                    val nx = motionEvent.x / cachedWidth
+                    val ny = motionEvent.y / cachedHeight
+
+                    if (testModeActive) {
+                        logLatency(System.nanoTime() - startNano)
+                        param.setResult(null)
+                        return
+                    }
+
+                    val regions = cachedRegions
+
+                    // 1. Priority: Exclude Zones (Whitelist)
+                    for (region in regions) {
+                        if (region.isExclude && region.contains(nx, ny)) {
+                            logLatency(System.nanoTime() - startNano)
+                            return
+                        }
+                    }
+
+                    // 2. Surgical Blocking Zones
+                    for (region in regions) {
+                        if (!region.isExclude && region.contains(nx, ny)) {
+                            if (shouldBlockSurgically(motionEvent, region)) {
+                                logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
+                                logLatency(System.nanoTime() - startNano)
+                                param.setResult(null)
+                                return
+                            }
+                        }
+                    }
+                    logLatency(System.nanoTime() - startNano)
+                } catch (t: Throwable) {
+                    handleHookCrash(t)
+                }
+            }
+        }
+
+        var hooked = false
+        // Strategy 1: Standard InputDispatcher.dispatchMotionLocked
         try {
             XposedHelpers.findAndHookMethod(
                 "com.android.server.input.InputDispatcher",
                 null,
                 "dispatchMotionLocked",
                 android.os.IBinder::class.java,
-                object : de.robv.android.xposed.XC_MethodHook() {
-                    override fun beforeHookedMethod(param: MethodHookParam) {
-                        try {
-                            val now = System.currentTimeMillis()
-                            updateConfigIfNeeded(now)
-                            
-                            if (!cachedEnabled || cachedPaused) return
-                            if (!cachedLsposedMode) return // LSPosed mode disabled — OverlayService handles blocking
+                hookHandler
+            )
+            hooked = true
+            XposedBridge.log("$TAG: Hooked InputDispatcher.dispatchMotionLocked successfully")
+        } catch (e: Throwable) {
+            XposedBridge.log("$TAG: Primary hook failed (${e.message}), trying alternative signatures...")
+        }
 
-                            val motionEvent = param.args.getOrNull(1) as? MotionEvent ?: return
-                            
-                            val startNano = System.nanoTime()
-                            updateMetricsIfNeeded(now)
-                            
-                            if (cachedWidth <= 0 || cachedHeight <= 0) return
-                            
-                            val nx = motionEvent.x / cachedWidth
-                            val ny = motionEvent.y / cachedHeight
-                            
-                            if (testModeActive) {
-                                logLatency(System.nanoTime() - startNano)
-                                param.setResult(null)
-                                return
-                            }
-                            
-                            val regions = cachedRegions
-                            
-                            // 1. Priority: Exclude Zones (Whitelist)
-                            for (region in regions) {
-                                if (region.isExclude && region.contains(nx, ny)) {
-                                    logLatency(System.nanoTime() - startNano)
-                                    return
-                                }
-                            }
-                            
-                            // 2. Surgical Blocking Zones
-                            for (region in regions) {
-                                if (!region.isExclude && region.contains(nx, ny)) {
-                                    if (shouldBlockSurgically(motionEvent, region)) {
-                                        logBlockedTouch(nx, ny, motionEvent.pressure, (motionEvent.eventTime - motionEvent.downTime), region)
-                                        logLatency(System.nanoTime() - startNano)
-                                        param.setResult(null)
-                                        return
-                                    }
-                                }
-                            }
-                            logLatency(System.nanoTime() - startNano)
-                        } catch (t: Throwable) {
-                            handleHookCrash(t)
-                        }
+        // Strategy 2: Fallback to scanning InputDispatcher declared methods for MotionEvent parameters
+        if (!hooked) {
+            try {
+                val inputDispatcherClass = XposedHelpers.findClass("com.android.server.input.InputDispatcher", null)
+                for (method in inputDispatcherClass.declaredMethods) {
+                    if ((method.name.contains("dispatchMotion") || method.name.contains("injectInputEvent")) &&
+                        method.parameterTypes.contains(MotionEvent::class.java)) {
+                        XposedBridge.hookMethod(method, hookHandler)
+                        hooked = true
+                        XposedBridge.log("$TAG: Hooked fallback method ${method.name}")
                     }
                 }
-            )
-        } catch (e: Exception) {
-            XposedBridge.log("$TAG: Error hooking InputDispatcher: ${e.message}")
+            } catch (e: Throwable) {
+                XposedBridge.log("$TAG: InputDispatcher fallback failed: ${e.message}")
+            }
+        }
+
+        // Strategy 3: Fallback to InputManagerService
+        if (!hooked) {
+            try {
+                val imsClass = XposedHelpers.findClass("com.android.server.input.InputManagerService", null)
+                for (method in imsClass.declaredMethods) {
+                    if (method.name.contains("injectInputEvent") && method.parameterTypes.contains(MotionEvent::class.java)) {
+                        XposedBridge.hookMethod(method, hookHandler)
+                        hooked = true
+                        XposedBridge.log("$TAG: Hooked InputManagerService.${method.name}")
+                    }
+                }
+            } catch (e: Throwable) {
+                XposedBridge.log("$TAG: InputManagerService fallback failed: ${e.message}")
+            }
+        }
+
+        if (!hooked) {
+            XposedBridge.log("$TAG: WARNING - Could not hook any InputDispatcher/InputManager method.")
         }
     }
 
@@ -177,28 +229,33 @@ class InputBlockerXposed : IXposedHookZygoteInit {
     }
 
     private fun updateConfigIfNeeded(now: Long) {
-        if (now - lastLoadTime < CACHE_TTL) return
+        val pkg = currentPackageName
+        val configPath = if (pkg != null && File("/data/adb/modules/inputblocker/config/profiles/$pkg.conf").exists()) {
+            "/data/adb/modules/inputblocker/config/profiles/$pkg.conf"
+        } else {
+            "/data/adb/modules/inputblocker/config/profiles/default.conf"
+        }
+
+        val file = File(configPath)
+        val fileLastMod = if (file.exists()) file.lastModified() else -1L
+
+        // Re-read immediately if file modification time changed, otherwise respect TTL
+        if (now - lastLoadTime < CACHE_TTL && fileLastMod == lastConfigFileModified && lastConfigFileModified != -1L) return
 
         try {
             val killSwitch = File("/data/adb/modules/inputblocker/config/kill_switch")
             if (killSwitch.exists()) {
                 cachedEnabled = false
                 lastLoadTime = now
+                lastConfigFileModified = fileLastMod
                 return
             }
 
             testModeActive = File("/data/adb/modules/inputblocker/config/test_mode").exists()
 
-            val pkg = currentPackageName
-            val configPath = if (pkg != null && File("/data/adb/modules/inputblocker/config/profiles/$pkg.conf").exists()) {
-                "/data/adb/modules/inputblocker/config/profiles/$pkg.conf"
-            } else {
-                "/data/adb/modules/inputblocker/config/profiles/default.conf"
-            }
-            
-            val file = File(configPath)
             if (!file.exists()) {
                 lastLoadTime = now
+                lastConfigFileModified = fileLastMod
                 return
             }
             
@@ -224,6 +281,7 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             cachedPaused = newPaused
             cachedLsposedMode = newLsposedMode
             lastLoadTime = now
+            lastConfigFileModified = fileLastMod
         } catch (e: Exception) {
             XposedBridge.log("$TAG: Error loading config: ${e.message}")
         }

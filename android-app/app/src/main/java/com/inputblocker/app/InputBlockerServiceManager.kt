@@ -43,16 +43,30 @@ object InputBlockerServiceManager {
     }
 
     /**
-     * Checks whether LSPosed is installed by looking for its APK or module path.
+     * Checks whether LSPosed / Vector or compatible Xposed framework is installed
+     * by inspecting manager package data dirs, module paths, and installed package list.
      */
     fun isLsposedInstalled(): Boolean {
+        testCommandRunner?.let {
+            val res = it("check_lsposed")
+            if (res.isNotEmpty()) return res.contains("installed")
+        }
         return try {
-            val process = Runtime.getRuntime().exec(arrayOf(
-                "sh", "-c",
-                "ls /data/data/org.lsposed.lsposed 2>/dev/null || " +
-                "ls /data/app/*lsposed* 2>/dev/null || " +
-                "pm list packages 2>/dev/null | grep -q lsposed"
-            ))
+            val checkPaths = listOf(
+                "/data/data/org.lsposed.lsposed",
+                "/data/data/org.lsposed.manager",
+                "/data/data/io.github.lsposed.manager",
+                "/data/data/com.vector.lsposed",
+                "/data/data/com.wind.vector",
+                "/data/adb/modules/zygisk_lsposed",
+                "/data/adb/modules/lsposed",
+                "/data/adb/modules/zygisk_vector",
+                "/data/adb/modules/vector",
+                "/data/adb/lspd"
+            )
+            val pathChecks = checkPaths.joinToString(" || ") { "ls -d $it 2>/dev/null" }
+            val cmd = "$pathChecks || pm list packages 2>/dev/null | grep -iE 'lsposed|vector|edxposed|xposed'"
+            val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", cmd))
             process.waitFor()
             process.exitValue() == 0
         } catch (_: Exception) {
