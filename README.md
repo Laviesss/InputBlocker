@@ -1,4 +1,5 @@
 <div align="center">
+  <p><strong>🚧 WORK IN PROGRESS 🚧</strong></p>
   <h1>🛡️ InputBlocker</h1>
   <p><strong>Intelligent ghost-tap filtering for failing Android touchscreens</strong></p>
 
@@ -35,6 +36,14 @@
     <a href="#-faq"><b>FAQ</b></a>
   </p>
 </div>
+
+> **⚠️ Work in Progress — Use at Your Own Risk**
+>
+> InputBlocker is under active development and is **not stable**. Things may break, configurations may change between versions, and there is **no guarantee** that older releases will continue to work. Previous releases may be removed at any time without notice.
+>
+> **Use this software entirely at your own risk.** I am not responsible for any damage, data loss, boot loops, bricked devices, or any other issues that may arise from using this project. Flashing root modules and modifying system-level input handling carries inherent risk — you accept full responsibility for whatever happens to your device.
+>
+> If you're not comfortable with that, wait for a stable release.
 
 ---
 
