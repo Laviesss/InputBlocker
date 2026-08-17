@@ -41,4 +41,26 @@ class ClusterUtilsTest {
         assertEquals(0.12f, suggestedPressure, 0.001f)
         assertEquals(100L, suggestedDuration)
     }
+
+    @Test
+    fun testBoundingBoxMinimumSizeSinglePoint() {
+        val points = listOf(Pair(0.5f, 0.5f))
+        val bbox = ClusterUtils.calculateBoundingBox(points)
+        assertEquals(0.475f, bbox.x1, 0.001f)
+        assertEquals(0.475f, bbox.y1, 0.001f)
+        assertEquals(0.525f, bbox.x2, 0.001f)
+        assertEquals(0.525f, bbox.y2, 0.001f)
+        assertEquals(0.05f, bbox.width, 0.001f)
+        assertEquals(0.05f, bbox.height, 0.001f)
+    }
+
+    @Test
+    fun testBoundingBoxEdgeOfScreenClamping() {
+        val points = listOf(Pair(0.0f, 0.0f))
+        val bbox = ClusterUtils.calculateBoundingBox(points)
+        assertEquals(0.0f, bbox.x1, 0.001f)
+        assertEquals(0.0f, bbox.y1, 0.001f)
+        assertEquals(0.025f, bbox.x2, 0.001f)
+        assertEquals(0.025f, bbox.y2, 0.001f)
+    }
 }

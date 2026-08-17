@@ -140,6 +140,12 @@ object InputBlockerServiceManager {
             runRootCommand("cp ${tempFile.absolutePath} $path")
             runRootCommand("chmod 644 $path")
             tempFile.delete()
+
+            // Broadcast config reload event to active services
+            val reloadIntent = Intent("com.inputblocker.RELOAD").apply {
+                setPackage(context.packageName)
+            }
+            context.sendBroadcast(reloadIntent)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save config for profile $profile", e)
         }

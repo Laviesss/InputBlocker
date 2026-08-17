@@ -48,7 +48,12 @@ class SensingActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        origLockscreenSetting = intent.getStringExtra("EXTRA_ORIG_LOCKSCREEN_SETTING")
+        if (savedInstanceState != null) {
+            origLockscreenSetting = savedInstanceState.getString("SAVED_ORIG_LOCKSCREEN_SETTING")
+            lockscreenRestored = savedInstanceState.getBoolean("SAVED_LOCKSCREEN_RESTORED", false)
+        } else {
+            origLockscreenSetting = intent.getStringExtra("EXTRA_ORIG_LOCKSCREEN_SETTING")
+        }
 
         // Set window flags to stay visible over keyguard and keep display alive
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
@@ -135,17 +140,29 @@ class SensingActivity : Activity() {
         capturedTouches.clear()
 
         val performPowerCycle = intent.getBooleanExtra("EXTRA_PERFORM_POWER_CYCLE", false)
-        if (performPowerCycle) {
+        if (performPowerCycle && savedInstanceState == null) {
             timerText.text = "Cycling screen power..."
             Thread {
                 try {
-                    Thread.sleep(400) // Brief pause to ensure activity window attached
+                    Thread.sleep(300) // Brief pause to ensure activity window attached
+                    val pm = getSystemService(android.content.Context.POWER_SERVICE) as? android.os.PowerManager
                     Log.i(TAG, "Executing power off event...")
                     InputBlockerServiceManager.runRootCommand("input keyevent 26") // Screen off
-                    Thread.sleep(2000) // 2s power down
+
+                    // Adaptive screen-state check: poll up to 2500ms for screen to power down
+                    val pollStart = System.currentTimeMillis()
+                    while (pm?.isInteractive == true && System.currentTimeMillis() - pollStart < 2500L) {
+                        Thread.sleep(100)
+                    }
+
                     Log.i(TAG, "Executing wakeup event...")
                     InputBlockerServiceManager.runRootCommand("input keyevent KEYCODE_WAKEUP") // Wake
-                    Thread.sleep(800)
+
+                    // Adaptive check: poll up to 1500ms for screen to wake up
+                    val wakeStart = System.currentTimeMillis()
+                    while (pm?.isInteractive == false && System.currentTimeMillis() - wakeStart < 1500L) {
+                        Thread.sleep(100)
+                    }
                 } catch (e: Exception) {
                     Log.e(TAG, "Power cycle failed: ${e.message}")
                 }
@@ -190,7 +207,7 @@ class SensingActivity : Activity() {
                 capturedTouches.add(Pair(nx, ny))
                 heatmapView.addPoint(nx, ny)
                 tapCounterText.text = "Taps captured: ${capturedTouches.size}"
-                if (capturedTouches.size >= 1) {
+                if (capturedTouches.size == 1) {
                     btnStop.visibility = View.VISIBLE
                 }
                 Log.d(TAG, "Captured touch at normalized ($nx, $ny) [action=$action]")
@@ -249,6 +266,12 @@ class SensingActivity : Activity() {
                 Log.e(TAG, "Failed to restore lockscreen setting: ${e.message}")
             }
         }.start()
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString("SAVED_ORIG_LOCKSCREEN_SETTING", origLockscreenSetting)
+        outState.putBoolean("SAVED_LOCKSCREEN_RESTORED", lockscreenRestored)
     }
 
     override fun onDestroy() {

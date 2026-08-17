@@ -140,16 +140,20 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             XposedBridge.log("$TAG: Primary hook failed (${e.message}), trying alternative signatures...")
         }
 
-        // Strategy 2: Fallback to scanning InputDispatcher declared methods for MotionEvent parameters
+        // Strategy 2: Narrow fallback matching specific InputDispatcher methods containing MotionEvent
         if (!hooked) {
             try {
                 val inputDispatcherClass = XposedHelpers.findClass("com.android.server.input.InputDispatcher", null)
                 for (method in inputDispatcherClass.declaredMethods) {
-                    if ((method.name.contains("dispatchMotion") || method.name.contains("injectInputEvent")) &&
+                    val name = method.name
+                    if ((name == "dispatchMotionLocked" || name == "dispatchMotion" || name == "injectInputEvent") &&
+                        method.parameterTypes.size in 1..4 &&
                         method.parameterTypes.contains(MotionEvent::class.java)) {
                         XposedBridge.hookMethod(method, hookHandler)
                         hooked = true
-                        XposedBridge.log("$TAG: Hooked fallback method ${method.name}")
+                        val paramSig = method.parameterTypes.joinToString { it.simpleName }
+                        XposedBridge.log("$TAG: Hooked strategy 2: ${method.declaringClass.name}.$name($paramSig)")
+                        break
                     }
                 }
             } catch (e: Throwable) {
@@ -157,15 +161,19 @@ class InputBlockerXposed : IXposedHookZygoteInit {
             }
         }
 
-        // Strategy 3: Fallback to InputManagerService
+        // Strategy 3: Narrow fallback to InputManagerService.injectInputEvent overloads
         if (!hooked) {
             try {
                 val imsClass = XposedHelpers.findClass("com.android.server.input.InputManagerService", null)
                 for (method in imsClass.declaredMethods) {
-                    if (method.name.contains("injectInputEvent") && method.parameterTypes.contains(MotionEvent::class.java)) {
+                    val name = method.name
+                    if ((name == "injectInputEvent" || name == "injectInputEventInternal") &&
+                        method.parameterTypes.contains(MotionEvent::class.java)) {
                         XposedBridge.hookMethod(method, hookHandler)
                         hooked = true
-                        XposedBridge.log("$TAG: Hooked InputManagerService.${method.name}")
+                        val paramSig = method.parameterTypes.joinToString { it.simpleName }
+                        XposedBridge.log("$TAG: Hooked strategy 3: ${method.declaringClass.name}.$name($paramSig)")
+                        break
                     }
                 }
             } catch (e: Throwable) {
