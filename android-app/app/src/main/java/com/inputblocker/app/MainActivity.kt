@@ -953,7 +953,6 @@ class MainActivity : AppCompatActivity() {
         InputBlockerServiceManager.saveConfig(this, "default", content.toString())
 
         // Notify active services to reload configuration immediately
-        sendBroadcast(Intent("com.inputblocker.RELOAD"))
         sendBroadcast(Intent("com.inputblocker.RELOAD").apply { setPackage(packageName) })
     }
 

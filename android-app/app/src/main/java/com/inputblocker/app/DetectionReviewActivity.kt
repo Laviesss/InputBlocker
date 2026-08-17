@@ -295,9 +295,6 @@ class DetectionReviewActivity : Activity() {
             InputBlockerServiceManager.saveConfig(this, "default", content.toString())
             
             // Broadcast reload event to all services and components
-            val reloadIntent = Intent("com.inputblocker.RELOAD")
-            sendBroadcast(reloadIntent)
-
             val packageReloadIntent = Intent("com.inputblocker.RELOAD").apply {
                 setPackage(packageName)
             }
