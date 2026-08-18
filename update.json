@@ -1,9 +1,9 @@
 {
-  "version": "0.2.0",
-  "versionCode": 200,
-  "apkUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v0.2.0/InputBlocker-v0.2.0.apk",
-  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v0.2.0/InputBlocker-v0.2.0.zip",
-  "changelog": "## What's Changed (since v0.1.1)\n\n### 🚀 Features\n- on-device detection review via shared ClusterUtils \n- Address PR review feedback on ADB timeout handling and CLI subshell logic\n- Audit codebase and implement comprehensive improvements across all modules\n\n### 🧹 Chores\n- bump gradle-wrapper from 9.5.1 to 9.6.0 (deps)\n- bump actions/checkout from 6 to 7 (deps)\n\n___\n### 📥 Requirements\n| | |\n|---|---|\n| **Root** | Magisk / KernelSU / APatch / SuperSU |\n| **Framework** | LSPosed (recommended) – or Overlay Mode (no framework) |\n| **Android** | 6.0+ (API 23) |\n| **Version Code** | 200 |\n\n### 🆘 Support\n- **Issues**: https://github.com/Laviesss/InputBlocker/issues\n- **Security**: https://github.com/Laviesss/InputBlocker/security/advisories\n- **Documentation**: https://github.com/Laviesss/InputBlocker#readme\n",
-  "apkSha256": "655d7ee49df50b24a5dd870960488b22c37ba1acc16e5c799679dec6c8597606",
-  "zipSha256": "946ade1f7ec3cf967b561190786bd7568618524ead52ee4fe74da2db155d8efb"
+  "version": "0.1.2",
+  "versionCode": 201,
+  "apkUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v0.1.2/InputBlocker-v0.1.2.apk",
+  "zipUrl": "https://github.com/Laviesss/InputBlocker/releases/download/v0.1.2/InputBlocker-v0.1.2.zip",
+  "changelog": "## What's Changed (since v0.1.1)\n\n### 📚 Documentation\n- add WIP warning and use-at-your-own-risk disclaimer \n\n### 🐛 Bug Fixes\n- companion app boot install, duplicate broadcasts, LSPosed detection, config race, touch cap \n- Address PR feedback for LSPosed hook, adaptive power cycle, and tests\n- Fix LSPosed/Vector compatibility, auto-detect power cycle, and region editing\n- Fix LSPosed/Vector compatibility, auto-detect power cycle, and region editing\n\n### 🚀 Features\n- on-device detection review via shared ClusterUtils \n- Address PR review feedback on ADB timeout handling and CLI subshell logic\n- Audit codebase and implement comprehensive improvements across all modules\n\n### 🧹 Chores\n- bump gradle-wrapper from 9.5.1 to 9.6.0 (deps)\n- bump actions/checkout from 6 to 7 (deps)\n\n___\n### 📥 Requirements\n| | |\n|---|---|\n| **Root** | Magisk / KernelSU / APatch / SuperSU |\n| **Framework** | LSPosed (recommended) – or Overlay Mode (no framework) |\n| **Android** | 6.0+ (API 23) |\n| **Version Code** | 201 |\n\n### 🆘 Support\n- **Issues**: https://github.com/Laviesss/InputBlocker/issues\n- **Security**: https://github.com/Laviesss/InputBlocker/security/advisories\n- **Documentation**: https://github.com/Laviesss/InputBlocker#readme\n",
+  "apkSha256": "91a79162eeea217f13f74f0b531ffc669c7ed3db54f9e45f9de75cbcf4c9d342",
+  "zipSha256": "89efa7e1c46d3ac2464c72e9b846d4c7059443657dc7b86cfc0e8e0e9ae26d87"
 }
